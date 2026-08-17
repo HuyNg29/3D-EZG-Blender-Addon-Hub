@@ -54,6 +54,10 @@ Write-Host "--- gen_catalog" -ForegroundColor Cyan
     --out (Join-Path $dist "catalog.json")
 if ($LASTEXITCODE -ne 0) { throw "gen_catalog that bai" }
 
+Write-Host "--- build_installer" -ForegroundColor Cyan
+& $python (Join-Path $repo "tools\build_installer.py") --out (Join-Path $dist "EZG-Hub-Setup.bat")
+if ($LASTEXITCODE -ne 0) { throw "build_installer that bai" }
+
 Write-Host ""
 Write-Host "OK. Ket qua trong $dist" -ForegroundColor Green
 Get-ChildItem $dist | Select-Object Name, Length | Format-Table -AutoSize

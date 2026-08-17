@@ -27,15 +27,33 @@ profile addon).
 
 ---
 
-## Dành cho artist: cài addon EZG
+## Dành cho artist: cài hub
 
-Một lần duy nhất, trong Blender:
+Tải một file này về rồi **double-click**:
+
+```
+https://huyng29.github.io/3D-EZG-Blender-Addon-Hub/EZG-Hub-Setup.bat
+```
+
+Nó tự tìm mọi bản Blender trên máy, đăng ký kho EZG, cài và bật hub. Xong mở Blender,
+bấm phím **N**, vào tab **EZG Hub**.
+
+**Đóng Blender trước khi chạy.** Blender ghi đè `userpref.blend` lúc thoát, nên cài
+trong khi Blender đang mở thì thiết lập sẽ mất ngay khi bạn đóng nó. Trình cài đặt có
+kiểm tra và sẽ từ chối chạy nếu thấy Blender đang mở.
+
+<details>
+<summary>Hoặc làm thủ công</summary>
 
 **Preferences → Get Extensions → Repositories → [+] → Add Remote Repository**, dán URL:
 
 ```
 https://huyng29.github.io/3D-EZG-Blender-Addon-Hub/index.json
 ```
+
+Rồi tìm "EZG Addon Hub" trong Get Extensions và bấm Install.
+
+</details>
 
 Từ đó về sau mọi addon EZG hiện trong danh sách Extensions, và **Check for Updates**
 của Blender sẽ tự thấy bản mới. Không cần tải zip thủ công.
@@ -140,8 +158,28 @@ ra nghĩa vụ mới nào. Thứ thật sự cần canh là những gì **vô t�
 
 ---
 
+## Trình cài đặt một file
+
+`dist/EZG-Hub-Setup.bat` được sinh tự động, **không sửa tay**. Mã nguồn ở `tools/bootstrap/`:
+
+| File | Việc |
+|---|---|
+| `install_hub.ps1` | Tìm Blender (PATH, Program Files, registry, thư viện Steam), chạy bootstrap cho từng bản |
+| `bootstrap.py` | Chạy trong Blender: đăng ký kho EZG, cài hub, bật, lưu preferences |
+
+`tools/build_installer.py` ghép hai file trên, mã hoá base64 rồi nhúng vào một `.bat`.
+Base64 chỉ gồm `A-Za-z0-9+/=` nên không ký tự nào bị `cmd.exe` diễn giải nhầm — tránh
+được toàn bộ vấn đề escape của batch. Lúc chạy, `.bat` giải mã bằng `certutil` có sẵn
+trong Windows, nên máy artist không cần cài thêm gì.
+
+Build lại:
+
+```powershell
+python tools\build_installer.py --out dist\EZG-Hub-Setup.bat
+```
+
+CI cũng chạy bước này và publish file lên Pages.
+
 ## Chưa có trong repo
 
-- `addons/ezg_addon_hub/` — hub client (Phase 2)
 - `thumbs/` — ảnh thumbnail cho catalog
-- `EZG-Hub-Setup.bat` — bootstrap cài hub vào mọi version Blender (Phase 4)

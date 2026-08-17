@@ -113,6 +113,12 @@ jobs:
             --index dist/index.json \
             --out dist/catalog.json
 
+      - name: Build one-file installer
+        run: |
+          set -euo pipefail
+          # Trinh cai dat mot file cho artist: tai ve, double-click la xong.
+          "$BLENDER_PYTHON" tools/build_installer.py --out dist/EZG-Hub-Setup.bat
+
       - name: Copy thumbnails
         run: |
           set -euo pipefail
