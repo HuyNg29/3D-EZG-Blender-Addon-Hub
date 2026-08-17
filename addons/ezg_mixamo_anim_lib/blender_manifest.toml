@@ -1,9 +1,7 @@
 schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
-# Giu nguyen id cu (khong them tien to ezg_) vi addon nay da duoc phat hanh
-# duoi dang zip voi id nay va da nam tren may artist.
-id = "mixamo_anim_lib"
+id = "ezg_mixamo_anim_lib"
 version = "1.4.2"
 name = "Mixamo Animation Library"
 # Blender gioi han tagline 64 ky tu — ban cu dai 68 nen khong qua validate.

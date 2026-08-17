@@ -20,13 +20,16 @@ Addon hiện có:
 | `ezg_addon_hub` | EZG Addon Hub | 0.1.0 | Hub |
 | `ezg_fbx_batch` | FBX Batch to Blend Converter | 1.5.3 | Pipeline |
 | `ezg_deco_namer` | Deco Namer | 1.5.0 | Modeling / UV |
-| `auto_uv_palette` | Auto UV Palette | 1.0.0 | Modeling / UV |
-| `mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.21.0 | Rigging / Animation |
-| `mixamo_anim_lib` | Mixamo Animation Library | 1.4.2 | Rigging / Animation |
+| `ezg_auto_uv_palette` | Auto UV Palette | 1.0.0 | Modeling / UV |
+| `ezg_mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.21.0 | Rigging / Animation |
+| `ezg_mixamo_anim_lib` | Mixamo Animation Library | 1.4.2 | Rigging / Animation |
 
-Ba addon cuối giữ nguyên `id` cũ, **không** thêm tiền tố `ezg_`, vì chúng đã được phát hành
-dưới dạng zip với id đó và đang nằm trên máy artist. Đổi id sẽ khiến Blender coi là addon
-khác và tạo bản trùng.
+Mọi `id` đều mang tiền tố `ezg_` để không đụng tên với addon trên extensions.blender.org.
+
+Ba addon cuối từng được phát hành thủ công dưới dạng zip với id **không** có tiền tố
+(`auto_uv_palette`, `mixamo_anim_lib`, `mixamo_marker_rigger`). Bản cài tay đó là một dòng
+riêng: Blender coi nó là addon khác, sẽ không tự cập nhật, và sẽ hiện panel trùng.
+**Gỡ bản cài tay trước khi cài từ kho.** Tab "Máy của tôi" trong hub chỉ ra các cặp trùng này.
 
 Hub nằm ở **View3D → phím N → tab "EZG Hub"**, gồm ba tab con: **Kho EZG** (cài addon công ty),
 **Máy của tôi** (kiểm kê mọi addon đang có, kèm nguồn gốc và bản mới), **Backup** (lưu và phục hồi
