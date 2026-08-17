@@ -3,12 +3,29 @@
 Ham draw_hub() duoc dung o ca N-panel lan Preferences nen hai noi luon giong nhau.
 """
 
+import os
+
 import bpy
 from bpy.types import Panel, UIList
 
 from . import prefs as prefs_mod, scanner
 
 CATEGORY = "EZG Hub"
+
+_version = None
+
+
+def hub_version():
+    """Version cua chinh hub, doc tu blender_manifest.toml di kem.
+
+    Hien o goc duoi giao dien de biet chac dang chay ban nao — huu ich nhat
+    ngay sau khi bam Update, vi Blender can khoi dong lai moi nap ban moi.
+    """
+    global _version
+    if _version is None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        _version = scanner.read_manifest(here).get("version", "?")
+    return _version
 
 GROUP_ICON = {
     "A": 'WORLD',
@@ -282,6 +299,11 @@ def draw_hub(layout, context):
     elif wm.ezg_status:
         layout.separator()
         layout.label(text=wm.ezg_status, icon='INFO')
+
+    foot = layout.row()
+    foot.alignment = 'RIGHT'
+    foot.active = False
+    foot.label(text="EZG Hub v%s" % hub_version())
 
 
 class EZG_PT_hub(Panel):
