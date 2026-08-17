@@ -1,0 +1,23 @@
+# Chuan hoa xuong dong.
+#
+# Repo nay build tren ca Windows (may admin) lan Linux (GitHub Actions).
+# Neu de git tu doi CRLF/LF theo tung may, file zip build ra o hai noi se khac
+# nhau va rat kho biet la khac that hay chi khac xuong dong.
+#
+# Quy uoc: trong kho luon la LF. Rieng file Windows chay truc tiep thi CRLF.
+
+* text=auto eol=lf
+
+*.ps1  text eol=crlf
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+*.py   text eol=lf
+*.toml text eol=lf
+*.yml  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+*.zip  binary
+*.png  binary
+*.blend binary

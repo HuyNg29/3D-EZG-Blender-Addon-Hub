@@ -3517,5 +3517,3 @@ def unregister():
     del bpy.types.Scene.mmr_target_mesh
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
-
-
