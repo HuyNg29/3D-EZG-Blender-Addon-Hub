@@ -8,7 +8,7 @@ tagline = "Convert hang loat FBX trong 1 folder sang .blend, giu texture"
 maintainer = "Vit (EZG) <visual-01@easygoing.vn>"
 type = "add-on"
 
-website = "https://github.com/EZG/ezg-addon-hub"
+website = "https://github.com/HuyNg29/3D-EZG-Blender-Addon-Hub"
 
 tags = ["Import-Export", "Pipeline"]
 

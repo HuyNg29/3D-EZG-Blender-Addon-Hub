@@ -29,7 +29,7 @@ Một lần duy nhất, trong Blender:
 **Preferences → Get Extensions → Repositories → [+] → Add Remote Repository**, dán URL:
 
 ```
-https://<org>.github.io/ezg-addon-hub/index.json
+https://huyng29.github.io/3D-EZG-Blender-Addon-Hub/index.json
 ```
 
 Từ đó về sau mọi addon EZG hiện trong danh sách Extensions, và **Check for Updates**
@@ -110,16 +110,19 @@ hub chỉ hiển thị và trỏ tới nguồn gốc, **không** đưa file vào
 
 ---
 
-## Trước khi bật Pages, cần biết
+## Repo này là public — điều đó nghĩa là gì
 
-**Repo private + GitHub Pages**: trên gói Free, Pages của repo private không dùng được;
-nội dung sẽ public nếu bạn bật. Ba lựa chọn:
+Đã chọn public để GitHub Pages dùng được trên gói Free. Hệ quả cần nhớ khi commit:
 
-1. **Repo public** — addon Blender vốn phải là GPL, nên đây là hướng đơn giản nhất.
-2. **GitHub Team/Enterprise** — Pages private, kèm Access Token trong Blender.
-3. **Tự host** `index.json` + zip trên web server nội bộ của EZG.
+- Toàn bộ **lịch sử commit** công khai vĩnh viễn. Xoá file ở commit sau **không** xoá nó khỏi lịch sử.
+- Đừng bao giờ commit: access token, đường dẫn NAS nội bộ (`\\NAS\ezg\...`), tên khách hàng,
+  hay bất cứ thứ gì trong `config.json` của hub.
+- Backup profile của artist **không** thuộc repo này và không được đưa vào.
+- Addon trả phí của bên thứ ba **không** được đưa vào — chỉ khai báo `[[external]]` trong
+  `catalog.toml` để trỏ tới nguồn gốc.
 
-Cả ba đều dùng chung repo và workflow này; chỉ khác bước deploy cuối.
+Addon Blender dùng `bpy` vốn bắt buộc là GPL, nên việc công khai mã nguồn addon không tạo
+ra nghĩa vụ mới nào. Thứ thật sự cần canh là những gì **vô tình** commit về sau.
 
 ---
 

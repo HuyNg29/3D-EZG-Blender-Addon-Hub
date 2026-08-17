@@ -168,7 +168,7 @@ thay vì cài rồi để Blender lỗi.
 ### Một repo duy nhất, mỗi addon một folder — đúng như bạn nói
 
 ```
-ezg-addon-hub/                          ← 1 repo cho tất cả
+3D-EZG-Blender-Addon-Hub/               ← 1 repo cho tất cả (public)
 ├── addons/
 │   ├── ezg_addon_hub/                  ← chính cái hub, tự update qua đây
 │   │   ├── blender_manifest.toml
@@ -191,7 +191,7 @@ ezg-addon-hub/                          ← 1 repo cho tất cả
 
         ↓ GitHub Actions build → GitHub Pages
 
-https://<org>.github.io/ezg-addon-hub/   ← Blender đọc URL này
+https://huyng29.github.io/3D-EZG-Blender-Addon-Hub/   ← Blender đọc URL này
 ├── index.json
 ├── catalog.json
 ├── ezg_deco_namer-1.5.0.zip
@@ -282,7 +282,7 @@ Module name của extension là `bl_ext.<repo_module>.<pkg_id>`, không phải t
       "version": "1.2.0",
       "enabled": true,
       "kind": "extension",
-      "origin": { "group": "B", "repo_url": "https://<org>.github.io/ezg-addon-hub/index.json" },
+      "origin": { "group": "B", "repo_url": "https://huyng29.github.io/3D-EZG-Blender-Addon-Hub/index.json" },
       "blob": null
     },
     {
