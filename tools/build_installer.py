@@ -16,13 +16,25 @@ lan runner Linux cua CI:
 
 import argparse
 import base64
+import datetime
+import json
 import os
 import sys
+import tomllib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.dirname(HERE)
 BOOTSTRAP_DIR = os.path.join(HERE, "bootstrap")
+ADDONS_DIR = os.path.join(REPO_ROOT, "addons")
+PROFILE_TOML = os.path.join(REPO_ROOT, "profile.toml")
 
 LINE_WIDTH = 76
+
+# Bo profile mau di kem installer. Sinh tu addons/ nen them addon vao repo la
+# bo mau tu cap nhat o lan build sau — khong co danh sach chep tay nao de lech.
+PROFILE_LABEL = "Bo chuan EZG"
+REPO_MODULE = "ezg"          # trung voi REPO_MODULE trong bootstrap.py
+HUB_PKG = "ezg_addon_hub"    # bo ra: installer luon cai hub roi
 
 HEADER = """@echo off
 setlocal EnableExtensions
@@ -55,6 +67,55 @@ exit /b %EZGRC%
 """
 
 
+def build_profile_manifest():
+    """Sinh snapshot mau o dung dinh dang backup.py doc duoc.
+
+    Moi muc la nhom B (kho EZG) va khong co blob: restore che do "Ban moi nhat"
+    se tai thang tu kho ve, nen bo mau khong bao gio giu ban cu. Doi lai, che do
+    "Dung ban da luu" khong dung duoc voi bo mau — hub tu canh bao chuyen do.
+
+    Khong co khoa "blender": bo mau khong sinh ra tu mot ban Blender cu the nao,
+    ghi dai mot version vao day chi lam nguoi doc hieu nham.
+    """
+    items = []
+    for name in sorted(os.listdir(ADDONS_DIR)):
+        path = os.path.join(ADDONS_DIR, name, "blender_manifest.toml")
+        if not os.path.isfile(path):
+            continue
+        with open(path, "rb") as f:
+            m = tomllib.load(f)
+
+        pkg_id = m.get("id")
+        if not pkg_id or pkg_id == HUB_PKG:
+            continue
+
+        items.append({
+            "pkg_id": pkg_id,
+            "module": "bl_ext.%s.%s" % (REPO_MODULE, pkg_id),
+            "name": m.get("name") or pkg_id,
+            "version": m.get("version", ""),
+            "enabled": True,
+            "kind": "extension",
+            "origin": {
+                "group": "B",
+                "repo_module": REPO_MODULE,
+                "homepage": m.get("website", "") or "",
+            },
+            "blob": None,
+        })
+
+    if not items:
+        sys.exit("Khong tim thay addon nao trong %s de dua vao bo profile mau."
+                 % ADDONS_DIR)
+
+    return {
+        "schema": 1,
+        "profile": PROFILE_LABEL,
+        "created": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "items": items,
+    }
+
+
 def build(out_path):
     py_path = os.path.join(BOOTSTRAP_DIR, "bootstrap.py")
     ps1_path = os.path.join(BOOTSTRAP_DIR, "install_hub.ps1")
@@ -68,13 +129,19 @@ def build(out_path):
     with open(ps1_path, encoding="utf-8") as f:
         driver = f.read()
 
-    # Here-string nhay don giu noi dung nguyen van. Chi mot dong bat dau bang
-    # '@ moi ket thuc no, nen phai chac chan bootstrap.py khong co dong nhu vay.
-    for line in python.splitlines():
-        if line.startswith("'@"):
-            sys.exit("bootstrap.py co dong bat dau bang '@ - se lam hong here-string.")
+    profile = build_profile_manifest()
+    profile_json = json.dumps(profile, ensure_ascii=False, indent=2)
 
-    combined = "$BootstrapPython = @'\r\n" + python + "\r\n'@\r\n\r\n" + driver
+    # Here-string nhay don giu noi dung nguyen van. Chi mot dong bat dau bang
+    # '@ moi ket thuc no, nen phai chac chan payload khong co dong nhu vay.
+    for label, payload in (("bootstrap.py", python), ("profile mau", profile_json)):
+        for line in payload.splitlines():
+            if line.startswith("'@"):
+                sys.exit("%s co dong bat dau bang '@ - se lam hong here-string." % label)
+
+    combined = ("$BootstrapPython = @'\r\n" + python + "\r\n'@\r\n\r\n"
+                + "$ProfileJson = @'\r\n" + profile_json + "\r\n'@\r\n\r\n"
+                + driver)
     combined = combined.replace("\r\n", "\n").replace("\n", "\r\n")
 
     # BOM UTF-8 de PowerShell 5.1 doc dung ma hoa khi chay bang -File.
@@ -98,7 +165,7 @@ def build(out_path):
     with open(out_path, "wb") as f:
         f.write(text.encode("ascii"))
 
-    return os.path.getsize(out_path), len(lines)
+    return os.path.getsize(out_path), len(lines), len(profile["items"])
 
 
 def main():
@@ -107,8 +174,9 @@ def main():
                                                   "EZG-Hub-Setup.bat"))
     args = ap.parse_args()
 
-    size, n_lines = build(args.out)
+    size, n_lines, n_profile = build(args.out)
     print("Da tao %s (%d bytes, %d dong base64)" % (args.out, size, n_lines))
+    print("Bo profile mau '%s': %d addon." % (PROFILE_LABEL, n_profile))
 
 
 if __name__ == "__main__":

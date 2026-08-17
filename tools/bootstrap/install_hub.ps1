@@ -165,6 +165,57 @@ foreach ($blender in $found) {
 Remove-Item -LiteralPath $pyPath -Force -ErrorAction SilentlyContinue
 
 # ---------------------------------------------------------------------------
+# 4. Bo profile mau
+#
+# Ghi san mot snapshot vao thu muc backup de may moi co ngay mot muc trong tab
+# Backup: bam Phuc hoi la cai het addon EZG mot luot, khong phai cai tung cai.
+#
+# Ghi o day chu khong o bootstrap.py vi profile thuoc ve NGUOI DUNG, khong thuoc
+# ve tung ban Blender - bootstrap chay lai cho moi ban Blender tim thay.
+# ---------------------------------------------------------------------------
+$SNAPSHOT_NAME = "Bo chuan EZG"
+
+# Phai khop _safe() trong addons/ezg_addon_hub/backup.py, neu khong hub se tim
+# snapshot o mot thu muc khac voi thu muc vua ghi.
+function Get-SafeName($name) {
+    $sb = New-Object System.Text.StringBuilder
+    foreach ($c in $name.ToCharArray()) {
+        if ([char]::IsLetterOrDigit($c) -or $c -eq '-' -or $c -eq '_' -or $c -eq '.' -or $c -eq ' ') {
+            [void]$sb.Append($c)
+        }
+    }
+    $clean = $sb.ToString().Trim()
+    if ($clean) { return $clean }
+    return "default"
+}
+
+if ($okCount -gt 0) {
+    Write-Head "Bo profile mau"
+
+    $rawProfile = $env:USERNAME
+    if (-not $rawProfile) { $rawProfile = "default" }
+
+    $snapDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) `
+                         ("EZG Addon Hub\profiles\" + (Get-SafeName $rawProfile) + "\" + $SNAPSHOT_NAME)
+    $manifestPath = Join-Path $snapDir "manifest.json"
+
+    if (Test-Path -LiteralPath $manifestPath) {
+        Write-Ok "Da co san, giu nguyen."
+    } else {
+        try {
+            New-Item -ItemType Directory -Force -Path $snapDir | Out-Null
+            # UTF8 KHONG BOM: backup.py doc bang json.load, gap BOM la loi parse.
+            # Set-Content -Encoding utf8 cua PowerShell 5.1 co BOM nen khong dung duoc.
+            [System.IO.File]::WriteAllText(
+                $manifestPath, $ProfileJson, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Ok ("Da them '" + $SNAPSHOT_NAME + "' vao tab Backup.")
+        } catch {
+            Write-Warn ("Khong ghi duoc bo profile mau: " + $_.Exception.Message)
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "===============================================" -ForegroundColor Cyan
 if ($okCount -gt 0) {
@@ -174,6 +225,7 @@ if ($okCount -gt 0) {
     }
     Write-Host ""
     Write-Host " Mo Blender > phim N > tab 'EZG Hub'." -ForegroundColor Green
+    Write-Host (" De cai het addon EZG mot luot: tab Backup > chon '{0}' > Phuc hoi." -f $SNAPSHOT_NAME) -ForegroundColor Green
 } else {
     Write-Host " KHONG cai duoc vao ban Blender nao." -ForegroundColor Red
     Write-Host " Hub can Blender 4.5 tro len." -ForegroundColor Red
