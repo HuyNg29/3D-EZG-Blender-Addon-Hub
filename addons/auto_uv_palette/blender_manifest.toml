@@ -1,0 +1,21 @@
+schema_version = "1.0.0"
+
+# KHONG BAO GIO doi `id` sau lan release dau tien.
+# Giu nguyen id cu (khong them tien to ezg_) vi addon nay da duoc phat hanh
+# duoi dang zip voi id nay va da nam tren may artist.
+id = "auto_uv_palette"
+version = "1.0.0"
+name = "Auto UV Palette"
+# Blender gioi han tagline 64 ky tu — ban cu dai 69 nen khong qua validate.
+tagline = "Scale and arrange UVs of selected objects into a grid palette"
+maintainer = "EasyGoing Visual <visual@easygoing.vn>"
+type = "add-on"
+
+website = "https://github.com/HuyNg29/3D-EZG-Blender-Addon-Hub"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 EasyGoing Visual"]
+
+tags = ["UV", "Modeling", "Material"]

@@ -26,8 +26,13 @@ items = ["ezg_fbx_batch"]
 
 [[groups]]
 id = "modeling"
-label = "Modeling / Naming"
-items = ["ezg_deco_namer"]
+label = "Modeling / UV"
+items = ["ezg_deco_namer", "auto_uv_palette"]
+
+[[groups]]
+id = "rigging"
+label = "Rigging / Animation"
+items = ["mixamo_marker_rigger", "mixamo_anim_lib"]
 
 # ---------------------------------------------------------------------------
 # Addon cua EZG
@@ -57,6 +62,31 @@ Convert hang loat FBX trong 1 folder sang .blend, giu texture (pack vao file).
 Hai che do: moi FBX ra 1 file rieng, hoac gom tat ca vao 1 file.
 Chay bang tien trinh Blender nen rieng nen khong dong bang UI."""
 thumbnail = "thumbs/ezg_fbx_batch.png"
+recommended = true
+
+[items.auto_uv_palette]
+title_vi = "Auto UV Palette"
+summary_vi = """
+Scale va sap xep UV cua cac object dang chon vao mot luoi palette.
+Dung khi nhieu object dung chung mot texture bang mau."""
+thumbnail = "thumbs/auto_uv_palette.png"
+recommended = false
+
+[items.mixamo_marker_rigger]
+title_vi = "Manual Marker Mixamo Rigger"
+summary_vi = """
+Dat marker khop (cam, hang, co tay, khuyu, dau goi) len nhan vat T-Pose,
+tu sinh armature chuan Mixamo roi bind weight tu dong.
+Marker ben phai tu bam theo ben trai qua driver, chon duoc truc doi xung."""
+thumbnail = "thumbs/mixamo_marker_rigger.png"
+recommended = false
+
+[items.mixamo_anim_lib]
+title_vi = "Mixamo Animation Library"
+summary_vi = """
+Duyet mot thu muc chua file FBX tai tu Mixamo va ap animation thang vao rig.
+Khoi phai import tung file mot roi retarget bang tay."""
+thumbnail = "thumbs/mixamo_anim_lib.png"
 recommended = true
 
 # ---------------------------------------------------------------------------

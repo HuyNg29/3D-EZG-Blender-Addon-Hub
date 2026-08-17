@@ -15,11 +15,18 @@ Phase 1 — kho phát hành. Hub client (addon `ezg_addon_hub`) là Phase 2, ch�
 
 Addon hiện có:
 
-| id | Tên | Version | Tác giả |
+| id | Tên | Version | Nhóm |
 |---|---|---|---|
-| `ezg_addon_hub` | EZG Addon Hub | 0.1.0 | EZG |
-| `ezg_deco_namer` | Deco Namer | 1.5.0 | EZG |
-| `ezg_fbx_batch` | FBX Batch to Blend Converter | 1.5.3 | Vit (EZG) |
+| `ezg_addon_hub` | EZG Addon Hub | 0.1.0 | Hub |
+| `ezg_fbx_batch` | FBX Batch to Blend Converter | 1.5.3 | Pipeline |
+| `ezg_deco_namer` | Deco Namer | 1.5.0 | Modeling / UV |
+| `auto_uv_palette` | Auto UV Palette | 1.0.0 | Modeling / UV |
+| `mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.21.0 | Rigging / Animation |
+| `mixamo_anim_lib` | Mixamo Animation Library | 1.4.2 | Rigging / Animation |
+
+Ba addon cuối giữ nguyên `id` cũ, **không** thêm tiền tố `ezg_`, vì chúng đã được phát hành
+dưới dạng zip với id đó và đang nằm trên máy artist. Đổi id sẽ khiến Blender coi là addon
+khác và tạo bản trùng.
 
 Hub nằm ở **View3D → phím N → tab "EZG Hub"**, gồm ba tab con: **Kho EZG** (cài addon công ty),
 **Máy của tôi** (kiểm kê mọi addon đang có, kèm nguồn gốc và bản mới), **Backup** (lưu và phục hồi
@@ -76,7 +83,8 @@ addons/<pkg_id>/
 |---|---|
 | `id` **không bao giờ đổi** sau release đầu | Đổi id = Blender coi là addon khác → user mất settings, cài trùng |
 | `version` phải bump mỗi lần release | Đây là thứ duy nhất Blender dùng để biết có update |
-| `blender_version_min = "4.5.0"` | Phạm vi hỗ trợ đã chốt |
+| `blender_version_min` khai đúng mức tương thích thật | Hub cần `4.5.0`; addon khác cứ để mức thấp nhất nó chạy được, tối thiểu `4.2.0` vì Extensions không tồn tại trước đó |
+| `tagline` tối đa **64 ký tự**, không kết thúc bằng dấu câu | Blender từ chối manifest dài hơn — `extension validate` bắt được |
 | Import nội bộ dùng relative (`from . import x`) | Module thật là `bl_ext.<repo>.<id>`, không phải tên thư mục |
 | Tham chiếu module dùng `__package__`, không phải `__name__` | Ví dụ `AddonPreferences.bl_idname` |
 | Dependency Python đóng gói bằng **wheels** | Không được `pip install` lúc chạy |
