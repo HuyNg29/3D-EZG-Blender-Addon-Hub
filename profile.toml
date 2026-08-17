@@ -1,0 +1,43 @@
+# Bo profile mau di kem EZG-Hub-Setup.bat.
+#
+# May moi chay file .bat se co san mot muc "Bo chuan EZG" trong tab Backup:
+# bam Phuc hoi mot lan la cai het bo addon chuan cua studio.
+#
+# HAI NGUON, XU LI KHAC NHAU:
+#
+#   Addon EZG (nhom B)  -> KHONG liet ke o day. tools/build_installer.py tu quet
+#                          addons/ nen them addon vao repo la bo mau tu co.
+#
+#   Addon kho khac (A)  -> PHAI liet ke o day. Repo EZG khong quan li chung nen
+#                          khong co cach nao tu biet ban muon cai nhung cai nao.
+#
+# Bo mau khong ghim version: khi Phuc hoi, Blender tai ban moi nhat tu kho ve.
+# Nghia la them addon moi thi build lai .bat, con addon cu len version thi khong
+# can lam gi ca.
+#
+# LAY DANH SACH TU MOT MAY DA CAI SAN:
+#
+#     blender --background --python tools/dump_installed.py
+#
+# Script do in ra dung dinh dang duoi day de chep vao.
+
+schema = 1
+
+[[repos]]
+# Ten module cua kho trong Blender. 'blender_org' la kho extensions.blender.org,
+# co san tren moi ban Blender 4.5 nen may nao cung cai duoc.
+module = "blender_org"
+label = "extensions.blender.org"
+
+packages = [
+  { id = "print3d_toolbox",                 name = "3D Print Toolbox" },
+  { id = "act_game_asset_creation_toolset", name = "ACT: Game Asset Creation Toolset" },
+  { id = "auto_reload",                     name = "Auto Reload" },
+  { id = "EdgeFlow",                        name = "EdgeFlow" },
+  { id = "edit_mesh_tools",                 name = "Edit Mesh Tools" },
+  { id = "looptools",                       name = "LoopTools" },
+  { id = "mio3_copy_weight",                name = "Mio3 Copy Weight" },
+  { id = "mio3_uv",                         name = "Mio3 UV" },
+  { id = "nd",                              name = "ND" },
+  { id = "simple_deform_helper",            name = "Simple Deform Helper" },
+]

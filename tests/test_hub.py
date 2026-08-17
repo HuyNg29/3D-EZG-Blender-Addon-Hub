@@ -170,6 +170,41 @@ if has_update is not None:
 else:
     print("       (khong co addon nao co ban moi de thu truong hop cho phep)")
 
+print("-" * 70)
+print("8) Icon theo nguon goc")
+hub_mod = sys.modules[HUB]
+ui = hub_mod.ui
+
+check("nhom A dung icon co san", ui.group_icon("A").get("icon") == "WORLD")
+check("nhom C dung icon co san", ui.group_icon("C").get("icon") == "FILE_FOLDER")
+
+logo = os.path.join(REPO_ROOT, "addons", "ezg_addon_hub", "icons", "ezg_logo.png")
+kw = ui.group_icon("B")
+
+if os.path.isfile(logo):
+    entry = ui._previews.get("ezg_logo") if ui._previews else None
+    check("logo duoc nap vao preview collection", entry is not None)
+
+    if entry is not None:
+        w, h = tuple(entry.image_size)
+        check("doc duoc kich thuoc anh", w > 0 and h > 0, (w, h))
+        check("icon vuong", w == h, (w, h))
+        check("icon du nho de ve o co mot dong chu (<=256px)", max(w, h) <= 256, (w, h))
+
+    size = os.path.getsize(logo)
+    # File to la dau hieu quen chua thu nho — xem tools/make_icon.py
+    check("logo du nhe de di kem addon (<32 KB)", size < 32 * 1024, "(%d bytes)" % size)
+
+    # Blender chi cap icon_id khi co giao dien. Chay headless thi icon_id luon
+    # bang 0, nen group_icon() quay ve icon co san — dung va an toan. Viec icon
+    # thuc su hien ra chi kiem chung duoc bang mat trong Blender co UI.
+    if bpy.app.background:
+        check("headless thi quay ve icon co san thay vi ve icon rong", "icon" in kw, kw)
+    else:
+        check("co giao dien thi nhom B dung icon_value", "icon_value" in kw, kw)
+else:
+    check("khong co logo thi quay ve icon co san", "icon" in kw, kw)
+
 print("=" * 70)
 if failures:
     print("THAT BAI %d/%d muc:" % (len(failures), step))
