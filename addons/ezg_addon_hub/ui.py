@@ -185,7 +185,13 @@ def draw_machine(layout, context):
     layout.template_list("EZG_UL_inventory", "", wm, "ezg_inventory", wm, "ezg_inventory_index", rows=8)
 
     if n_update:
-        big = layout.row()
+        col = layout.column(align=True)
+
+        one = col.row()
+        one.scale_y = 1.2
+        one.operator("ezg.update_selected", text="Cap nhat muc dang chon", icon='IMPORT')
+
+        big = col.row()
         big.scale_y = 1.3
         big.operator("ezg.update_all", text="Cap nhat tat ca", icon='IMPORT')
 

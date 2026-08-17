@@ -53,6 +53,17 @@ def sync_all():
         raise BridgeError("Sync that bai: %s" % exc)
 
 
+def sync_repo(repo):
+    """Tai lai index cua rieng mot repo — nhanh hon sync_all khi chi can 1 addon."""
+    idx = scanner.repo_index(repo)
+    if idx < 0:
+        raise BridgeError("Khong xac dinh duoc vi tri repo trong danh sach.")
+    try:
+        bpy.ops.extensions.repo_sync(repo_index=idx)
+    except Exception as exc:
+        raise BridgeError("Sync kho '%s' that bai: %s" % (repo.name, exc))
+
+
 def upgrade_all():
     try:
         bpy.ops.extensions.package_upgrade_all()

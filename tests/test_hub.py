@@ -143,6 +143,33 @@ if len(wm.ezg_snapshots):
     check("khong lam thay doi so addon", len(wm.ezg_inventory) == n_inv,
           "(%d vs %d)" % (len(wm.ezg_inventory), n_inv))
 
+print("-" * 70)
+print("7) Nut 'Cap nhat muc dang chon'")
+check("operator co ton tai", hasattr(bpy.ops.ezg, "update_selected"))
+
+# poll phai chan dung 2 truong hop, neu khong user se bam vao mot nut vo nghia
+no_update = next((i for i, r in enumerate(wm.ezg_inventory)
+                  if not r.update_version and r.group != "C"), None)
+if no_update is not None:
+    wm.ezg_inventory_index = no_update
+    check("chan khi muc dang chon da la ban moi nhat",
+          not bpy.ops.ezg.update_selected.poll())
+
+manual = next((i for i, r in enumerate(wm.ezg_inventory) if r.group == "C"), None)
+if manual is not None:
+    wm.ezg_inventory_index = manual
+    check("chan khi muc dang chon la nguon thu cong",
+          not bpy.ops.ezg.update_selected.poll())
+
+has_update = next((i for i, r in enumerate(wm.ezg_inventory)
+                   if r.update_version and r.group != "C"), None)
+if has_update is not None:
+    wm.ezg_inventory_index = has_update
+    check("cho phep khi muc dang chon co ban moi",
+          bpy.ops.ezg.update_selected.poll())
+else:
+    print("       (khong co addon nao co ban moi de thu truong hop cho phep)")
+
 print("=" * 70)
 if failures:
     print("THAT BAI %d/%d muc:" % (len(failures), step))

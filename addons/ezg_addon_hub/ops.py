@@ -187,6 +187,59 @@ class EZG_OT_install(Operator):
         return {'FINISHED'}
 
 
+class EZG_OT_update_selected(Operator):
+    bl_idname = "ezg.update_selected"
+    bl_label = "Cap nhat muc dang chon"
+    bl_description = "Chi cap nhat addon dang chon trong danh sach"
+
+    @classmethod
+    def poll(cls, context):
+        wm = context.window_manager
+        if not (0 <= wm.ezg_inventory_index < len(wm.ezg_inventory)):
+            cls.poll_message_set("Chua chon addon nao trong danh sach.")
+            return False
+
+        item = wm.ezg_inventory[wm.ezg_inventory_index]
+        if item.group == "C":
+            cls.poll_message_set(
+                "'%s' la nguon thu cong — hub khong tu cap nhat duoc." % item.name)
+            return False
+        if not item.update_version:
+            cls.poll_message_set("'%s' dang la ban moi nhat." % item.name)
+            return False
+        return True
+
+    def execute(self, context):
+        wm = context.window_manager
+        item = wm.ezg_inventory[wm.ezg_inventory_index]
+        name, target = item.name, item.update_version
+
+        repo = next((r for r in context.preferences.extensions.repos
+                     if r.module == item.repo_module), None)
+        if repo is None:
+            msg = "Khong tim thay kho '%s' cua addon nay." % item.repo_module
+            _set_status("", msg)
+            self.report({'ERROR'}, msg)
+            return {'CANCELLED'}
+
+        try:
+            bridge.sync_repo(repo)
+            bridge.install(repo, item.pkg_id, enable=item.enabled)
+        except Exception as exc:
+            _set_status("", str(exc))
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+
+        bridge.save_prefs()
+        remote.clear_cache()
+        bpy.ops.ezg.refresh_inventory(check_updates=True)
+
+        msg = "Da cap nhat %s len v%s. Khoi dong lai Blender de ap dung." % (name, target)
+        _set_status(msg)
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
 class EZG_OT_update_all(Operator):
     bl_idname = "ezg.update_all"
     bl_label = "Cap nhat tat ca"
@@ -335,6 +388,7 @@ classes = (
     EZG_OT_refresh_store,
     EZG_OT_setup_repo,
     EZG_OT_install,
+    EZG_OT_update_selected,
     EZG_OT_update_all,
     EZG_OT_open_url,
     EZG_OT_refresh_snapshots,
