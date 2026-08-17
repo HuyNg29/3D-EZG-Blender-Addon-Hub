@@ -6,13 +6,64 @@ Ham draw_hub() duoc dung o ca N-panel lan Preferences nen hai noi luon giong nha
 import os
 
 import bpy
+# Phai import o day, KHONG duoc import trong ham. `import bpy.utils.previews`
+# gan ten `bpy` vao pham vi cuc bo, khien Python coi `bpy` la bien local trong
+# CA ham do — moi dong dung `bpy` truoc dong import se nem UnboundLocalError.
+import bpy.utils.previews
 from bpy.types import Panel, UIList
 
 from . import prefs as prefs_mod, scanner
 
 CATEGORY = "EZG Hub"
 
+# Icon theo NGUON GOC addon, khong phai theo chuc nang:
+#   A  kho ngoai (extensions.blender.org...)  -> qua cau: tai tu Internet ve
+#   B  kho EZG                                -> kien hang: do minh phat hanh
+#   C  nguon thu cong                         -> thu muc: cai tu file tren dia
+#
+# Doi icon o day neu muon. Vai lua chon hop li cho nhom B, deu co san trong
+# Blender 4.5: 'PACKAGE', 'SOLO_ON', 'FAKE_USER_ON', 'COMMUNITY', 'BOOKMARKS',
+# 'MODIFIER'. Tranh 'FUND' - do la icon quyen gop, de gay hieu nham.
+#
+# Muon dung dung logo EZG thi khong can sua day, xem ICON_FILE ben duoi.
+GROUP_ICON = {
+    "A": 'WORLD',
+    "B": 'PACKAGE',
+    "C": 'FILE_FOLDER',
+}
+
+# Tha mot file PNG vuong (khuyen nghi 32x32 hoac 64x64, nen trong suot) vao
+# addons/ezg_addon_hub/icons/ezg_logo.png la addon EZG se hien dung logo do
+# thay cho icon co san. Khong co file thi tu dung lai GROUP_ICON["B"].
+ICON_FILE = "ezg_logo.png"
+
+_previews = None
 _version = None
+
+
+def _icons_dir():
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+
+
+def _ezg_icon_id():
+    """icon_id cua logo EZG, hoac 0 neu khong co file logo."""
+    if _previews is None:
+        return 0
+    entry = _previews.get("ezg_logo")
+    return entry.icon_id if entry else 0
+
+
+def group_icon(group):
+    """kwargs icon cho layout.label()/operator().
+
+    Blender nhan icon co san qua `icon=` (chuoi) nhung icon tu anh qua
+    `icon_value=` (so nguyen), nen phai tra ve kwargs chu khong tra ve mot gia tri.
+    """
+    if group == "B":
+        icon_id = _ezg_icon_id()
+        if icon_id:
+            return {"icon_value": icon_id}
+    return {"icon": GROUP_ICON.get(group, 'DOT')}
 
 
 def hub_version():
@@ -26,12 +77,6 @@ def hub_version():
         here = os.path.dirname(os.path.abspath(__file__))
         _version = scanner.read_manifest(here).get("version", "?")
     return _version
-
-GROUP_ICON = {
-    "A": 'WORLD',
-    "B": 'FUND',
-    "C": 'FILE_FOLDER',
-}
 
 
 def _label_lines(layout, text, icon='NONE'):
@@ -74,7 +119,7 @@ class EZG_UL_inventory(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         row.label(text="", icon='CHECKBOX_HLT' if item.enabled else 'CHECKBOX_DEHLT')
-        row.label(text=item.name, icon=GROUP_ICON.get(item.group, 'DOT'))
+        row.label(text=item.name, **group_icon(item.group))
 
         sub = row.row()
         sub.alignment = 'RIGHT'
@@ -125,7 +170,10 @@ def draw_store(layout, context):
     box = layout.box()
 
     head = box.row()
-    head.label(text=item.title, icon='FUND' if not item.is_external else 'LINKED')
+    if item.is_external:
+        head.label(text=item.title, icon='LINKED')
+    else:
+        head.label(text=item.title, **group_icon("B"))
     if item.recommended:
         sub = head.row()
         sub.alignment = 'RIGHT'
@@ -200,7 +248,7 @@ def draw_machine(layout, context):
 
     item = wm.ezg_inventory[wm.ezg_inventory_index]
     box = layout.box()
-    box.label(text=item.name, icon=GROUP_ICON.get(item.group, 'DOT'))
+    box.label(text=item.name, **group_icon(item.group))
     box.label(text="Phien ban: v%s" % (item.version or "?"))
     box.label(text="Nguon: %s" % item.source_label)
     box.label(text="Trang thai: %s" % ("dang bat" if item.enabled else "dang tat"))
@@ -332,13 +380,37 @@ classes = (
 
 
 def register():
+    global _previews
+
+    # Icon tu file anh phai nap qua preview collection; khong co file logo thi
+    # bo qua, group_icon() se tu quay ve icon co san cua Blender.
+    try:
+        _previews = bpy.utils.previews.new()
+        path = os.path.join(_icons_dir(), ICON_FILE)
+        if os.path.isfile(path):
+            _previews.load("ezg_logo", path, 'IMAGE')
+    except Exception as exc:
+        print("[EZG Hub] Khong nap duoc logo: %s" % exc)
+        _previews = None
+
     for c in classes:
         bpy.utils.register_class(c)
 
 
 def unregister():
+    global _previews
+
     for c in reversed(classes):
         try:
             bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+        except Exception as exc:
+            # KHONG nuot im lang: go class that bai se lam lan bat ke tiep chet
+            # voi "already registered", ma nguyen nhan that thi da bi giau mat.
+            print("[EZG Hub] Khong go duoc %s: %s" % (c.__name__, exc))
+
+    if _previews is not None:
+        try:
+            bpy.utils.previews.remove(_previews)
+        except Exception as exc:
+            print("[EZG Hub] Khong giai phong duoc preview: %s" % exc)
+        _previews = None

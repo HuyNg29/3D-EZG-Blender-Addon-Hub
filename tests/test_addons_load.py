@@ -44,34 +44,47 @@ print("=" * 70)
 
 failures = []
 
-for pkg_id in pkg_ids:
-    module = "bl_ext.%s.%s" % (REPO_MODULE, pkg_id)
+# Chay HAI vong. Vong thu hai moi la phan quan trong: neu unregister() bo sot
+# mot class, lan bat ke tiep se chet voi "already registered as a subclass".
+# Chay mot vong khong bao gio thay duoc loi do — da tung de lot mot lan that.
+ROUNDS = 2
 
+
+def cycle(pkg_id, module, round_no):
+    """Tra ve chuoi mo ta loi, hoac None neu vong nay sach."""
     try:
         bpy.ops.preferences.addon_enable(module=module)
     except Exception as exc:
-        failures.append("%s: bat that bai -> %s" % (pkg_id, exc))
-        print("  LOI  %-24s bat that bai" % pkg_id)
-        continue
+        return "vong %d: bat that bai -> %s" % (round_no, exc)
 
     if module not in bpy.context.preferences.addons:
-        failures.append("%s: bat khong bao loi nhung khong co hieu luc" % pkg_id)
-        print("  LOI  %-24s bat khong co hieu luc" % pkg_id)
-        continue
+        return "vong %d: bat khong bao loi nhung khong co hieu luc" % round_no
 
     try:
         bpy.ops.preferences.addon_disable(module=module)
     except Exception as exc:
-        failures.append("%s: tat that bai -> %s" % (pkg_id, exc))
-        print("  LOI  %-24s tat that bai" % pkg_id)
-        continue
+        return "vong %d: tat that bai -> %s" % (round_no, exc)
 
     if module in bpy.context.preferences.addons:
-        failures.append("%s: tat roi ma van con trong danh sach" % pkg_id)
-        print("  LOI  %-24s tat khong sach" % pkg_id)
-        continue
+        return "vong %d: tat roi ma van con trong danh sach" % round_no
 
-    print("  OK   %-24s bat va tat sach" % pkg_id)
+    return None
+
+
+for pkg_id in pkg_ids:
+    module = "bl_ext.%s.%s" % (REPO_MODULE, pkg_id)
+
+    problem = None
+    for round_no in range(1, ROUNDS + 1):
+        problem = cycle(pkg_id, module, round_no)
+        if problem:
+            break
+
+    if problem:
+        failures.append("%s: %s" % (pkg_id, problem))
+        print("  LOI  %-24s %s" % (pkg_id, problem))
+    else:
+        print("  OK   %-24s bat va tat sach %d vong" % (pkg_id, ROUNDS))
 
 print("=" * 70)
 if failures:
