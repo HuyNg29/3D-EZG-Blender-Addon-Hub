@@ -67,16 +67,26 @@ exit /b %EZGRC%
 """
 
 
-def build_profile_manifest():
-    """Sinh snapshot mau o dung dinh dang backup.py doc duoc.
+def _record(pkg_id, name, repo_module, group, version="", homepage=""):
+    """Mot muc trong snapshot, dung dinh dang backup.py doc duoc."""
+    return {
+        "pkg_id": pkg_id,
+        "module": "bl_ext.%s.%s" % (repo_module, pkg_id),
+        "name": name or pkg_id,
+        "version": version,
+        "enabled": True,
+        "kind": "extension",
+        "origin": {
+            "group": group,
+            "repo_module": repo_module,
+            "homepage": homepage,
+        },
+        "blob": None,
+    }
 
-    Moi muc la nhom B (kho EZG) va khong co blob: restore che do "Ban moi nhat"
-    se tai thang tu kho ve, nen bo mau khong bao gio giu ban cu. Doi lai, che do
-    "Dung ban da luu" khong dung duoc voi bo mau — hub tu canh bao chuyen do.
 
-    Khong co khoa "blender": bo mau khong sinh ra tu mot ban Blender cu the nao,
-    ghi dai mot version vao day chi lam nguoi doc hieu nham.
-    """
+def ezg_items():
+    """Addon EZG (nhom B) — quet thang tu addons/, khong co danh sach chep tay."""
     items = []
     for name in sorted(os.listdir(ADDONS_DIR)):
         path = os.path.join(ADDONS_DIR, name, "blender_manifest.toml")
@@ -89,24 +99,63 @@ def build_profile_manifest():
         if not pkg_id or pkg_id == HUB_PKG:
             continue
 
-        items.append({
-            "pkg_id": pkg_id,
-            "module": "bl_ext.%s.%s" % (REPO_MODULE, pkg_id),
-            "name": m.get("name") or pkg_id,
-            "version": m.get("version", ""),
-            "enabled": True,
-            "kind": "extension",
-            "origin": {
-                "group": "B",
-                "repo_module": REPO_MODULE,
-                "homepage": m.get("website", "") or "",
-            },
-            "blob": None,
-        })
+        items.append(_record(pkg_id, m.get("name"), REPO_MODULE, "B",
+                             version=m.get("version", ""),
+                             homepage=m.get("website", "") or ""))
+    return items
 
-    if not items:
-        sys.exit("Khong tim thay addon nao trong %s de dua vao bo profile mau."
-                 % ADDONS_DIR)
+
+def external_items():
+    """Addon tu kho khac (nhom A) — doc profile.toml.
+
+    Khong the suy ra tu repo nhu nhom B: day la addon cua nguoi khac, chi co
+    admin moi biet studio muon cai nhung cai nao.
+    """
+    if not os.path.isfile(PROFILE_TOML):
+        return []
+
+    with open(PROFILE_TOML, "rb") as f:
+        cfg = tomllib.load(f)
+
+    items = []
+    seen = set()
+    for repo in cfg.get("repos", []) or []:
+        module = (repo.get("module") or "").strip()
+        if not module:
+            sys.exit("profile.toml: co mot [[repos]] thieu khoa 'module'.")
+        if module == REPO_MODULE:
+            sys.exit("profile.toml: khong liet ke kho EZG ('%s') o day — "
+                     "addon EZG duoc quet tu dong tu addons/." % REPO_MODULE)
+
+        for pkg in repo.get("packages", []) or []:
+            pkg_id = (pkg.get("id") or "").strip()
+            if not pkg_id:
+                sys.exit("profile.toml: kho '%s' co mot package thieu 'id'." % module)
+            key = (module, pkg_id)
+            if key in seen:
+                sys.exit("profile.toml: '%s' bi liet ke hai lan trong kho '%s'."
+                         % (pkg_id, module))
+            seen.add(key)
+            items.append(_record(pkg_id, pkg.get("name"), module, "A"))
+
+    return items
+
+
+def build_profile_manifest():
+    """Sinh snapshot mau gom addon EZG + addon tu kho ngoai.
+
+    Khong muc nao co blob: restore che do "Ban moi nhat" tai thang tu kho ve, nen
+    bo mau khong bao gio giu ban cu. Doi lai, che do "Dung ban da luu" khong dung
+    duoc voi bo mau — hub tu canh bao chuyen do.
+
+    Khong co khoa "blender": bo mau khong sinh ra tu mot ban Blender cu the nao,
+    ghi dai mot version vao day chi lam nguoi doc hieu nham.
+    """
+    ezg = ezg_items()
+    if not ezg:
+        sys.exit("Khong tim thay addon EZG nao trong %s." % ADDONS_DIR)
+
+    items = ezg + external_items()
 
     return {
         "schema": 1,
@@ -165,7 +214,7 @@ def build(out_path):
     with open(out_path, "wb") as f:
         f.write(text.encode("ascii"))
 
-    return os.path.getsize(out_path), len(lines), len(profile["items"])
+    return os.path.getsize(out_path), len(lines), profile["items"]
 
 
 def main():
@@ -174,9 +223,11 @@ def main():
                                                   "EZG-Hub-Setup.bat"))
     args = ap.parse_args()
 
-    size, n_lines, n_profile = build(args.out)
+    size, n_lines, items = build(args.out)
+    n_ezg = sum(1 for i in items if i["origin"]["group"] == "B")
     print("Da tao %s (%d bytes, %d dong base64)" % (args.out, size, n_lines))
-    print("Bo profile mau '%s': %d addon." % (PROFILE_LABEL, n_profile))
+    print("Bo profile mau '%s': %d addon (%d EZG, %d tu kho ngoai)."
+          % (PROFILE_LABEL, len(items), n_ezg, len(items) - n_ezg))
 
 
 if __name__ == "__main__":

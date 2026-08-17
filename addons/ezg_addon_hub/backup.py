@@ -217,6 +217,17 @@ def restore(context, snap_dir, mode, repo_url, token=""):
         except Exception as exc:
             report.append("Khong chuan bi duoc repo EZG: %s" % exc)
 
+    # Kho phai duoc sync thi package_install moi tim thay goi. May vua cai Blender
+    # xong co the chua mo Get Extensions lan nao — luc do index cua kho
+    # extensions.blender.org chua ton tai va moi addon nhom A se that bai het.
+    # Sync mot lan o day re hon nhieu so voi sync trong vong lap.
+    if any(r["origin"].get("group") in ("A", "B") for r in records):
+        try:
+            bridge.sync_all()
+        except Exception as exc:
+            report.append("Khong tai duoc danh sach goi tu kho (%s). "
+                          "Addon tai tu kho co the that bai." % exc)
+
     for rec in records:
         name = rec.get("name") or rec.get("pkg_id")
         module = rec.get("module", "")
