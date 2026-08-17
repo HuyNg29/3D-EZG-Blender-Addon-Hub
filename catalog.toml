@@ -1,0 +1,65 @@
+# Metadata hien thi cua EZG Addon Hub.
+#
+# File nay KHONG thay the blender_manifest.toml.
+#   - blender_manifest.toml -> Blender doc (qua index.json) de CAI va UPDATE
+#   - catalog.toml          -> hub doc de HIEN THI (nhom, mo ta tieng Viet, anh)
+#
+# Dung TOML (khong phai YAML/JSON) vi doc duoc bang `tomllib` co san trong Python 3.11
+# cua Blender -> khong can cai them gi. Xem tools/gen_catalog.py.
+#
+# `id` phai trung voi `id` trong blender_manifest.toml. Sai id se lam build that bai.
+
+schema = 1
+
+# ---------------------------------------------------------------------------
+# Nhom hien thi trong hub
+# ---------------------------------------------------------------------------
+[[groups]]
+id = "pipeline"
+label = "Pipeline"
+items = ["ezg_fbx_batch"]
+
+[[groups]]
+id = "modeling"
+label = "Modeling / Naming"
+items = ["ezg_deco_namer"]
+
+# ---------------------------------------------------------------------------
+# Addon cua EZG
+# ---------------------------------------------------------------------------
+[items.ezg_deco_namer]
+title_vi = "Deco Namer"
+summary_vi = """
+Doi ten hang loat mesh theo tien to deco_NN_ kem hau to chu cai.
+Tu dong nhay qua cac hau to da bi chiem.
+Hover vao rule de sang len nhom mesh cung ten."""
+thumbnail = "thumbs/ezg_deco_namer.png"
+recommended = true
+
+[items.ezg_fbx_batch]
+title_vi = "FBX Batch to Blend Converter"
+summary_vi = """
+Convert hang loat FBX trong 1 folder sang .blend, giu texture (pack vao file).
+Hai che do: moi FBX ra 1 file rieng, hoac gom tat ca vao 1 file.
+Chay bang tien trinh Blender nen rieng nen khong dong bang UI."""
+thumbnail = "thumbs/ezg_fbx_batch.png"
+recommended = true
+
+# ---------------------------------------------------------------------------
+# Addon BEN THU BA — chi tro toi nguon, KHONG dua vao repo EZG.
+#
+# Hub hien thi de user biet ma cai, nhung viec update do chinh nguon lo.
+# Dua chung vao repo EZG se khien ban trong hub mai mai tre hon ban goc.
+# Xem docs/ARCHITECTURE.md muc 4 (nhom A / C).
+# ---------------------------------------------------------------------------
+[[external]]
+id = "blender_mcp"
+title_vi = "Blender MCP"
+summary_vi = "Noi Blender voi Claude qua MCP. Tac gia: Siddharth Ahuja"
+homepage = "https://github.com/ahujasid/blender-mcp"
+
+[[external]]
+id = "tripo3d_blender_bridge"
+title_vi = "Tripo3D Blender Bridge"
+summary_vi = "Cau noi Tripo3D sang Blender. Tac gia: Tripo3D"
+homepage = "https://www.tripo3d.ai/"

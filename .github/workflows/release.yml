@@ -1,0 +1,134 @@
+name: Build & deploy extensions repo
+
+# Moi lan push vao main: build tat ca addon trong addons/, sinh index.json,
+# roi deploy len GitHub Pages. Do la URL ma Blender doc.
+#
+# Admin release mot addon = sua `version` trong blender_manifest.toml roi push.
+# Khong co thao tac tay nao khac.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'addons/**'
+      - 'catalog.toml'
+      - 'tools/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Khong huy giua chung: mot lan deploy do dang co the de lai index.json lech voi zip.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Bump khi muon doi Blender dung de build. Phai >= blender_version_min cua moi addon.
+  BLENDER_SERIES: "4.5"
+  BLENDER_VERSION: "4.5.12"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Blender
+        id: cache-blender
+        uses: actions/cache@v4
+        with:
+          path: ~/blender
+          key: blender-${{ env.BLENDER_VERSION }}-linux-x64
+
+      - name: Download Blender
+        if: steps.cache-blender.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          base="https://download.blender.org/release/Blender${BLENDER_SERIES}"
+          file="blender-${BLENDER_VERSION}-linux-x64.tar.xz"
+
+          # Neu ban pin khong con tren mirror (Blender go ban cu khi ra ban vá moi),
+          # tu lay ban 4.5.x moi nhat thay vi de CI chet.
+          if ! curl -fsI "${base}/${file}" >/dev/null 2>&1; then
+            echo "::warning::Khong thay ${file}, dung ban ${BLENDER_SERIES}.x moi nhat tren mirror."
+            file=$(curl -fsSL "${base}/" \
+              | grep -oE "blender-${BLENDER_SERIES}\.[0-9]+-linux-x64\.tar\.xz" \
+              | sort -V | tail -n1)
+            if [ -z "${file}" ]; then
+              echo "::error::Khong tim duoc ban Blender ${BLENDER_SERIES}.x nao tren mirror."
+              exit 1
+            fi
+          fi
+
+          echo "Tai ${base}/${file}"
+          mkdir -p ~/blender
+          curl -fsSL "${base}/${file}" | tar -xJ -C ~/blender --strip-components=1
+
+      - name: Resolve tool paths
+        run: |
+          set -euo pipefail
+          blender="$HOME/blender/blender"
+          "$blender" --version
+          # Python di kem Blender -> gen_catalog.py chay duoc ma khong can setup-python.
+          python=$(find "$HOME/blender" -type f -path '*/python/bin/python3*' | head -n1)
+          echo "BLENDER=$blender" >> "$GITHUB_ENV"
+          echo "BLENDER_PYTHON=$python" >> "$GITHUB_ENV"
+
+      - name: Validate & build extensions
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          shopt -s nullglob
+          found=0
+          for dir in addons/*/; do
+            [ -f "${dir}blender_manifest.toml" ] || continue
+            found=1
+            echo "::group::$(basename "$dir")"
+            # --factory-startup: khong load add-on cua user tren runner
+            "$BLENDER" --factory-startup --command extension validate "$dir"
+            "$BLENDER" --factory-startup --command extension build \
+              --source-dir "$dir" --output-dir dist
+            echo "::endgroup::"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::Khong tim thay addon nao co blender_manifest.toml trong addons/"
+            exit 1
+          fi
+
+      - name: Generate index.json
+        run: |
+          set -euo pipefail
+          "$BLENDER" --factory-startup --command extension server-generate \
+            --repo-dir dist --html
+
+      - name: Generate catalog.json
+        run: |
+          set -euo pipefail
+          "$BLENDER_PYTHON" tools/gen_catalog.py \
+            --catalog catalog.toml \
+            --index dist/index.json \
+            --out dist/catalog.json
+
+      - name: Copy thumbnails
+        run: |
+          set -euo pipefail
+          if [ -d thumbs ]; then cp -r thumbs dist/thumbs; fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

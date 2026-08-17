@@ -1,0 +1,16 @@
+# Build output
+dist/
+
+# Blender ghi cache vao thu muc addons khi dung lam Local Repository (xem docs/DEV-WORKFLOW.md)
+__pycache__/
+*.pyc
+addons/.blender_ext/
+addons/**/*.zip
+
+# Bundle cu — giu tam de doi chieu, xoa sau khi migrate xong
+addon_bundle_installer.zip
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+
+# KHONG BAO GIO doi `id` sau lan release dau tien.
+id = "ezg_fbx_batch"
+version = "1.5.3"
+name = "FBX Batch to Blend Converter"
+tagline = "Convert hang loat FBX trong 1 folder sang .blend, giu texture"
+maintainer = "Vit (EZG) <visual-01@easygoing.vn>"
+type = "add-on"
+
+website = "https://github.com/EZG/ezg-addon-hub"
+
+tags = ["Import-Export", "Pipeline"]
+
+blender_version_min = "4.5.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+copyright = [
+  "2026 EZG",
+]
+
+[permissions]
+files = "Doc file FBX tu o dia va ghi ra file .blend"

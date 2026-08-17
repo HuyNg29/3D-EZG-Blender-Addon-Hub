@@ -1,0 +1,23 @@
+schema_version = "1.0.0"
+
+# KHONG BAO GIO doi `id` sau lan release dau tien.
+# Doi id = Blender coi day la add-on khac -> user mat settings va bi cai trung.
+id = "ezg_deco_namer"
+version = "1.5.0"
+name = "Deco Namer"
+tagline = "Doi ten mesh theo tien to deco_NN_ va hau to chu cai"
+maintainer = "EZG <visual-01@easygoing.vn>"
+type = "add-on"
+
+website = "https://github.com/EZG/ezg-addon-hub"
+
+tags = ["Object", "Pipeline"]
+
+blender_version_min = "4.5.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+copyright = [
+  "2026 EZG",
+]
