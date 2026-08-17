@@ -1,6 +1,6 @@
 # Trinh cai dat EZG Addon Hub - phan dieu khien.
 #
-# File nay KHONG dung truc tiep. tools\build_installer.ps1 nhung bootstrap.py vao
+# File nay KHONG dung truc tiep. tools\build_installer.py nhung bootstrap.py vao
 # bien $BootstrapPython roi dong goi ca hai thanh mot file EZG-Hub-Setup.bat.
 #
 # Nhiem vu: tim moi ban Blender tren may, chay bootstrap.py trong tung ban.
@@ -117,13 +117,33 @@ Set-Content -LiteralPath $pyPath -Value $BootstrapPython -Encoding utf8
 $okCount = 0
 $skipCount = 0
 
+$logOut = Join-Path $env:TEMP "ezg_bootstrap_out.txt"
+$logErr = Join-Path $env:TEMP "ezg_bootstrap_err.txt"
+
 foreach ($blender in $found) {
     Write-Head ("Cai vao: " + $blender)
 
     # KHONG dung --factory-startup: bootstrap goi save_userpref(), ket hop voi
     # factory-startup se ghi de sach thiet lap Blender cua user.
-    $out = & $blender --background --python $pyPath 2>&1
-    $code = $LASTEXITCODE
+    #
+    # KHONG dung `2>&1`: trong PowerShell 5.1, redirect stderr cua mot native exe
+    # boc TUNG DONG stderr thanh ErrorRecord (NativeCommandError). Vi tren la
+    # $ErrorActionPreference = "Stop", mot dong log vo hai cua addon nao do dang
+    # bat trong Blender (vd tripo_addon in "WebSocket server started") se lam ca
+    # trinh cai dat chet giua duong, khong bao gi.
+    # Start-Process ghi thang ra file, khong di qua stream cua PowerShell.
+    $proc = Start-Process -FilePath $blender `
+                          -ArgumentList @("--background", "--python", $pyPath) `
+                          -NoNewWindow -Wait -PassThru `
+                          -RedirectStandardOutput $logOut `
+                          -RedirectStandardError $logErr
+    $code = $proc.ExitCode
+
+    # bootstrap.py in moi thu (ke ca "LOI:") ra stdout; doc them stderr de neu
+    # Blender crash that thi con dau vet.
+    $out = @()
+    if (Test-Path -LiteralPath $logOut) { $out += Get-Content -LiteralPath $logOut }
+    if (Test-Path -LiteralPath $logErr) { $out += Get-Content -LiteralPath $logErr }
 
     foreach ($line in $out) {
         $text = "$line"
@@ -137,6 +157,7 @@ foreach ($blender in $found) {
         $okCount++
     } else {
         Write-Warn "Bo qua ban nay - xem dong LOI o tren."
+        Write-Warn ("Log day du: " + $logOut)
         $skipCount++
     }
 }
