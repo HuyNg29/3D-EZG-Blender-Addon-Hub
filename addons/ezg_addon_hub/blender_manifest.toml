@@ -1,0 +1,26 @@
+schema_version = "1.0.0"
+
+# KHONG BAO GIO doi `id` sau lan release dau tien.
+id = "ezg_addon_hub"
+version = "0.1.0"
+name = "EZG Addon Hub"
+tagline = "Quan li addon EZG, kiem ke may va backup profile addon"
+maintainer = "EZG <visual-01@easygoing.vn>"
+type = "add-on"
+
+website = "https://github.com/HuyNg29/3D-EZG-Blender-Addon-Hub"
+
+tags = ["Pipeline", "System"]
+
+blender_version_min = "4.5.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+copyright = [
+  "2026 EZG",
+]
+
+[permissions]
+network = "Tai danh sach addon EZG va kiem tra ban cap nhat"
+files = "Doc addon dang cai de kiem ke va ghi file backup profile"

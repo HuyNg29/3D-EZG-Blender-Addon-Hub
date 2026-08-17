@@ -17,8 +17,13 @@ Addon hiện có:
 
 | id | Tên | Version | Tác giả |
 |---|---|---|---|
+| `ezg_addon_hub` | EZG Addon Hub | 0.1.0 | EZG |
 | `ezg_deco_namer` | Deco Namer | 1.5.0 | EZG |
 | `ezg_fbx_batch` | FBX Batch to Blend Converter | 1.5.3 | Vit (EZG) |
+
+Hub nằm ở **View3D → phím N → tab "EZG Hub"**, gồm ba tab con: **Kho EZG** (cài addon công ty),
+**Máy của tôi** (kiểm kê mọi addon đang có, kèm nguồn gốc và bản mới), **Backup** (lưu và phục hồi
+profile addon).
 
 ---
 
@@ -69,6 +74,15 @@ git commit -am "deco_namer: fix ..." && git push
 
 GitHub Actions tự chạy validate → build → `server-generate` → deploy lên Pages.
 **Sửa `version` trong manifest rồi push là xong**, không có thao tác tay nào khác.
+
+### Chạy test
+
+```powershell
+.\tools\run_tests.ps1
+```
+
+**Đừng gọi `blender --python tests\...` trực tiếp** — test có ghi preferences, chạy ngoài sandbox
+sẽ xoá sạch thiết lập Blender của bạn. Lý do chi tiết ở [docs/DEV-WORKFLOW.md](docs/DEV-WORKFLOW.md) mục 6.
 
 ### Build thử trước khi push
 

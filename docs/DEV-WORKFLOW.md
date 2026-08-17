@@ -153,7 +153,29 @@ blender --command extension validate addons/ezg_deco_namer
 
 ---
 
-## 6. Phần code cũ tái dùng được cho hub
+## 6. Chạy test — luôn dùng `tools\run_tests.ps1`
+
+```powershell
+.\tools\run_tests.ps1
+```
+
+**Không bao giờ gọi `blender --python tests\...` trực tiếp.**
+
+Test của hub phải gọi `bpy.ops.wm.save_userpref()` để kiểm tra luồng cài đặt. Nếu chạy trên config thật,
+lệnh đó **ghi đè `userpref.blend` của bạn** — mất trạng thái bật/tắt của mọi addon, asset library,
+theme, keymap, và preferences riêng của từng addon (kể cả API key). Nguy hiểm nhất là khi kết hợp với
+`--factory-startup`: Blender nạp thiết lập mặc định rồi lưu đè lên bản thật.
+
+Việc này **đã xảy ra thật một lần** trong quá trình phát triển. Blender không giữ bản sao lưu nào của
+`userpref.blend`, nên không khôi phục lại được.
+
+`run_tests.ps1` đặt biến `BLENDER_USER_RESOURCES` trỏ sang một thư mục tạm, khiến Blender dùng
+config / scripts / extensions trong sandbox đó và xoá đi sau khi chạy. `tests/test_hub.py` cũng
+tự thoát ngay nếu không thấy biến này, nên không chạy nhầm được.
+
+---
+
+## 7. Phần code cũ tái dùng được cho hub
 
 | Từ `addon_bundle_installer` | Dùng lại vào |
 |---|---|

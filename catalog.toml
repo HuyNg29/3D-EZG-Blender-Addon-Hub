@@ -15,6 +15,11 @@ schema = 1
 # Nhom hien thi trong hub
 # ---------------------------------------------------------------------------
 [[groups]]
+id = "hub"
+label = "Hub"
+items = ["ezg_addon_hub"]
+
+[[groups]]
 id = "pipeline"
 label = "Pipeline"
 items = ["ezg_fbx_batch"]
@@ -27,6 +32,15 @@ items = ["ezg_deco_namer"]
 # ---------------------------------------------------------------------------
 # Addon cua EZG
 # ---------------------------------------------------------------------------
+[items.ezg_addon_hub]
+title_vi = "EZG Addon Hub"
+summary_vi = """
+Trung tam quan li addon: cai addon EZG, kiem ke moi addon dang co tren may,
+va backup / phuc hoi profile addon khi doi may hoac cai lai Blender.
+Hub tu cap nhat chinh no qua kho nay."""
+thumbnail = "thumbs/ezg_addon_hub.png"
+recommended = true
+
 [items.ezg_deco_namer]
 title_vi = "Deco Namer"
 summary_vi = """
