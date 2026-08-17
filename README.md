@@ -113,6 +113,25 @@ GitHub Actions tự chạy validate → build → `server-generate` → deploy l
 **Đừng gọi `blender --python tests\...` trực tiếp** — test có ghi preferences, chạy ngoài sandbox
 sẽ xoá sạch thiết lập Blender của bạn. Lý do chi tiết ở [docs/DEV-WORKFLOW.md](docs/DEV-WORKFLOW.md) mục 6.
 
+| Test | Kiểm tra |
+|---|---|
+| `test_addons_load.py` | Mọi addon trong `addons/` bật và tắt được dưới hệ thống Extensions |
+| `test_hub.py` | 22 kiểm tra cho hub: quét máy, tải kho, backup, restore |
+| `test_mmr.py` | Bộ test của Marker Mixamo Rigger |
+| `test_mixamo_compat.py` | Rig sinh ra khớp rig Mixamo thật (**cần FBX mẫu**) |
+
+Một số test cần bộ FBX mẫu của Mixamo. Bộ này nặng ~33 MB nên **không nằm trong git**:
+
+```powershell
+.\tools\run_tests.ps1 -Assets "D:\EZG Addon Assets\MixamoLibResource"
+```
+
+Không trỏ tới thì các test đó tự bỏ qua, **không** tính là thất bại. Mặc định script tìm ở
+`D:\EZG Addon Assets\MixamoLibResource`.
+
+`tests/stale/` chứa test tạm treo — logic còn giá trị nhưng kịch bản dựng dữ liệu đã lỗi thời.
+`run_tests.ps1` không quét thư mục con nên chúng không chạy. Lý do ở [tests/stale/README.md](tests/stale/README.md).
+
 ### Build thử trước khi push
 
 ```powershell
@@ -190,6 +209,20 @@ python tools\build_installer.py --out dist\EZG-Hub-Setup.bat
 ```
 
 CI cũng chạy bước này và publish file lên Pages.
+
+## Dữ liệu để ngoài git
+
+| Thứ | Ở đâu | Vì sao |
+|---|---|---|
+| FBX mẫu của Mixamo (~33 MB) | `D:\EZG Addon Assets\MixamoLibResource` | Nặng, chỉ dùng cho test; đưa vào git sẽ phình repo và làm Pages chậm |
+| `backup_before_nla_move.blend` (34 MB) | `D:\EZG Addon Assets` | File backup lúc phát triển, không phải mã nguồn |
+
+Nên chuyển thư mục này lên NAS của EZG để máy khác cũng chạy được các test cần asset.
+
+## Công cụ kèm theo
+
+`tools/unity-fix/` — bộ script vá pipeline xuất FBX từ Blender sang Unity, đi kèm
+Mixamo Animation Library từ trước. Xem `tools/unity-fix/README.txt`.
 
 ## Chưa có trong repo
 

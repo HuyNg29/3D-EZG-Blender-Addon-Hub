@@ -15,6 +15,9 @@
 
 param(
     [string]$Blender = "D:\AppInstall\Steam\steamapps\common\Blender\blender.exe",
+    # Thu muc chua FBX mau cua Mixamo. Bo asset nay ~33 MB nen khong nam trong
+    # git. Khong tro toi thi cac test can no se tu bo qua, khong tinh la hong.
+    [string]$Assets = $(if ($env:EZG_TEST_ASSETS) { $env:EZG_TEST_ASSETS } else { "D:\EZG Addon Assets\MixamoLibResource" }),
     [switch]$Keep
 )
 
@@ -36,6 +39,14 @@ try {
     $env:BLENDER_USER_RESOURCES = $sandbox
     $env:EZG_REPO_ROOT = $repo
 
+    if ($Assets -and (Test-Path -LiteralPath $Assets)) {
+        $env:EZG_TEST_ASSETS = (Resolve-Path -LiteralPath $Assets).Path
+        Write-Host ("Asset: " + $env:EZG_TEST_ASSETS) -ForegroundColor DarkGray
+    } else {
+        Remove-Item Env:\EZG_TEST_ASSETS -ErrorAction SilentlyContinue
+        Write-Host "Khong co thu muc asset - test can FBX mau se bi bo qua." -ForegroundColor Yellow
+    }
+
     foreach ($t in $tests) {
         Write-Host ""
         Write-Host ("=== {0} ===" -f $t.Name) -ForegroundColor Cyan
@@ -49,6 +60,7 @@ try {
 finally {
     Remove-Item Env:\BLENDER_USER_RESOURCES -ErrorAction SilentlyContinue
     Remove-Item Env:\EZG_REPO_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:\EZG_TEST_ASSETS -ErrorAction SilentlyContinue
     if ($Keep) {
         Write-Host "Sandbox giu lai: $sandbox" -ForegroundColor Yellow
     } else {
