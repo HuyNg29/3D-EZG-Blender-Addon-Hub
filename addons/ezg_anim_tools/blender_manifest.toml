@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+# KHONG BAO GIO doi `id` sau lan release dau tien.
+id = "ezg_anim_tools"
+version = "1.0.0"
+name = "EZG Animation Tools"
+tagline = "Retarget animation giua hai rig, va lat guong trai/phai"
+maintainer = "EasyGoing Visual <visual@easygoing.vn>"
+type = "add-on"
+
+website = "https://github.com/HuyNg29/3D-EZG-Blender-Addon-Hub"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 EasyGoing Visual"]
+
+tags = ["Animation", "Rigging", "3D View"]

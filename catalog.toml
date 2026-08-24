@@ -32,7 +32,7 @@ items = ["ezg_deco_namer", "ezg_auto_uv_palette"]
 [[groups]]
 id = "rigging"
 label = "Rigging / Animation"
-items = ["ezg_mixamo_marker_rigger", "ezg_mixamo_anim_lib"]
+items = ["ezg_mixamo_marker_rigger", "ezg_mixamo_anim_lib", "ezg_anim_tools"]
 
 # ---------------------------------------------------------------------------
 # Addon cua EZG
@@ -88,6 +88,17 @@ Duyet mot thu muc chua file FBX tai tu Mixamo va ap animation thang vao rig.
 Khoi phai import tung file mot roi retarget bang tay."""
 thumbnail = "thumbs/ezg_mixamo_anim_lib.png"
 recommended = true
+
+[items.ezg_anim_tools]
+title_vi = "EZG Animation Tools"
+summary_vi = """
+Hai viec quanh chuyen dong: RETARGET animation tu mot bo xuong bat ki sang bo
+xuong khac (tu doan bang anh xa tu ten xuong, tu bu chenh lech rest pose A-pose
+vs T-pose, quy doi tinh tien hong theo ti le chieu cao), va LAT GUONG trai/phai
+mot action (sao du ca kenh cap object nen khong bi sai scale khi export).
+Ca hai deu co nut do sai lech de biet ket qua bam sat den dau."""
+thumbnail = "thumbs/ezg_anim_tools.png"
+recommended = false
 
 # ---------------------------------------------------------------------------
 # Addon BEN THU BA — chi tro toi nguon, KHONG dua vao repo EZG.
