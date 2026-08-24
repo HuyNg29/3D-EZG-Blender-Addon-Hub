@@ -262,6 +262,28 @@ err, worst = mirror.mirror_error(ctx, tgt, src_act, new)
 print("    lech so voi anh guong ly thuyet: %.5f do" % err)
 check(err < 0.01, "lat guong chinh xac (< 0.01 do)")
 
+# --- Ban clone: nhan doi action goc roi lat de len ------------------------
+# Dat dau vet vao ban goc de chung minh clone mang theo, con ban dung action
+# rong thi khong. Day chinh la khac biet giua hai nut.
+src_act["ezg_test_tag"] = 4242
+src_act.frame_range  # cham vao cho chac frame_range da tinh
+
+cl, rep_cl = mirror.mirror_action(ctx, tgt, src_act, "RT_Aligned_Clone", clone=True)
+check(cl.get("ezg_test_tag") == 4242,
+      "clone mang theo custom property cua ban goc")
+check(new.get("ezg_test_tag") is None,
+      "ban dung action rong KHONG mang theo (dung nhu mo ta)")
+check(len(cl.fcurves) >= len(src_act.fcurves),
+      "clone co do phu kenh khong kem ban goc (%d vs %d)"
+      % (len(cl.fcurves), len(src_act.fcurves)))
+
+n_obj_cl = len([fc for fc in cl.fcurves if not fc.data_path.startswith("pose.bones")])
+check(n_obj_cl == 9, "clone giu du 9 fcurve cap object (%d)" % n_obj_cl)
+
+err_cl, _ = mirror.mirror_error(ctx, tgt, src_act, cl)
+print("    ban clone lech: %.5f do" % err_cl)
+check(err_cl < 0.01, "ban clone lat guong cung chinh xac (< 0.01 do)")
+
 # Tay phai cua ban moi phai o dung cho tay trai cua ban goc, va nguoc lai
 def hand_y(action, bone):
     tgt.animation_data.action = action

@@ -106,8 +106,35 @@ def _object_level(action):
     return out
 
 
-def mirror_action(context, ob, src_action, new_name):
+def _bind_slot(ad, action):
+    """Blender 4.4+ dung slotted action: gan action xong con phai co slot.
+
+    Khong co slot thi action duoc lien ket nhung KHONG dieu khien gi ca — tu the
+    dung im ma khong bao loi.
+    """
+    if not hasattr(ad, "action_slot"):
+        return
+    if ad.action_slot is None and getattr(action, "slots", None):
+        try:
+            ad.action_slot = action.slots[0]
+        except Exception:
+            pass
+
+
+def mirror_action(context, ob, src_action, new_name, clone=True):
     """Tao action moi la anh guong trai/phai cua `src_action`.
+
+    clone=True (mac dinh, va la duong ma UI dung)
+        Nhan doi action goc roi lat de len. Giu duoc marker, custom property,
+        fcurve modifier, channel group, va bao dam do phu kenh y het ban goc —
+        ke ca 9 fcurve cap object, thu ma neu thieu se lam engine hien nhan vat
+        sai scale. Doi lai: fcurve rac cua ban goc (vi du kenh cho xuong khong
+        con ton tai) cung theo sang.
+
+    clone=False
+        Dung action rong roi ghi lai tung kenh tu the. Ket qua sach hon nhung
+        moi thu khong phai kenh tu the deu mat. Giu lai vi doi khi can dung
+        chinh cai tinh chat "sach" do.
 
     Tra ve (action_moi, canh_bao).
     """
@@ -160,6 +187,7 @@ def mirror_action(context, ob, src_action, new_name):
             t.is_solo = False
             t.mute = True
         ad.action = src_action
+        _bind_slot(ad, src_action)
 
         src_pose = {}
         for f in range(f0, f1 + 1):
@@ -171,12 +199,20 @@ def mirror_action(context, ob, src_action, new_name):
         old = bpy.data.actions.get(new_name)
         if old:
             bpy.data.actions.remove(old)
-        new = bpy.data.actions.new(new_name)
+        if clone:
+            new = src_action.copy()
+            new.name = new_name
+            if new.name != new_name:
+                report.append("Ten '%s' bi chiem, Blender doi thanh '%s'."
+                              % (new_name, new.name))
+        else:
+            new = bpy.data.actions.new(new_name)
         new.use_fake_user = True
 
         for pb in ob.pose.bones:
             pb.rotation_mode = 'QUATERNION'
         ad.action = new
+        _bind_slot(ad, new)
 
         for f in range(f0, f1 + 1):
             scene.frame_set(f)
@@ -258,8 +294,10 @@ def mirror_error(context, ob, src_action, dst_action):
             t.is_solo = False
             t.mute = True
         ad.action = src_action
+        _bind_slot(ad, src_action)
         A = {f: fk() for f in (scene.frame_set(f) or f for f in range(f0, f1 + 1))}
         ad.action = dst_action
+        _bind_slot(ad, dst_action)
         B = {f: fk() for f in (scene.frame_set(f) or f for f in range(f0, f1 + 1))}
         worst = 0.0
         name = ""

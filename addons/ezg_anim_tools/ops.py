@@ -197,8 +197,9 @@ def _mirror_inputs(context):
 class EZG_AT_OT_mirror(Operator):
     bl_idname = "ezg_at.mirror"
     bl_label = "Mirror Action"
-    bl_description = ("Tao action moi la anh guong trai/phai. Sao du ca kenh cap "
-                      "object nen khong bi sai scale khi export")
+    bl_description = ("Nhan doi action da chon roi lat guong trai/phai de len. "
+                      "Giu nguyen marker, custom property, fcurve modifier va do "
+                      "phu kenh cua ban goc")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -221,7 +222,7 @@ class EZG_AT_OT_mirror(Operator):
             return {'CANCELLED'}
 
         try:
-            new, report = mirror.mirror_action(context, ob, act, name)
+            new, report = mirror.mirror_action(context, ob, act, name, clone=True)
         except mirror.MirrorError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}

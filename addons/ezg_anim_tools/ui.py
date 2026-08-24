@@ -133,6 +133,10 @@ class EZG_AT_PT_mirror(Panel):
         col.label(text="Sao du ca 9 kenh cap object (location /", icon='INFO')
         col.label(text="rotation / scale). Thieu chung thi Blender van")
         col.label(text="dung nhung engine se hien nhan vat sai scale.")
+        col.separator()
+        col.label(text="Nut nay nhan doi action goc roi lat de len, nen", icon='DUPLICATE')
+        col.label(text="giu ca marker, custom property, fcurve modifier.")
+        col.label(text="Doi lai: fcurve rac cua ban goc cung theo sang.")
 
 
 classes = (EZG_AT_UL_map, EZG_AT_PT_retarget, EZG_AT_PT_mirror)
