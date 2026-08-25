@@ -76,7 +76,9 @@ Dat nhan cho node Object Info / Collection Info theo ten object ma node do dang
 tro toi, nen nhin cay Geometry Nodes la doc duoc ngay thay vi phai bam vao tung
 node. Chay cho cay dang mo (ke ca group long ben trong) hoac ca file.
 Kem nut dan cac node do ve mot cot thang, cach deu va thu nho lai cho gon —
-sap theo vi tri dang thay hoac theo nhan A→Z."""
+sap theo vi tri dang thay hoac theo nhan A→Z.
+Va nut don: xoa cac node Info khong tro toi object nao hoac khong noi vao dau,
+co bang xem truoc liet ke dung nhung node sap bi xoa kem ly do."""
 thumbnail = "thumbs/ezg_gn_info_namer.png"
 recommended = false
 

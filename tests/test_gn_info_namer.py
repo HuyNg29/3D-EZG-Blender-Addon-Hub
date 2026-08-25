@@ -164,6 +164,73 @@ stack = sorted((a, b, c), key=lambda n: -n.location.y)
 gaps = [abs(n.location.y - m.location.y) for n, m in zip(stack, stack[1:])]
 check(all(g > 100.0 for g in gaps), "node mo ra khong chong len nhau (%s)" % gaps)
 
+
+# --- Don node thua ----------------------------------------------------------
+print("--- don node thua ---")
+
+clean = bpy.data.node_groups.new("Clean", "GeometryNodeTree")
+out = clean.nodes.new("NodeGroupOutput")
+join = clean.nodes.new("GeometryNodeJoinGeometry")
+clean.links.new(join.outputs[0], out.inputs[0])
+
+
+def info_node(name, ob=None, wire=True):
+    n = clean.nodes.new("GeometryNodeObjectInfo")
+    n.name = name
+    n.select = False
+    if ob is not None:
+        n.inputs["Object"].default_value = ob
+    if wire:
+        clean.links.new(n.outputs["Geometry"], join.inputs[0])
+    return n
+
+
+good = info_node("good", ob=cube, wire=True)            # co object + co day
+no_obj = info_node("no_obj", ob=None, wire=True)         # trong nhung dang noi day
+orphan = info_node("orphan", ob=cube, wire=False)        # co object, khong noi
+dead = info_node("dead", ob=None, wire=False)            # trong va khong noi
+
+check(mod.node_waste_reason(good) is None, "node co object va co day -> giu")
+check(mod.node_waste_reason(no_obj) == mod.REASON_EMPTY_LINKED,
+      "node trong nhung dang noi day -> canh bao dut mach (%s)"
+      % mod.node_waste_reason(no_obj))
+check(mod.node_waste_reason(orphan) == mod.REASON_UNLINKED,
+      "node co object nhung khong noi -> thua (%s)" % mod.node_waste_reason(orphan))
+check(mod.node_waste_reason(dead) == "trống, không nối",
+      "node vua trong vua khong noi -> bao ca hai (%s)" % mod.node_waste_reason(dead))
+
+# Tat tung dieu kien mot: nguoi dung phai chan duoc ve ma ho khong muon dong toi.
+check(mod.node_waste_reason(orphan, remove_unlinked=False) is None,
+      "tat 'khong noi' thi node khong noi duoc tha")
+check(mod.node_waste_reason(no_obj, remove_empty=False) is None,
+      "tat 'khong chua object' thi node trong dang noi day duoc tha")
+check(mod.node_waste_reason(dead, remove_empty=False) == mod.REASON_UNLINKED,
+      "tat 'khong chua object' van bat duoc node khong noi")
+
+# Node khong phai Info khong bao gio bi dung toi, du no khong noi vao dau.
+lonely = clean.nodes.new("GeometryNodeSetPosition")
+check(mod.node_waste_reason(lonely) is None, "node khong phai Info -> khong dung toi")
+
+found = mod.find_waste_nodes(clean)
+check(sorted(n.name for n, _ in found) == ["dead", "no_obj", "orphan"],
+      "quet ca cay ra dung 3 node thua (%s)" % [n.name for n, _ in found])
+
+orphan.select = True
+found_sel = mod.find_waste_nodes(clean, selected_only=True)
+check([n.name for n, _ in found_sel] == ["orphan"],
+      "pham vi 'dang chon' chi lay node da chon (%s)" % [n.name for n, _ in found_sel])
+
+# Xoa that: node giu lai phai con nguyen, va day cua no khong duoc dut theo.
+n_before = len(clean.nodes)
+removed = mod.remove_nodes(clean, [n for n, _ in found])
+check(removed == 3 and len(clean.nodes) == n_before - 3,
+      "xoa dung 3 node (%d)" % removed)
+check("good" in clean.nodes, "node con dung giu nguyen")
+# Lay lai tham chieu: xoa node khac co the lam con tro Python cu thanh vo hieu.
+check(clean.nodes["good"].outputs["Geometry"].is_linked,
+      "day cua node giu lai khong bi dut")
+check(mod.find_waste_nodes(clean) == [], "quet lai khong con node thua")
+
 if FAILED:
     print("\nFAILED %d:" % len(FAILED))
     for m in FAILED:

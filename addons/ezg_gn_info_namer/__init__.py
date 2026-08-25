@@ -13,6 +13,11 @@ Geometry Node Editor > phím N > tab "EZG". Hai việc:
               theo nhãn A→Z — nên chạy sau khi đặt nhãn thì ra danh sách xếp
               theo tên object.
 
+  Dọn         xoá các node Info không trỏ tới object nào, hoặc không có dây nào
+              đi ra từ đầu ra của nó. Đây là việc duy nhất trong addon có thể
+              làm mất công đang làm, nên nó luôn hiện bảng xem trước liệt kê
+              đúng những node sắp bị xoá kèm lý do, xác nhận rồi mới xoá.
+
 Nhãn KHÔNG tự cập nhật khi đổi object trong node. Bấm lại nút là xong.
 """
 
@@ -65,11 +70,9 @@ def label_info_nodes(trees):
     empty = 0
     for tree in trees:
         for node in tree.nodes:
-            socket_name = INFO_NODES.get(node.bl_idname)
-            if socket_name is None:
+            if node.bl_idname not in INFO_NODES:
                 continue
-            socket = node.inputs.get(socket_name)
-            data = socket.default_value if socket else None
+            data = _info_datablock(node)
             if data is None:
                 empty += 1
                 continue
@@ -77,6 +80,15 @@ def label_info_nodes(trees):
                 node.label = data.name
                 renamed += 1
     return renamed, empty
+
+
+def _info_datablock(node):
+    """Object / Collection ma node Info dang tro toi. None neu o trong."""
+    socket_name = INFO_NODES.get(node.bl_idname)
+    if socket_name is None:
+        return None
+    socket = node.inputs.get(socket_name)
+    return socket.default_value if socket else None
 
 
 def _edit_tree(context):
@@ -303,6 +315,167 @@ class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# --- Don node thua -----------------------------------------------------------
+#
+# Day la chuc nang DUY NHAT trong addon co the lam mat viec dang lam, nen no
+# khong bao gio chay thang: bam nut la hien bang liet ke dung nhung node sap bi
+# xoa va ly do, xac nhan roi moi xoa.
+
+# Ly do mot node bi coi la thua. Thu tu quan trong: mot node vua trong vua khong
+# noi day thi bao ca hai, con "trong nhung DANG noi day" la truong hop can canh
+# vi xoa no la dut mach cay.
+REASON_EMPTY = "trống"
+REASON_UNLINKED = "không nối"
+REASON_EMPTY_LINKED = "trống, nhưng đang nối dây"
+
+
+def node_waste_reason(node, remove_empty=True, remove_unlinked=True):
+    """Ly do node nay bi coi la thua, hoac None neu no van dang co ich.
+
+    "Khong noi" xet o dau RA: node Info sinh du lieu cho phan sau cua cay, day
+    vao dau vao cua no (vd Object tro tu Group Input) khong lam no co ich neu
+    khong ai lay ket qua.
+    """
+    if node.bl_idname not in INFO_NODES:
+        return None
+
+    is_empty = _info_datablock(node) is None
+    is_unlinked = not any(s.is_linked for s in node.outputs)
+
+    reasons = []
+    if remove_empty and is_empty:
+        reasons.append(REASON_EMPTY)
+    if remove_unlinked and is_unlinked:
+        reasons.append(REASON_UNLINKED)
+
+    if not reasons:
+        return None
+    if is_empty and not is_unlinked:
+        # Xoa node nay se dut mot soi day dang co that -> phai noi ro.
+        return REASON_EMPTY_LINKED
+    return ", ".join(reasons)
+
+
+def find_waste_nodes(tree, remove_empty=True, remove_unlinked=True,
+                     selected_only=False):
+    """Danh sach (node, ly do) cac node Info thua trong MOT cay."""
+    found = []
+    for node in tree.nodes:
+        if selected_only and not node.select:
+            continue
+        reason = node_waste_reason(node, remove_empty, remove_unlinked)
+        if reason is not None:
+            found.append((node, reason))
+    return found
+
+
+def remove_nodes(tree, nodes):
+    """Xoa cac node khoi cay. Tra ve so node da xoa."""
+    count = 0
+    for node in list(nodes):
+        tree.nodes.remove(node)
+        count += 1
+    return count
+
+
+def _node_title(node):
+    return node.label or node.name
+
+
+class EZG_GN_OT_clean_info_nodes(bpy.types.Operator):
+    """Xoá các node Info không trỏ tới object nào, hoặc không nối vào đâu cả"""
+
+    bl_idname = "ezg_gn.clean_info_nodes"
+    bl_label = "Dọn node thừa"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    remove_empty: bpy.props.BoolProperty(
+        name="Không chứa object",
+        default=True,
+        description="Node Info chua tro toi object / collection nao",
+    )
+    remove_unlinked: bpy.props.BoolProperty(
+        name="Không nối vào đâu",
+        default=True,
+        description="Node Info khong co day nao di ra tu dau ra cua no",
+    )
+    selected_only: bpy.props.BoolProperty(
+        name="Chỉ node đang chọn",
+        default=False,
+        description="Chi xet cac node dang chon, thay vi ca cay dang mo",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return _edit_tree(context) is not None
+
+    def _found(self, context):
+        tree = _edit_tree(context)
+        if tree is None:
+            return []
+        return find_waste_nodes(tree, self.remove_empty, self.remove_unlinked,
+                                self.selected_only)
+
+    def invoke(self, context, event):
+        if not (self.remove_empty or self.remove_unlinked):
+            self.report({'WARNING'}, "Chưa chọn điều kiện nào để dọn.")
+            return {'CANCELLED'}
+        if not self._found(context):
+            self.report({'INFO'}, "Không có node Info nào thừa.")
+            return {'CANCELLED'}
+        return context.window_manager.invoke_props_dialog(self, width=380)
+
+    def draw(self, context):
+        layout = self.layout
+
+        col = layout.column(align=True)
+        col.prop(self, "remove_empty")
+        col.prop(self, "remove_unlinked")
+        col.prop(self, "selected_only")
+
+        layout.separator()
+
+        found = self._found(context)
+        if not found:
+            layout.label(text="Không còn node nào khớp điều kiện.", icon='CHECKMARK')
+            return
+
+        layout.label(text="Sẽ xoá %d node:" % len(found), icon='TRASH')
+
+        box = layout.box()
+        col = box.column(align=True)
+        SHOWN = 12
+        for node, reason in found[:SHOWN]:
+            icon = 'ERROR' if reason == REASON_EMPTY_LINKED else 'DOT'
+            col.label(text="%s  —  %s" % (_node_title(node), reason), icon=icon)
+        if len(found) > SHOWN:
+            col.label(text="… và %d node nữa" % (len(found) - SHOWN))
+
+        if any(r == REASON_EMPTY_LINKED for _, r in found):
+            layout.label(text="Node đánh dấu đỏ đang có dây — xoá là đứt mạch.",
+                         icon='ERROR')
+
+    def execute(self, context):
+        tree = _edit_tree(context)
+        if tree is None:
+            self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+            return {'CANCELLED'}
+
+        found = self._found(context)
+        if not found:
+            self.report({'INFO'}, "Không có node Info nào thừa.")
+            return {'CANCELLED'}
+
+        cut_links = sum(1 for _, r in found if r == REASON_EMPTY_LINKED)
+        removed = remove_nodes(tree, [n for n, _ in found])
+
+        msg = "Đã xoá %d node thừa." % removed
+        if cut_links:
+            msg += " %d node trong đó đang có dây — Ctrl+Z nếu cần." % cut_links
+        self.report({'WARNING'} if cut_links else {'INFO'}, msg)
+        return {'FINISHED'}
+
+
 class EZG_GN_PT_info_namer(bpy.types.Panel):
     bl_label = "GN Info Namer"
     bl_space_type = 'NODE_EDITOR'
@@ -371,10 +544,29 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         if n_all != n_info:
             layout.label(text="Kể cả group lồng: %d node Info" % n_all, icon='NODETREE')
 
+        layout.separator()
+
+        # Dem san so node thua ngay tren panel: nut xoa ma khong noi truoc no se
+        # xoa bao nhieu thi khong ai dam bam.
+        waste = find_waste_nodes(tree, selected_only=bool(n_sel))
+
+        col = layout.column(align=True)
+        col.scale_y = 1.4
+        col.enabled = bool(waste)
+        op = col.operator(EZG_GN_OT_clean_info_nodes.bl_idname, icon='TRASH')
+        op.selected_only = bool(n_sel)
+
+        if waste:
+            layout.label(text="Thừa: %d node (bấm để xem trước)" % len(waste),
+                         icon='INFO')
+        else:
+            layout.label(text="Không có node Info nào thừa.", icon='CHECKMARK')
+
 
 classes = (
     EZG_GN_OT_label_info_nodes,
     EZG_GN_OT_arrange_nodes,
+    EZG_GN_OT_clean_info_nodes,
     EZG_GN_PT_info_namer,
 )
 
