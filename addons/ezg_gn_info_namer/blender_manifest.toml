@@ -1,0 +1,18 @@
+schema_version = "1.0.0"
+
+# KHONG BAO GIO doi `id` sau lan release dau tien.
+id = "ezg_gn_info_namer"
+version = "1.0.0"
+name = "GN Info Namer"
+tagline = "Dat nhan cho node Object Info / Collection Info theo ten object"
+maintainer = "EasyGoing Visual <visual@easygoing.vn>"
+type = "add-on"
+
+website = "https://github.com/HuyNg29/3D-EZG-Blender-Addon-Hub"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 EasyGoing Visual"]
+
+tags = ["Node", "Geometry Nodes"]

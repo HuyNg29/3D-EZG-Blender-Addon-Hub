@@ -30,6 +30,11 @@ label = "Modeling / UV"
 items = ["ezg_deco_namer", "ezg_auto_uv_palette"]
 
 [[groups]]
+id = "nodes"
+label = "Geometry Nodes"
+items = ["ezg_gn_info_namer"]
+
+[[groups]]
 id = "rigging"
 label = "Rigging / Animation"
 items = ["ezg_mixamo_marker_rigger", "ezg_mixamo_anim_lib", "ezg_anim_tools"]
@@ -63,6 +68,15 @@ Hai che do: moi FBX ra 1 file rieng, hoac gom tat ca vao 1 file.
 Chay bang tien trinh Blender nen rieng nen khong dong bang UI."""
 thumbnail = "thumbs/ezg_fbx_batch.png"
 recommended = true
+
+[items.ezg_gn_info_namer]
+title_vi = "GN Info Namer"
+summary_vi = """
+Dat nhan cho node Object Info / Collection Info theo ten object ma node do dang
+tro toi, nen nhin cay Geometry Nodes la doc duoc ngay thay vi phai bam vao tung
+node. Chay cho cay dang mo (ke ca group long ben trong) hoac ca file."""
+thumbnail = "thumbs/ezg_gn_info_namer.png"
+recommended = false
 
 [items.ezg_auto_uv_palette]
 title_vi = "Auto UV Palette"
