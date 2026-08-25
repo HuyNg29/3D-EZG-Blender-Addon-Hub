@@ -21,7 +21,7 @@ Addon hiện có:
 | `ezg_fbx_batch` | FBX Batch to Blend Converter | 1.5.3 | Pipeline |
 | `ezg_deco_namer` | Deco Namer | 1.5.0 | Modeling / UV |
 | `ezg_auto_uv_palette` | Auto UV Palette | 1.0.0 | Modeling / UV |
-| `ezg_gn_info_namer` | GN Info Namer | 1.0.0 | Geometry Nodes |
+| `ezg_gn_info_namer` | GN Info Namer | 1.1.0 | Geometry Nodes |
 | `ezg_mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.21.0 | Rigging / Animation |
 | `ezg_mixamo_anim_lib` | Mixamo Animation Library | 1.4.2 | Rigging / Animation |
 | `ezg_anim_tools` | EZG Animation Tools | 1.1.0 | Rigging / Animation |

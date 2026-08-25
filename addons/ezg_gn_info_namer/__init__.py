@@ -1,12 +1,17 @@
-"""GN Info Namer — đặt nhãn cho node Object Info / Collection Info theo tên
-object (hoặc collection) mà node đó đang trỏ tới.
+"""GN Info Namer — dọn đám node Object Info / Collection Info trong Geometry Nodes.
 
-Geometry Node Editor > phím N > tab "EZG".
+Geometry Node Editor > phím N > tab "EZG". Hai việc:
 
-Node Object Info nào cũng hiện đúng một chữ "Object Info" trên đầu, nên một cây
-có mười node nhìn giống hệt nhau — phải bấm vào từng cái mới biết nó lấy object
-gì. Addon này ghi tên object vào `node.label`, là chuỗi Blender hiển thị thay cho
-tên node, nên nhìn cây là đọc được ngay.
+  Đặt nhãn    ghi tên object (hoặc collection) mà node đang trỏ tới vào
+              `node.label` — chuỗi Blender hiển thị thay cho tên node.
+              Node Object Info nào cũng hiện đúng một chữ "Object Info" trên
+              đầu, nên một cây mười node nhìn giống hệt nhau; có nhãn thì nhìn
+              là đọc được ngay, khỏi bấm vào từng cái.
+
+  Sắp xếp     dàn các node đó về một cột (hoặc hàng) thẳng, cách đều, và thu
+              nhỏ (`node.hide`) cho gọn. Sắp được theo vị trí đang thấy hoặc
+              theo nhãn A→Z — nên chạy sau khi đặt nhãn thì ra danh sách xếp
+              theo tên object.
 
 Nhãn KHÔNG tự cập nhật khi đổi object trong node. Bấm lại nút là xong.
 """
@@ -125,6 +130,179 @@ class EZG_GN_OT_label_info_nodes(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# --- Sap xep -----------------------------------------------------------------
+#
+# Chieu cao mot node da thu nho (hide=True). Blender ve no thanh mot vien thuoc
+# cao co dinh, khong phu thuoc so socket.
+HIDDEN_HEIGHT = 32.0
+
+# Node khong the thu nho / khong nen keo di rieng:
+#   Frame  keo frame la keo theo moi node ben trong
+#   Reroute chi la mot cham noi day, hide khong co tac dung
+SKIP_TYPES = {"NodeFrame", "NodeReroute"}
+
+
+def _node_height(node, ui_scale=1.0):
+    """Chieu cao node theo don vi cua node tree.
+
+    `node.dimensions` bang 0 voi node CHUA TUNG duoc ve tren man hinh, va bi cu
+    ngay sau khi doi `hide` (Blender chi cap nhat luc redraw). Nen o day chi
+    dung dimensions khi no co gia tri that, con lai thi uoc luong theo so socket.
+    """
+    if node.hide:
+        return HIDDEN_HEIGHT
+
+    dim_y = node.dimensions.y / (ui_scale or 1.0)
+    if dim_y > 1.0:
+        return dim_y
+
+    sockets = sum(1 for s in node.inputs if s.enabled and not s.hide)
+    sockets += sum(1 for s in node.outputs if s.enabled and not s.hide)
+    return 34.0 + 22.0 * sockets
+
+
+def set_collapse(nodes, collapse):
+    """collapse True/False -> thu nho / mo lai. None -> giu nguyen."""
+    if collapse is None:
+        return 0
+    changed = 0
+    for node in nodes:
+        if node.hide != collapse:
+            node.hide = collapse
+            changed += 1
+    return changed
+
+
+def arrange_nodes(nodes, axis='COLUMN', gap=10.0, order='POSITION', ui_scale=1.0):
+    """Dan node ve mot cot (hoac mot hang) thang, cach deu. Tra ve so node da doi cho.
+
+    Node nam trong frame duoc dan RIENG theo tung frame: `node.location` cua
+    chung tinh theo goc cua frame, tron chung voi node ngoai frame se nhay lung
+    tung. Node khong o frame nao cung la mot nhom.
+    """
+    buckets = {}
+    for node in nodes:
+        buckets.setdefault(node.parent, []).append(node)
+
+    if order == 'NAME':
+        def key(n):
+            return ((n.label or n.name).lower(), n.name.lower())
+    elif axis == 'ROW':
+        def key(n):
+            return (n.location.x, -n.location.y)
+    else:
+        def key(n):
+            return (-n.location.y, n.location.x)
+
+    moved = 0
+    for group in buckets.values():
+        group.sort(key=key)
+        # Neo vao goc trai-tren cua chinh nhom do, de no khong nhay di cho khac.
+        x0 = min(n.location.x for n in group)
+        y0 = max(n.location.y for n in group)
+
+        cursor = 0.0
+        for node in group:
+            if axis == 'ROW':
+                target = (x0 + cursor, y0)
+                cursor += node.width + gap
+            else:
+                target = (x0, y0 - cursor)
+                cursor += _node_height(node, ui_scale) + gap
+
+            if abs(node.location.x - target[0]) > 1e-4 or \
+               abs(node.location.y - target[1]) > 1e-4:
+                moved += 1
+            node.location = target
+
+    return moved
+
+
+def _arrange_targets(tree, scope):
+    """Node se bi sap xep. Bo qua frame va reroute (xem SKIP_TYPES)."""
+    if scope == 'SELECTED':
+        pool = [n for n in tree.nodes if n.select]
+    else:
+        pool = [n for n in tree.nodes if n.bl_idname in INFO_NODES]
+    return [n for n in pool if n.bl_idname not in SKIP_TYPES]
+
+
+class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
+    """Dan node thang hang va thu nho lai cho gon"""
+
+    bl_idname = "ezg_gn.arrange_nodes"
+    bl_label = "Thẳng hàng + thu nhỏ"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    scope: bpy.props.EnumProperty(
+        name="Phạm vi",
+        items=[
+            ('INFO', "Node Info", "Moi node Object Info / Collection Info trong cay dang mo"),
+            ('SELECTED', "Đang chọn", "Chi cac node dang chon, thuoc loai nao cung duoc"),
+        ],
+        default='INFO',
+    )
+    collapse: bpy.props.EnumProperty(
+        name="Thu nhỏ",
+        items=[
+            ('COLLAPSE', "Thu nhỏ", "Gap node lai thanh mot vach nho"),
+            ('EXPAND', "Mở ra", "Mo lai node dang bi gap"),
+            ('KEEP', "Giữ nguyên", "Khong dong den trang thai gap/mo"),
+        ],
+        default='COLLAPSE',
+    )
+    axis: bpy.props.EnumProperty(
+        name="Hướng",
+        items=[
+            ('COLUMN', "Cột dọc", "Xep chong tu tren xuong, thang le trai"),
+            ('ROW', "Hàng ngang", "Xep tu trai sang phai, thang le tren"),
+        ],
+        default='COLUMN',
+    )
+    order: bpy.props.EnumProperty(
+        name="Thứ tự",
+        items=[
+            ('POSITION', "Theo vị trí", "Giu nguyen thu tu dang thay tren man hinh"),
+            ('NAME', "Theo nhãn A→Z", "Sap theo nhan node, xep chua co nhan theo ten node"),
+        ],
+        default='POSITION',
+    )
+    gap: bpy.props.FloatProperty(
+        name="Khoảng cách",
+        default=10.0, min=0.0, soft_max=120.0,
+        description="Khoang ho giua hai node lien nhau",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return _edit_tree(context) is not None
+
+    def execute(self, context):
+        tree = _edit_tree(context)
+        if tree is None:
+            self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+            return {'CANCELLED'}
+
+        targets = _arrange_targets(tree, self.scope)
+        if not targets:
+            if self.scope == 'SELECTED':
+                self.report({'WARNING'}, "Chưa chọn node nào.")
+            else:
+                self.report({'WARNING'}, "Cây này không có node Info nào.")
+            return {'CANCELLED'}
+
+        collapse = {'COLLAPSE': True, 'EXPAND': False}.get(self.collapse)
+        set_collapse(targets, collapse)
+
+        ui_scale = context.preferences.system.ui_scale
+        moved = arrange_nodes(targets, axis=self.axis, gap=self.gap,
+                              order=self.order, ui_scale=ui_scale)
+
+        self.report({'INFO'}, "Đã sắp xếp %d node (%d node đổi chỗ)."
+                    % (len(targets), moved))
+        return {'FINISHED'}
+
+
 class EZG_GN_PT_info_namer(bpy.types.Panel):
     bl_label = "GN Info Namer"
     bl_space_type = 'NODE_EDITOR'
@@ -154,14 +332,51 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         row.operator(EZG_GN_OT_label_info_nodes.bl_idname,
                      text="Cả file", icon='FILE_BLEND').whole_file = True
 
-        n_info = sum(
+        layout.separator()
+
+        n_sel = len(_arrange_targets(tree, 'SELECTED'))
+        scope = 'SELECTED' if n_sel else 'INFO'
+
+        col = layout.column(align=True)
+        col.scale_y = 1.4
+        op = col.operator(EZG_GN_OT_arrange_nodes.bl_idname, icon='ALIGN_JUSTIFY')
+        op.scope = scope
+        op.collapse = 'COLLAPSE'
+
+        row = layout.row(align=True)
+        op = row.operator(EZG_GN_OT_arrange_nodes.bl_idname,
+                          text="Mở ra", icon='FULLSCREEN_ENTER')
+        op.scope = scope
+        op.collapse = 'EXPAND'
+        op = row.operator(EZG_GN_OT_arrange_nodes.bl_idname,
+                          text="Theo nhãn A→Z", icon='SORTALPHA')
+        op.scope = scope
+        op.collapse = 'KEEP'
+        op.order = 'NAME'
+
+        # Nut chay tren node dang chon neu co, khong thi chay tren moi node Info.
+        # Noi ro ra vi hai truong hop cho ket qua rat khac nhau.
+        n_info = sum(1 for node in tree.nodes if node.bl_idname in INFO_NODES)
+        if n_sel:
+            layout.label(text="Sẽ sắp xếp: %d node đang chọn" % n_sel,
+                         icon='RESTRICT_SELECT_OFF')
+        else:
+            layout.label(text="Sẽ sắp xếp: %d node Info trong cây" % n_info,
+                         icon='NODE')
+
+        n_all = sum(
             1 for t in _walk_trees(tree) for node in t.nodes
             if node.bl_idname in INFO_NODES
         )
-        layout.label(text="Cây này: %d node Info" % n_info, icon='NODE')
+        if n_all != n_info:
+            layout.label(text="Kể cả group lồng: %d node Info" % n_all, icon='NODETREE')
 
 
-classes = (EZG_GN_OT_label_info_nodes, EZG_GN_PT_info_namer)
+classes = (
+    EZG_GN_OT_label_info_nodes,
+    EZG_GN_OT_arrange_nodes,
+    EZG_GN_PT_info_namer,
+)
 
 
 def register():

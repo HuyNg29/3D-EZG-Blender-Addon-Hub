@@ -74,7 +74,9 @@ title_vi = "GN Info Namer"
 summary_vi = """
 Dat nhan cho node Object Info / Collection Info theo ten object ma node do dang
 tro toi, nen nhin cay Geometry Nodes la doc duoc ngay thay vi phai bam vao tung
-node. Chay cho cay dang mo (ke ca group long ben trong) hoac ca file."""
+node. Chay cho cay dang mo (ke ca group long ben trong) hoac ca file.
+Kem nut dan cac node do ve mot cot thang, cach deu va thu nho lai cho gon —
+sap theo vi tri dang thay hoac theo nhan A→Z."""
 thumbnail = "thumbs/ezg_gn_info_namer.png"
 recommended = false
 
