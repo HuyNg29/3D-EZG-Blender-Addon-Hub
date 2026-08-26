@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_gn_info_namer"
-version = "1.3.0"
+version = "1.4.0"
 name = "GN Info Namer"
 tagline = "Them object vao Geometry Nodes, dat nhan va dan thang hang"
 maintainer = "EasyGoing Visual <visual@easygoing.vn>"

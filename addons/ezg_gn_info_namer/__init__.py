@@ -1,6 +1,6 @@
 """GN Info Namer — dọn đám node Object Info / Collection Info trong Geometry Nodes.
 
-Geometry Node Editor > phím N > tab "EZG". Bốn việc:
+Geometry Node Editor > phím N > tab "EZG". Năm việc:
 
   Thêm object chọn object ngoài viewport, bấm một nút là mỗi cái thành một node
               Object Info, nối hết vào một Join Geometry, đặt nhãn và dàn thẳng
@@ -17,7 +17,11 @@ Geometry Node Editor > phím N > tab "EZG". Bốn việc:
   Sắp xếp     dàn các node đó về một cột (hoặc hàng) thẳng, cách đều, và thu
               nhỏ (`node.hide`) cho gọn. Sắp được theo vị trí đang thấy hoặc
               theo nhãn A→Z — nên chạy sau khi đặt nhãn thì ra danh sách xếp
-              theo tên object.
+              theo tên object. Cắm lại luôn dây vào Join theo đúng thứ tự trên
+              xuống để chúng chạy song song, không chéo qua nhau.
+
+  Chọn object chọn node Info rồi bấm là object nó trỏ tới sáng lên ngoài
+              viewport và outliner. Có công tắc làm việc đó tự động.
 
   Dọn         xoá các node Info không trỏ tới object nào, hoặc không có dây nào
               đi ra từ đầu ra của nó. Đây là việc duy nhất trong addon có thể
@@ -179,6 +183,67 @@ def _node_height(node, ui_scale=1.0):
     return 34.0 + 22.0 * sockets
 
 
+def _abs_y(node):
+    """Do cao that trong cay: node trong frame co location tinh theo goc frame."""
+    y = node.location.y
+    parent = node.parent
+    while parent is not None:
+        y += parent.location.y
+        parent = parent.parent
+    return y
+
+
+def untangle_links(tree, socket):
+    """Cam lai day vao mot socket multi-input theo thu tu tren -> duoi cua node nguon.
+
+    Cho cam cua tung soi day tren socket multi-input do `multi_input_sort_id`
+    quyet dinh, ma thuoc tinh do CHI DOC va Blender dat no theo THU TU TAO
+    LINK. Nen cach duy nhat de day het xoan la go het ra roi cam lai lan luot
+    tu tren xuong. Tra ve so day da cam lai.
+    """
+    if not socket.is_multi_input:
+        return 0
+
+    links = list(socket.links)
+    if len(links) < 2:
+        return 0
+
+    ordered = sorted(links, key=lambda l: (-_abs_y(l.from_node), l.from_node.location.x))
+    # Ghi lai bang TEN: sau khi go link, giu tham chieu socket la khong chac chan.
+    sources = [(l.from_node.name, l.from_socket.identifier) for l in ordered]
+
+    for link in links:
+        tree.links.remove(link)
+
+    remade = 0
+    for node_name, socket_id in sources:
+        node = tree.nodes.get(node_name)
+        if node is None:
+            continue
+        out = next((s for s in node.outputs if s.identifier == socket_id), None)
+        if out is not None:
+            tree.links.new(out, socket)
+            remade += 1
+    return remade
+
+
+def untangle_downstream(tree, nodes):
+    """Go xoan moi socket multi-input dang nhan day tu cac node nay."""
+    targets = []
+    seen = set()
+    for node in nodes:
+        for out in node.outputs:
+            for link in out.links:
+                socket = link.to_socket
+                if not socket.is_multi_input:
+                    continue
+                key = (link.to_node.name, socket.identifier)
+                if key not in seen:
+                    seen.add(key)
+                    targets.append(socket)
+    return sum(untangle_links(tree, s) for s in targets)
+
+
 def set_collapse(nodes, collapse):
     """collapse True/False -> thu nho / mo lai. None -> giu nguyen."""
     if collapse is None:
@@ -290,6 +355,12 @@ class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
         default=10.0, min=0.0, soft_max=120.0,
         description="Khoang ho giua hai node lien nhau",
     )
+    untangle: bpy.props.BoolProperty(
+        name="Gỡ xoắn dây",
+        default=True,
+        description=("Cam lai day vao Join Geometry theo dung thu tu tren xuong, "
+                     "de chung chay song song thay vi cheo qua nhau"),
+    )
 
     @classmethod
     def poll(cls, context):
@@ -316,8 +387,14 @@ class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
         moved = arrange_nodes(targets, axis=self.axis, gap=self.gap,
                               order=self.order, ui_scale=ui_scale)
 
-        self.report({'INFO'}, "Đã sắp xếp %d node (%d node đổi chỗ)."
-                    % (len(targets), moved))
+        # Dan node xong ma khong cam lai day thi day van theo cho cam cu -> xoan
+        # het vao nhau. Hai viec nay luon phai di cung mot luot.
+        rewired = untangle_downstream(tree, targets) if self.untangle else 0
+
+        msg = "Đã sắp xếp %d node (%d node đổi chỗ)." % (len(targets), moved)
+        if rewired:
+            msg += " Cắm lại %d dây cho hết xoắn." % rewired
+        self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 
@@ -366,12 +443,27 @@ def _geometry_socket(sockets):
     return None
 
 
-def ensure_join(tree):
+def drop_group_input_links(tree, join):
+    """Go day di thang tu Group Input vao Join. Tra ve so day da go.
+
+    Group Input mang hinh khoi cua chinh object dang deo modifier. Gan nhu luon
+    la mot cube placeholder, va gop no vao Join chi to them mot khoi thua nam
+    giua canh. Nen mac dinh la khong noi.
+    """
+    dead = [l for s in join.inputs for l in s.links
+            if l.from_node.bl_idname == "NodeGroupInput"]
+    for link in dead:
+        tree.links.remove(link)
+    return len(dead)
+
+
+def ensure_join(tree, keep_group_input=False):
     """Tra ve (join, da_tao_moi, da_noi_ra_output).
 
     Dung lai Join Geometry dang cam vao Group Output neu co san. Neu Group
-    Output dang nhan day tu thu khac thi thu do duoc CAM VAO Join chu khong bi
-    thay the — them object khong duoc lam bien mat thu dang co trong cay.
+    Output dang nhan day tu mot node KHAC thi node do duoc cam vao Join chu
+    khong bi thay the — them object khong duoc lam bien mat mach dang co.
+    Rieng Group Input thi khong, xem drop_group_input_links.
     """
     out = _find_group_output(tree)
     sock = _geometry_socket(out.inputs) if out else None
@@ -379,6 +471,8 @@ def ensure_join(tree):
     if sock is not None and sock.is_linked:
         src = sock.links[0].from_node
         if src.bl_idname == "GeometryNodeJoinGeometry":
+            if not keep_group_input:
+                drop_group_input_links(tree, src)
             return src, False, True
 
     join = tree.nodes.new("GeometryNodeJoinGeometry")
@@ -389,7 +483,9 @@ def ensure_join(tree):
         return join, True, False
 
     if sock.is_linked:
-        tree.links.new(sock.links[0].from_socket, join.inputs[0])
+        old = sock.links[0]
+        if keep_group_input or old.from_node.bl_idname != "NodeGroupInput":
+            tree.links.new(old.from_socket, join.inputs[0])
     tree.links.new(join.outputs[0], sock)
     return join, True, True
 
@@ -455,6 +551,12 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
         default=True,
         description="Gap cac node vua tao lai cho gon",
     )
+    keep_group_input: bpy.props.BoolProperty(
+        name="Giữ dây Group Input",
+        default=False,
+        description=("Gop ca hinh khoi cua chinh object dang deo modifier vao Join. "
+                     "Tat: chi gop cac object them vao"),
+    )
 
     @classmethod
     def poll(cls, context):
@@ -490,7 +592,7 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
                 self.report({'WARNING'}, "Chưa chọn object nào.")
             return {'CANCELLED'}
 
-        join, join_created, wired = ensure_join(tree)
+        join, join_created, wired = ensure_join(tree, self.keep_group_input)
 
         # Bam nut hai lan khong duoc tao ra hai node cho cung mot object.
         existing = objects_feeding(join)
@@ -507,6 +609,9 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
         set_collapse(column, True if self.collapse else None)
         arrange_nodes(column, axis='COLUMN', gap=10.0, order='NAME',
                       ui_scale=context.preferences.system.ui_scale)
+        # Cam lai TOAN BO day vao Join, khong chi day moi: day cu van theo cho
+        # cam cu nen chi cam lai mot phan la van xoan.
+        untangle_links(tree, join.inputs[0])
 
         for node in tree.nodes:
             node.select = node in made
@@ -528,6 +633,158 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
         if notes:
             msg += " (" + "; ".join(notes) + ")"
         self.report({'WARNING'} if (join_created and not wired) else {'INFO'}, msg)
+        return {'FINISHED'}
+
+
+# --- Chon object tu node -----------------------------------------------------
+#
+# Blender KHONG phat su kien nao khi doi node dang chon, nen khong co cach nao
+# "bat" cu click de dong bo ngay. Hai duong di:
+#
+#   nut bam    chac chan, khong ton gi khi khong dung
+#   tu dong    mot timer nhe cu 0.25s doc lai node dang chon; chi chay khi bat
+#
+# Timer chi doc du lieu roi doi selection — dung cach ma ezg_deco_namer da lam.
+SYNC_INTERVAL = 0.25
+
+_sync_key = None      # node da dong bo lan cuoi, de khong lam di lam lai
+
+
+def objects_of_nodes(nodes):
+    """Object cac node Info dang tro toi. Collection Info -> moi object trong nhom."""
+    found = []
+    seen = set()
+    for node in nodes:
+        data = _info_datablock(node)
+        if data is None:
+            continue
+        members = data.objects if isinstance(data, bpy.types.Collection) else [data]
+        for ob in members:
+            if ob.name not in seen:
+                seen.add(ob.name)
+                found.append(ob)
+    return found
+
+
+def select_objects(view_layer, objects):
+    """Chon dung nhung object nay. Tra ve so object chon duoc.
+
+    Object nam trong collection bi loai khoi view layer thi khong chon duoc —
+    bo qua chu khong bao loi, vi node van hop le va van ra hinh binh thuong.
+    """
+    targets = [view_layer.objects.get(ob.name) for ob in objects]
+    targets = [ob for ob in targets if ob is not None]
+    if not targets:
+        return 0
+
+    for ob in view_layer.objects:
+        ob.select_set(False)
+
+    picked = 0
+    for ob in targets:
+        try:
+            ob.select_set(True)
+        except RuntimeError:
+            continue
+        picked += 1
+
+    if picked:
+        view_layer.objects.active = targets[-1]
+    return picked
+
+
+def selected_info_nodes(tree):
+    """Node Info dang chon, node active xep CUOI de no thanh object active."""
+    nodes = [n for n in tree.nodes if n.select and n.bl_idname in INFO_NODES]
+    active = tree.nodes.active
+    if active is not None and active.bl_idname in INFO_NODES:
+        nodes = [n for n in nodes if n != active] + [active]
+    return nodes
+
+
+def _node_editors():
+    """(window, tree) cua moi Geometry Node Editor dang mo."""
+    wm = getattr(bpy.context, "window_manager", None)
+    if wm is None:
+        return
+    for win in wm.windows:
+        screen = getattr(win, "screen", None)
+        if screen is None:
+            continue
+        for area in screen.areas:
+            if area.type != 'NODE_EDITOR':
+                continue
+            space = area.spaces.active
+            if getattr(space, "tree_type", "") != 'GeometryNodeTree':
+                continue
+            tree = getattr(space, "edit_tree", None)
+            if tree is not None:
+                yield win, tree
+
+
+def _sync_timer():
+    """Tra ve None de tu huy khi tat cong tac hoac khi addon bi go."""
+    global _sync_key
+    wm = getattr(bpy.context, "window_manager", None)
+    if wm is None or not getattr(wm, "ezg_gn_sync_select", False):
+        _sync_key = None
+        return None
+
+    for win, tree in _node_editors():
+        nodes = selected_info_nodes(tree)
+        if not nodes:
+            continue
+        key = (tree.name, tuple(n.name for n in nodes))
+        if key == _sync_key:
+            continue
+        _sync_key = key
+        select_objects(win.view_layer, objects_of_nodes(nodes))
+        break
+
+    return SYNC_INTERVAL
+
+
+def _on_sync_toggled(self, context):
+    global _sync_key
+    _sync_key = None
+    if self.ezg_gn_sync_select and not bpy.app.timers.is_registered(_sync_timer):
+        bpy.app.timers.register(_sync_timer, first_interval=0.0)
+
+
+class EZG_GN_OT_select_objects(bpy.types.Operator):
+    """Chọn object mà các node Info đang chọn trỏ tới, ngoài viewport và outliner"""
+
+    bl_idname = "ezg_gn.select_objects"
+    bl_label = "Chọn object của node"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return _edit_tree(context) is not None
+
+    def execute(self, context):
+        tree = _edit_tree(context)
+        nodes = selected_info_nodes(tree)
+        if not nodes:
+            self.report({'WARNING'}, "Chưa chọn node Info nào.")
+            return {'CANCELLED'}
+
+        objects = objects_of_nodes(nodes)
+        if not objects:
+            self.report({'WARNING'}, "Các node đang chọn chưa trỏ tới object nào.")
+            return {'CANCELLED'}
+
+        picked = select_objects(context.view_layer, objects)
+        if not picked:
+            self.report({'WARNING'},
+                        "Object của node không có trong view layer này "
+                        "(collection bị loại trừ?).")
+            return {'CANCELLED'}
+
+        msg = "Đã chọn %d object." % picked
+        if picked < len(objects):
+            msg += " %d object không có trong view layer." % (len(objects) - picked)
+        self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 
@@ -746,6 +1003,18 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
 
         layout.separator()
 
+        n_info_sel = len(selected_info_nodes(tree))
+        row = layout.row(align=True)
+        row.enabled = bool(n_info_sel)
+        row.operator(EZG_GN_OT_select_objects.bl_idname,
+                     text="Chọn object của %d node" % n_info_sel
+                          if n_info_sel else "Chọn object của node",
+                     icon='RESTRICT_SELECT_OFF')
+        layout.prop(context.window_manager, "ezg_gn_sync_select", toggle=True,
+                    icon='UV_SYNC_SELECT')
+
+        layout.separator()
+
         n_sel = len(_arrange_targets(tree, 'SELECTED'))
         scope = 'SELECTED' if n_sel else 'INFO'
 
@@ -806,17 +1075,50 @@ classes = (
     EZG_GN_OT_add_selected_objects,
     EZG_GN_OT_label_info_nodes,
     EZG_GN_OT_arrange_nodes,
+    EZG_GN_OT_select_objects,
     EZG_GN_OT_clean_info_nodes,
     EZG_GN_PT_info_namer,
 )
+
+
+def _stop_sync():
+    """Tat timer dong bo. Bo sot cho nay la timer con chay sau khi go addon,
+    goi vao ham da bien mat -> Blender bao loi moi 0.25 giay."""
+    global _sync_key
+    _sync_key = None
+    try:
+        if bpy.app.timers.is_registered(_sync_timer):
+            bpy.app.timers.unregister(_sync_timer)
+    except Exception:
+        pass
 
 
 def register():
     for c in classes:
         bpy.utils.register_class(c)
 
+    bpy.types.WindowManager.ezg_gn_sync_select = bpy.props.BoolProperty(
+        name="Tự chọn theo node",
+        default=False,
+        update=_on_sync_toggled,
+        description=("Chon node Info nao thi object cua no tu sang len ngoai viewport. "
+                     "Blender khong bao khi doi node dang chon nen cho nay phai doc "
+                     "lai moi 0.25 giay — tat di khi khong dung"),
+    )
+
 
 def unregister():
+    _stop_sync()
+
+    wm = getattr(bpy.context, "window_manager", None)
+    if wm is not None and hasattr(wm, "ezg_gn_sync_select"):
+        try:
+            wm.ezg_gn_sync_select = False
+        except Exception:
+            pass
+    if hasattr(bpy.types.WindowManager, "ezg_gn_sync_select"):
+        del bpy.types.WindowManager.ezg_gn_sync_select
+
     for c in reversed(classes):
         try:
             bpy.utils.unregister_class(c)

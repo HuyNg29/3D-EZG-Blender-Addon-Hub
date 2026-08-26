@@ -272,8 +272,10 @@ check(created1 and wired1, "tao Join moi va noi ra Group Output")
 # mot doi tuong Python MOI boc cung mot du lieu. `is` luon False, ke ca khi do
 # dung la mot node — day la cach de viet mot test luon xanh ma khong kiem gi.
 check(gout1.inputs[0].links[0].from_node == join1, "Group Output nhan tu Join")
-check(any(l.from_node == gin1 for s in join1.inputs for l in s.links),
-      "thu dang cam vao output duoc cam vao Join, khong bi thay the")
+# Group Input mang hinh cua chinh object deo modifier — mac dinh KHONG gop vao.
+# Mach that su (node khac) thi van duoc giu, xem phan "day vao Join" ben duoi.
+check(not any(l.from_node == gin1 for s in join1.inputs for l in s.links),
+      "day Group Input bi bo, khong gop vao Join")
 
 # Goi lai: phai DUNG LAI Join da co, khong de ra Join thu hai.
 join2, created2, _ = mod.ensure_join(tree1)
@@ -312,6 +314,123 @@ mod.arrange_nodes(mod.nodes_feeding(join1), axis='COLUMN', gap=10.0, order='NAME
 check(len({round(n.location.x, 4) for n in made}) == 1, "cot node thang le trai")
 check(all(n.location.x < join1.location.x for n in made),
       "cot node nam ben trai Join")
+
+
+# --- Day khong xoan, va bo day Group Input ----------------------------------
+print("--- day vao Join ---")
+
+tree2, gin2, gout2 = gn_tree("Wire")
+join_w, _, _ = mod.ensure_join(tree2)
+check(not any(l.from_node == gin2 for s in join_w.inputs for l in s.links),
+      "mac dinh KHONG cam Group Input vao Join")
+check(gout2.inputs[0].links[0].from_node == join_w,
+      "Group Output van nhan tu Join du da bo Group Input")
+
+tree3, gin3, gout3 = gn_tree("WireKeep")
+join_k, _, _ = mod.ensure_join(tree3, keep_group_input=True)
+check(any(l.from_node == gin3 for s in join_k.inputs for l in s.links),
+      "bat 'giu day Group Input' thi van cam vao")
+check(mod.drop_group_input_links(tree3, join_k) == 1, "go duoc day Group Input")
+check(not any(l.from_node == gin3 for s in join_k.inputs for l in s.links),
+      "go xong thi khong con day Group Input")
+
+# Mach that (khong phai Group Input) dang cam vao output KHONG duoc bien mat.
+tree4, gin4, gout4 = gn_tree("WireChain")
+setpos = tree4.nodes.new("GeometryNodeSetPosition")
+tree4.links.new(setpos.outputs[0], gout4.inputs[0])
+join_c, _, _ = mod.ensure_join(tree4)
+check(any(l.from_node == setpos for s in join_c.inputs for l in s.links),
+      "node dang cam vao output duoc chuyen vao Join, khong bi vut")
+
+# Go xoan: multi_input_sort_id CHI DOC va bang thu tu tao link, nen kiem tra
+# bang chinh no — day la thu quyet dinh cho cam tren socket.
+tree5, _, gout5 = gn_tree("Untangle")
+join5, _, _ = mod.ensure_join(tree5)
+objs = [mesh_obj("W_%d" % i) for i in range(4)]
+made5 = mod.add_objects_to_join(tree5, objs, join5)
+
+# Dat NGUOC voi thu tu tao link: W_0 xuong duoi cung, W_3 len tren cung. Cho
+# cam tren socket van theo thu tu tao nen day cheo het qua nhau — dung canh
+# ma go xoan phai sua. Neu dat xuoi thi trang thai "truoc" da dung san, va
+# test se xanh ma khong chung minh duoc gi.
+for i, n in enumerate(made5):
+    n.location = (-400.0, 100.0 * i)
+top_down = [n.label for n in sorted(made5, key=lambda n: -n.location.y)]
+
+order_before = [l.from_node.label for l in
+                sorted(join5.inputs[0].links, key=lambda l: l.multi_input_sort_id)]
+check(order_before != top_down,
+      "truoc khi go: cho cam khong khop thu tu tren-duoi (%s)" % order_before)
+
+remade = mod.untangle_links(tree5, join5.inputs[0])
+check(remade == 4, "cam lai du 4 day (%d)" % remade)
+order_after = [l.from_node.label for l in
+               sorted(join5.inputs[0].links, key=lambda l: l.multi_input_sort_id)]
+check(order_after == top_down,
+      "sau khi go: cho cam chay tu tren xuong dung thu tu node (%s)" % order_after)
+check(len(join5.inputs[0].links) == 4, "khong mat day nao khi cam lai")
+
+# Node duoi cung leo len tren -> cam lai phai theo vi tri moi, khong theo cu.
+made5[0].location = (-400.0, 900.0)
+mod.untangle_links(tree5, join5.inputs[0])
+top = min(join5.inputs[0].links, key=lambda l: l.multi_input_sort_id)
+check(top.from_node.label == made5[0].label,
+      "node leo len tren cung thi day cua no cam len cho tren cung (%s)"
+      % top.from_node.label)
+
+check(mod.untangle_downstream(tree5, made5) == 4,
+      "untangle_downstream tim ra Join tu chinh cac node nguon")
+
+
+# --- Chon object tu node ----------------------------------------------------
+print("--- chon object tu node ---")
+
+vl = bpy.context.view_layer
+grp = bpy.data.collections.new("Bo_Ban_Ghe")
+bpy.context.scene.collection.children.link(grp)
+c1, c2 = mesh_obj("Trong_Nhom_1"), mesh_obj("Trong_Nhom_2")
+for o in (c1, c2):
+    grp.objects.link(o)
+
+# Danh sach object cua view layer duoc dung lai theo depsgraph. Vua link object
+# xong ma doc ngay thi no chua co trong do — trong Blender that thi khong gap vi
+# nguoi dung bam nut rat lau sau khi object da ton tai.
+print("    truoc update: vl thay %d/3 object"
+      % sum(1 for o in (c1, c2, src_a) if vl.objects.get(o.name) is not None))
+vl.update()
+print("    sau  update: vl thay %d/3 object"
+      % sum(1 for o in (c1, c2, src_a) if vl.objects.get(o.name) is not None))
+
+tree6, _, _ = gn_tree("Pick")
+n_obj6 = tree6.nodes.new("GeometryNodeObjectInfo")
+n_obj6.inputs["Object"].default_value = src_a
+n_coll6 = tree6.nodes.new("GeometryNodeCollectionInfo")
+n_coll6.inputs["Collection"].default_value = grp
+n_empty6 = tree6.nodes.new("GeometryNodeObjectInfo")
+
+check(mod.objects_of_nodes([n_obj6]) == [src_a], "node Object Info -> dung object do")
+check(sorted(o.name for o in mod.objects_of_nodes([n_coll6])) ==
+      ["Trong_Nhom_1", "Trong_Nhom_2"],
+      "node Collection Info -> moi object trong nhom")
+check(mod.objects_of_nodes([n_empty6]) == [], "node trong -> khong chon gi")
+
+# Node active phai xep CUOI de object cua no thanh object active.
+for n in (n_obj6, n_coll6):
+    n.select = True
+n_empty6.select = False
+tree6.nodes.active = n_obj6
+check(mod.selected_info_nodes(tree6)[-1] == n_obj6, "node active xep cuoi danh sach")
+
+picked = mod.select_objects(vl, [c1, c2, src_a])
+check(picked == 3, "chon duoc 3 object (%d)" % picked)
+check(vl.objects.active == src_a, "object cuoi danh sach thanh object active")
+check(sorted(o.name for o in vl.objects if o.select_get()) ==
+      sorted([c1.name, c2.name, src_a.name]), "dung 3 object do dang duoc chon")
+
+# Chon lan hai phai BO CHON nhung cai cu, khong cong don.
+mod.select_objects(vl, [c1])
+check([o.name for o in vl.objects if o.select_get()] == [c1.name],
+      "chon lan hai khong cong don vao lan truoc")
 
 if FAILED:
     print("\nFAILED %d:" % len(FAILED))
