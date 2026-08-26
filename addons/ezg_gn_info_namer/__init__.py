@@ -1,6 +1,12 @@
 """GN Info Namer — dọn đám node Object Info / Collection Info trong Geometry Nodes.
 
-Geometry Node Editor > phím N > tab "EZG". Hai việc:
+Geometry Node Editor > phím N > tab "EZG". Bốn việc:
+
+  Thêm object chọn object ngoài viewport, bấm một nút là mỗi cái thành một node
+              Object Info, nối hết vào một Join Geometry, đặt nhãn và dàn thẳng
+              hàng luôn. Object đang mang chính modifier đó (thường là object
+              chọn cuối cùng, chữ vàng) bị loại ra — trỏ node vào chính nó là
+              vòng phụ thuộc, Blender cho cả modifier chết.
 
   Đặt nhãn    ghi tên object (hoặc collection) mà node đang trỏ tới vào
               `node.label` — chuỗi Blender hiển thị thay cho tên node.
@@ -315,6 +321,216 @@ class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# --- Them object dang chon vao cay -------------------------------------------
+#
+# Loai object KHONG mang hinh khoi. Cam mot cai vao Join Geometry thi Join nhan
+# duoc dung so khong, chi to them mot node vo nghia trong cay.
+NO_GEOMETRY_TYPES = {'CAMERA', 'LIGHT', 'SPEAKER', 'LIGHT_PROBE', 'EMPTY', 'ARMATURE'}
+
+# Khoang cach giua cot Object Info -> Join -> Group Output khi phai tu dat cho.
+COLUMN_GAP = 260.0
+
+
+def _tree_hosts(tree):
+    """Object dang dung chinh cay nay lam modifier.
+
+    Tro mot node Object Info vao object dang chay cay do la tu tham chieu chinh
+    minh: Blender phat hien vong phu thuoc va cho ca modifier chet, khong ra
+    hinh gi. Nen nhung object nay luon bi loai khoi danh sach them vao.
+    """
+    hosts = set()
+    for ob in bpy.data.objects:
+        for mod in ob.modifiers:
+            if mod.type == 'NODES' and mod.node_group is tree:
+                hosts.add(ob)
+    return hosts
+
+
+def _find_group_output(tree):
+    outs = [n for n in tree.nodes if n.bl_idname == "NodeGroupOutput"]
+    for node in outs:
+        if node.is_active_output:
+            return node
+    return outs[0] if outs else None
+
+
+def _geometry_socket(sockets):
+    """Socket hinh khoi that su.
+
+    Bo qua NodeSocketVirtual (o cuoi Group Output): noi day vao no bang Python
+    khong bao loi nhung cung khong tao ra socket that — day di vao hu vo.
+    """
+    for socket in sockets:
+        if socket.type == 'GEOMETRY':
+            return socket
+    return None
+
+
+def ensure_join(tree):
+    """Tra ve (join, da_tao_moi, da_noi_ra_output).
+
+    Dung lai Join Geometry dang cam vao Group Output neu co san. Neu Group
+    Output dang nhan day tu thu khac thi thu do duoc CAM VAO Join chu khong bi
+    thay the — them object khong duoc lam bien mat thu dang co trong cay.
+    """
+    out = _find_group_output(tree)
+    sock = _geometry_socket(out.inputs) if out else None
+
+    if sock is not None and sock.is_linked:
+        src = sock.links[0].from_node
+        if src.bl_idname == "GeometryNodeJoinGeometry":
+            return src, False, True
+
+    join = tree.nodes.new("GeometryNodeJoinGeometry")
+    if out is not None:
+        join.location = (out.location.x - COLUMN_GAP, out.location.y)
+
+    if sock is None:
+        return join, True, False
+
+    if sock.is_linked:
+        tree.links.new(sock.links[0].from_socket, join.inputs[0])
+    tree.links.new(join.outputs[0], sock)
+    return join, True, True
+
+
+def nodes_feeding(join):
+    """Cac node Info dang cam vao Join nay (khong lap, giu thu tu gap duoc)."""
+    found = []
+    seen = set()
+    for socket in join.inputs:
+        for link in socket.links:
+            node = link.from_node
+            if node.bl_idname in INFO_NODES and node.as_pointer() not in seen:
+                seen.add(node.as_pointer())
+                found.append(node)
+    return found
+
+
+def objects_feeding(join):
+    """{object: node} — de biet object nao da co node roi, khoi tao trung."""
+    existing = {}
+    for node in nodes_feeding(join):
+        data = _info_datablock(node)
+        if data is not None:
+            existing.setdefault(data, node)
+    return existing
+
+
+def add_objects_to_join(tree, objects, join, relative=True, as_instance=False):
+    """Tao mot node Object Info cho moi object roi cam vao Join. Tra ve list node."""
+    made = []
+    for ob in objects:
+        node = tree.nodes.new("GeometryNodeObjectInfo")
+        node.inputs["Object"].default_value = ob
+        node.inputs["As Instance"].default_value = as_instance
+        node.transform_space = 'RELATIVE' if relative else 'ORIGINAL'
+        node.label = ob.name
+        node.location = (join.location.x - COLUMN_GAP, join.location.y)
+        tree.links.new(node.outputs["Geometry"], join.inputs[0])
+        made.append(node)
+    return made
+
+
+class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
+    """Tạo node Object Info cho các object đang chọn rồi nối hết vào một Join Geometry"""
+
+    bl_idname = "ezg_gn.add_selected_objects"
+    bl_label = "Thêm object đang chọn"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    relative: bpy.props.BoolProperty(
+        name="Giữ đúng vị trí ngoài scene",
+        default=True,
+        description=("Transform Space = Relative: object hien ra dung cho no dang dung. "
+                     "Tat = Original: lay hinh o goc toa do rieng cua no"),
+    )
+    as_instance: bpy.props.BoolProperty(
+        name="Lấy dạng instance",
+        default=False,
+        description="As Instance: nhe hon nhieu khi cung mot hinh lap lai nhieu lan",
+    )
+    collapse: bpy.props.BoolProperty(
+        name="Thu nhỏ node",
+        default=True,
+        description="Gap cac node vua tao lai cho gon",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return _edit_tree(context) is not None
+
+    def execute(self, context):
+        tree = _edit_tree(context)
+        if tree is None:
+            self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+            return {'CANCELLED'}
+
+        hosts = _tree_hosts(tree)
+        selected = list(context.view_layer.objects.selected)
+
+        # Xep theo ten cho ket qua on dinh: Blender khong luu thu tu bam chuot.
+        wanted = sorted(
+            (ob for ob in selected
+             if ob not in hosts and ob.type not in NO_GEOMETRY_TYPES),
+            key=lambda o: o.name.lower(),
+        )
+        n_host = sum(1 for ob in selected if ob in hosts)
+        n_skip = sum(1 for ob in selected
+                     if ob not in hosts and ob.type in NO_GEOMETRY_TYPES)
+
+        if not wanted:
+            if n_host and len(selected) == n_host:
+                self.report({'WARNING'},
+                            "Chỉ chọn mỗi object đang mang modifier — "
+                            "chọn thêm object nguồn.")
+            elif n_skip:
+                self.report({'WARNING'}, "Các object đang chọn đều không có hình khối.")
+            else:
+                self.report({'WARNING'}, "Chưa chọn object nào.")
+            return {'CANCELLED'}
+
+        join, join_created, wired = ensure_join(tree)
+
+        # Bam nut hai lan khong duoc tao ra hai node cho cung mot object.
+        existing = objects_feeding(join)
+        fresh = [ob for ob in wanted if ob not in existing]
+        n_dup = len(wanted) - len(fresh)
+
+        made = add_objects_to_join(tree, fresh, join,
+                                   relative=self.relative,
+                                   as_instance=self.as_instance)
+
+        # Dat nhan + dan thang ca cot: node moi va node da co san deu cam vao
+        # cung mot Join nen chung la mot chong, sap chung voi nhau moi gon.
+        column = nodes_feeding(join)
+        set_collapse(column, True if self.collapse else None)
+        arrange_nodes(column, axis='COLUMN', gap=10.0, order='NAME',
+                      ui_scale=context.preferences.system.ui_scale)
+
+        for node in tree.nodes:
+            node.select = node in made
+        if made:
+            tree.nodes.active = made[0]
+
+        notes = []
+        if n_dup:
+            notes.append("%d object đã có node sẵn" % n_dup)
+        if n_host:
+            notes.append("bỏ qua %d object đang mang modifier" % n_host)
+        if n_skip:
+            notes.append("bỏ qua %d object không có hình khối" % n_skip)
+        if join_created and not wired:
+            notes.append("Join CHƯA nối ra Group Output — cây này không có "
+                         "đầu ra hình khối")
+
+        msg = "Đã thêm %d object vào Join." % len(made)
+        if notes:
+            msg += " (" + "; ".join(notes) + ")"
+        self.report({'WARNING'} if (join_created and not wired) else {'INFO'}, msg)
+        return {'FINISHED'}
+
+
 # --- Don node thua -----------------------------------------------------------
 #
 # Day la chuc nang DUY NHAT trong addon co the lam mat viec dang lam, nen no
@@ -496,6 +712,29 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
             layout.label(text="Chưa mở cây node nào.", icon='INFO')
             return
 
+        # Object se duoc them vao: dem san de nut noi ro no sap lam gi.
+        hosts = _tree_hosts(tree)
+        selected = list(context.view_layer.objects.selected)
+        addable = [ob for ob in selected
+                   if ob not in hosts and ob.type not in NO_GEOMETRY_TYPES]
+
+        col = layout.column(align=True)
+        col.scale_y = 1.4
+        col.enabled = bool(addable)
+        col.operator(EZG_GN_OT_add_selected_objects.bl_idname, icon='ADD')
+
+        if addable:
+            layout.label(text="Sẽ thêm: %d object" % len(addable),
+                         icon='OUTLINER_OB_MESH')
+        elif selected:
+            # Chon moi object dang mang modifier la truong hop rat de gap:
+            # no la object active, sang mau vang, nen nguoi dung tuong da chon du.
+            layout.label(text="Object đang chọn không thêm được.", icon='INFO')
+        else:
+            layout.label(text="Chưa chọn object nào ngoài viewport.", icon='INFO')
+
+        layout.separator()
+
         col = layout.column(align=True)
         col.scale_y = 1.4
         col.operator(EZG_GN_OT_label_info_nodes.bl_idname,
@@ -564,6 +803,7 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
 
 
 classes = (
+    EZG_GN_OT_add_selected_objects,
     EZG_GN_OT_label_info_nodes,
     EZG_GN_OT_arrange_nodes,
     EZG_GN_OT_clean_info_nodes,

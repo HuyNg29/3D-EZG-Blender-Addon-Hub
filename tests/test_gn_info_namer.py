@@ -231,6 +231,88 @@ check(clean.nodes["good"].outputs["Geometry"].is_linked,
       "day cua node giu lai khong bi dut")
 check(mod.find_waste_nodes(clean) == [], "quet lai khong con node thua")
 
+
+# --- Them object vao cay ----------------------------------------------------
+print("--- them object vao Join ---")
+
+
+def gn_tree(name):
+    """Cay giong cay Blender tao ra khi them modifier Geometry Nodes."""
+    t = bpy.data.node_groups.new(name, "GeometryNodeTree")
+    t.interface.new_socket(name="Geometry", in_out='INPUT',
+                           socket_type='NodeSocketGeometry')
+    t.interface.new_socket(name="Geometry", in_out='OUTPUT',
+                           socket_type='NodeSocketGeometry')
+    gi = t.nodes.new("NodeGroupInput")
+    go = t.nodes.new("NodeGroupOutput")
+    go.location = (400.0, 0.0)
+    t.links.new(gi.outputs[0], go.inputs[0])
+    return t, gi, go
+
+
+def mesh_obj(name):
+    o = bpy.data.objects.new(name, bpy.data.meshes.new(name))
+    bpy.context.collection.objects.link(o)
+    return o
+
+
+tree1, gin1, gout1 = gn_tree("Build")
+host = mesh_obj("Host")
+md = host.modifiers.new("GeometryNodes", 'NODES')
+md.node_group = tree1
+
+check(mod._tree_hosts(tree1) == {host},
+      "nhan ra object dang mang chinh cay nay lam modifier")
+
+# Join dau tien: phai NOI RA Group Output, va thu dang cam vao output (Group
+# Input) phai duoc cam vao Join chu khong bi thay the.
+join1, created1, wired1 = mod.ensure_join(tree1)
+check(created1 and wired1, "tao Join moi va noi ra Group Output")
+# Dung `==` chu khong phai `is`: moi lan doc mot node qua RNA, Blender tra ve
+# mot doi tuong Python MOI boc cung mot du lieu. `is` luon False, ke ca khi do
+# dung la mot node — day la cach de viet mot test luon xanh ma khong kiem gi.
+check(gout1.inputs[0].links[0].from_node == join1, "Group Output nhan tu Join")
+check(any(l.from_node == gin1 for s in join1.inputs for l in s.links),
+      "thu dang cam vao output duoc cam vao Join, khong bi thay the")
+
+# Goi lai: phai DUNG LAI Join da co, khong de ra Join thu hai.
+join2, created2, _ = mod.ensure_join(tree1)
+check(join2 == join1 and not created2, "goi lai thi dung lai Join da co")
+check(sum(1 for n in tree1.nodes
+          if n.bl_idname == "GeometryNodeJoinGeometry") == 1,
+      "chi co dung mot Join trong cay")
+
+src_a = mesh_obj("Ghe")
+src_b = mesh_obj("Ban")
+made = mod.add_objects_to_join(tree1, [src_a, src_b], join1)
+check(len(made) == 2, "tao 2 node Object Info")
+check([n.label for n in made] == ["Ghe", "Ban"], "dat nhan luon theo ten object")
+check(all(n.transform_space == 'RELATIVE' for n in made),
+      "mac dinh Relative — object hien ra dung cho no dang dung")
+check(all(n.outputs["Geometry"].is_linked for n in made), "ca 2 node deu noi vao Join")
+check(set(mod.objects_feeding(join1)) == {src_a, src_b},
+      "doc lai duoc object nao da co node trong Join")
+
+# Cay khong co dau ra hinh khoi: Join van duoc tao nhung phai bao la CHUA noi,
+# khong duoc im lang. Noi day vao socket ao cua Group Output bang Python khong
+# bao loi nhung cung khong tao ra socket that — day di vao hu vo.
+bare = bpy.data.node_groups.new("Bare", "GeometryNodeTree")
+bare.nodes.new("NodeGroupOutput")
+_, created3, wired3 = mod.ensure_join(bare)
+check(created3 and not wired3, "cay khong co dau ra hinh khoi -> bao chua noi")
+
+# Doi ten object roi chay nut dat nhan: node phai theo ten moi.
+src_a.name = "Ghe_Sofa"
+mod.label_info_nodes([tree1])
+check(made[0].label == "Ghe_Sofa", "dat lai nhan sau khi doi ten object")
+
+# Cot node phai dan thang va nam ben TRAI Join.
+mod.set_collapse(made, True)
+mod.arrange_nodes(mod.nodes_feeding(join1), axis='COLUMN', gap=10.0, order='NAME')
+check(len({round(n.location.x, 4) for n in made}) == 1, "cot node thang le trai")
+check(all(n.location.x < join1.location.x for n in made),
+      "cot node nam ben trai Join")
+
 if FAILED:
     print("\nFAILED %d:" % len(FAILED))
     for m in FAILED:

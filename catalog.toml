@@ -72,6 +72,8 @@ recommended = true
 [items.ezg_gn_info_namer]
 title_vi = "GN Info Namer"
 summary_vi = """
+Chon object ngoai viewport, bam mot nut la moi cai thanh mot node Object Info,
+noi het vao mot Join Geometry, dat nhan va dan thang hang luon.
 Dat nhan cho node Object Info / Collection Info theo ten object ma node do dang
 tro toi, nen nhin cay Geometry Nodes la doc duoc ngay thay vi phai bam vao tung
 node. Chay cho cay dang mo (ke ca group long ben trong) hoac ca file.
