@@ -636,6 +636,73 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# --- Transform Space ----------------------------------------------------------
+#
+# O chon Transform Space nam trong THAN node, ma addon nay thu nho node lai cho
+# gon — thu nho xong thi khong con thay o do nua. Nen phai co cho bat tat o
+# ngoai panel, khong thi doi y roi la phai mo tung node ra.
+TRANSFORM_SPACES = (
+    ('RELATIVE', "Relative",
+     "Object hien ra dung cho no dang dung ngoai scene"),
+    ('ORIGINAL', "Original",
+     "Lay hinh o goc toa do rieng cua object, bo qua vi tri ngoai scene"),
+)
+
+
+def info_nodes_in(tree, selected_only=False):
+    """Node Info trong cay. selected_only -> chi nhung cai dang chon."""
+    return [n for n in tree.nodes
+            if n.bl_idname in INFO_NODES and (n.select or not selected_only)]
+
+
+def set_transform_space(nodes, space):
+    """Doi Transform Space. Tra ve so node thuc su doi."""
+    changed = 0
+    for node in nodes:
+        if node.transform_space != space:
+            node.transform_space = space
+            changed += 1
+    return changed
+
+
+class EZG_GN_OT_set_transform_space(bpy.types.Operator):
+    """Đổi Transform Space của node Info hàng loạt"""
+
+    bl_idname = "ezg_gn.set_transform_space"
+    bl_label = "Transform Space"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    space: bpy.props.EnumProperty(
+        name="Transform Space", items=TRANSFORM_SPACES, default='RELATIVE',
+    )
+    selected_only: bpy.props.BoolProperty(
+        name="Chỉ node đang chọn", default=False,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return _edit_tree(context) is not None
+
+    @classmethod
+    def description(cls, context, properties):
+        for ident, label, note in TRANSFORM_SPACES:
+            if ident == properties.space:
+                return "%s — %s" % (label, note)
+        return ""
+
+    def execute(self, context):
+        tree = _edit_tree(context)
+        nodes = info_nodes_in(tree, self.selected_only)
+        if not nodes:
+            self.report({'WARNING'}, "Không có node Info nào.")
+            return {'CANCELLED'}
+
+        changed = set_transform_space(nodes, self.space)
+        self.report({'INFO'}, "Đã đổi %d/%d node sang %s."
+                    % (changed, len(nodes), self.space.title()))
+        return {'FINISHED'}
+
+
 # --- Chon object tu node -----------------------------------------------------
 #
 # Blender KHONG phat su kien nao khi doi node dang chon, nen khong co cach nao
@@ -1004,6 +1071,23 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         layout.separator()
 
         n_info_sel = len(selected_info_nodes(tree))
+
+        # O chon Transform Space nam trong than node, thu nho node lai la khong
+        # con thay. Bay ra day de doi duoc ma khong phai mo tung node.
+        ts_nodes = info_nodes_in(tree, bool(n_info_sel))
+        if ts_nodes:
+            layout.label(text="Transform Space — %d node%s"
+                              % (len(ts_nodes), " đang chọn" if n_info_sel else ""))
+            spaces = {n.transform_space for n in ts_nodes}
+            row = layout.row(align=True)
+            for ident, label, _note in TRANSFORM_SPACES:
+                op = row.operator(EZG_GN_OT_set_transform_space.bl_idname,
+                                  text=label, depress=(spaces == {ident}))
+                op.space = ident
+                op.selected_only = bool(n_info_sel)
+
+        layout.separator()
+
         row = layout.row(align=True)
         row.enabled = bool(n_info_sel)
         row.operator(EZG_GN_OT_select_objects.bl_idname,
@@ -1075,6 +1159,7 @@ classes = (
     EZG_GN_OT_add_selected_objects,
     EZG_GN_OT_label_info_nodes,
     EZG_GN_OT_arrange_nodes,
+    EZG_GN_OT_set_transform_space,
     EZG_GN_OT_select_objects,
     EZG_GN_OT_clean_info_nodes,
     EZG_GN_PT_info_namer,

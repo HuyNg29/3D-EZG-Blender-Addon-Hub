@@ -432,6 +432,35 @@ mod.select_objects(vl, [c1])
 check([o.name for o in vl.objects if o.select_get()] == [c1.name],
       "chon lan hai khong cong don vao lan truoc")
 
+
+# --- Transform Space --------------------------------------------------------
+print("--- transform space ---")
+
+tree7, _, _ = gn_tree("Space")
+join7, _, _ = mod.ensure_join(tree7)
+sp = mod.add_objects_to_join(tree7, [mesh_obj("S_%d" % i) for i in range(3)], join7)
+n_coll7 = tree7.nodes.new("GeometryNodeCollectionInfo")
+
+check(all(n.transform_space == 'RELATIVE' for n in sp),
+      "them object -> mac dinh Relative")
+check(mod.set_transform_space(sp, 'ORIGINAL') == 3, "doi ca 3 sang Original")
+check(all(n.transform_space == 'ORIGINAL' for n in sp), "ca 3 da la Original")
+check(mod.set_transform_space(sp, 'ORIGINAL') == 0,
+      "doi lai dung gia tri do thi khong dem lai")
+
+# Collection Info cung co Transform Space — khong duoc bo sot.
+check(hasattr(n_coll7, "transform_space"), "Collection Info cung co Transform Space")
+mod.set_transform_space(mod.info_nodes_in(tree7), 'RELATIVE')
+check(n_coll7.transform_space == 'RELATIVE', "doi ca node Collection Info")
+
+# selected_only phai loc dung, khong thi bam nut la doi ca cay.
+for n in tree7.nodes:
+    n.select = False
+sp[0].select = True
+check([n.name for n in mod.info_nodes_in(tree7, selected_only=True)] == [sp[0].name],
+      "selected_only chi lay node dang chon")
+check(len(mod.info_nodes_in(tree7)) == 4, "khong loc thi lay het 4 node Info")
+
 if FAILED:
     print("\nFAILED %d:" % len(FAILED))
     for m in FAILED:
