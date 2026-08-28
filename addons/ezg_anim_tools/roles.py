@@ -98,19 +98,90 @@ def auto_map(armature):
     Xuong nao khop nhieu lan thi giu cai co ten NGAN nhat: rig hay co xuong phu
     kieu 'LeftHandThumb1' hoac 'L_Buffbone_Glb_Hand_Loc' ma ta khong muon lay.
     """
-    found = {}
+    cands = {}
     for b in armature.bones:
         role = detect_role(b.name)
         if role is None:
             continue
-        side = detect_side(b.name) if ROLE_SIDED[role] else ""
-        if ROLE_SIDED[role] and side is None:
+        side = detect_side(b.name)
+        if ROLE_SIDED[role]:
+            if side is None:
+                continue
+        elif side is not None:
+            # Vai tro giua than ma ten xuong lai mang dau trai/phai thi khong
+            # phai no: "L_Hip" khop tu khoa "hip" nhung la xuong DUI trai,
+            # nhan lam hips se lai ca khung chau theo dui.
             continue
-        key = (role, side or "")
-        cur = found.get(key)
-        if cur is None or len(b.name) < len(cur):
-            found[key] = b.name
+        cands.setdefault((role, side if ROLE_SIDED[role] else ""), []).append(b.name)
+
+    # Ten ngan nhat truoc da, xuong phu kieu 'LeftHandThumb1' thuong dai hon.
+    found = {k: min(v, key=len) for k, v in cands.items()}
+    _prefer_parent_of_next(armature, cands, found)
+    _fill_by_hierarchy(armature, found)
     return found
+
+
+def _prefer_parent_of_next(armature, cands, found):
+    """Nhieu xuong cung khop mot vai tro thi lay xuong la CHA TRUC TIEP cua
+    xuong vai tro ke tiep.
+
+    Rig game hay co cap xuong trung dau kieu L_KneeUpper / L_KneeLower;
+    animation co khi chi nam o mot trong hai. Xuong cha truc tiep cua ban chan
+    mang delta world gom TRON moi khop o giua nen khong bo sot chuyen dong,
+    con ten-ngan-nhat co the vo dung cai twist bone khong he duoc anim.
+
+    Duyet tu ngon ve goc de vai tro sau da chot xong truoc khi vai tro truoc
+    can toi no.
+    """
+    for role, _, sided in reversed(ROLES):
+        for side in (("L", "R") if sided else ("",)):
+            names = cands.get((role, side), ())
+            if len(names) < 2:
+                continue
+            # CHI xet vai tro ke tiep truc tiep: nhay coc qua vai tro trung
+            # gian con thieu se cuop nham xuong cua chinh vai tro do
+            # (shoulder ma xet toi forearm se nuot mat bap tay).
+            nxt = ROLE_NEXT.get(role)
+            child = found.get((nxt, side if nxt and ROLE_SIDED[nxt] else "")) if nxt else None
+            if not child:
+                continue
+            parent = armature.bones[child].parent
+            if parent is not None and parent.name in names:
+                found[(role, side)] = parent.name
+
+
+# Vai tro doan bang ten hay truot -> dien bang xuong CHA cua vai tro ke sau.
+# Rig game dat ten danh lua duoc bo do tu khoa ("L_Shoulder" la bap tay,
+# "L_Hip" la dui) nhung quan he cha-con thi khong noi doi duoc.
+_PARENT_OF = [("upperarm", "forearm"), ("thigh", "shin")]
+
+
+def _fill_by_hierarchy(armature, found):
+    taken = set(found.values())
+    for role, child_role in _PARENT_OF:
+        for side in ("L", "R"):
+            if (role, side) in found or (child_role, side) not in found:
+                continue
+            child = armature.bones[found[(child_role, side)]]
+            head = child.matrix_local.translation
+            parent = child.parent
+            # Nhay qua xuong trung dau voi xuong con (cap twist kieu
+            # L_KneeLower/L_KneeUpper): dui that phai co doan chi han hoi.
+            # Nguong theo ti le vi dau cap twist co the lech vai phan van
+            # (rig that lech ~3e-4 m), va don vi rig thi cai met cai centimet.
+            eps = max(child.length * 0.02, 1e-5)
+            while parent is not None and \
+                    (parent.matrix_local.translation - head).length < eps:
+                parent = parent.parent
+            if parent is not None and parent.name not in taken:
+                found[(role, side)] = parent.name
+                taken.add(parent.name)
+    # Hips: khong doan duoc ten thi lay cha chung cua hai dui.
+    if ("hips", "") not in found:
+        pl = found.get(("thigh", "L")) and armature.bones[found[("thigh", "L")]].parent
+        pr = found.get(("thigh", "R")) and armature.bones[found[("thigh", "R")]].parent
+        if pl and pr and pl == pr and pl.name not in taken:
+            found[("hips", "")] = pl.name
 
 
 def pair_up(src_arm, tgt_arm):

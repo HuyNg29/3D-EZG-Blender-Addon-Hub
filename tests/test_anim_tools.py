@@ -169,6 +169,56 @@ check(by_role.get(("chest", "")) == ("Chest", "mixamorig:Spine2"),
       "Chest -> Spine2")
 
 
+# --- Rig game kieu LoL: ten xuong danh lua duoc bo tu khoa -------------------
+# "L_Hip" la DUI (khong phai hips), "L_Shoulder" la BAP TAY (khong phai vai),
+# "L_KneeUpper" la ong chan. Hoi quy cho bug that: hips bi gan nham vao L_Hip
+# lam ca khung chau lai theo dui trai -> chan trai nhac han len sau retarget.
+def lol_bones():
+    b = [
+        ("Root",   (0, 0, 1.00), (0, 0, 1.05), None),
+        ("Spine1", (0, 0, 1.05), (0, 0, 1.25), "Root"),
+        ("Chest",  (0, 0, 1.25), (0, 0, 1.45), "Spine1"),
+        ("Neck",   (0, 0, 1.45), (0, 0, 1.55), "Chest"),
+        ("Head",   (0, 0, 1.55), (0, 0, 1.70), "Neck"),
+        ("Pelvis", (0, 0, 0.98), (0, 0, 0.90), "Root"),
+    ]
+    for s, x in (("L", 1.0), ("R", -1.0)):
+        b += [
+            ("%s_Clavicle" % s,  (0.03 * x, 0, 1.44), (0.15 * x, 0, 1.42), "Chest"),
+            ("%s_Shoulder" % s,  (0.18 * x, 0, 1.41), (0.30 * x, 0, 1.20), "%s_Clavicle" % s),
+            ("%s_Elbow" % s,     (0.30 * x, 0, 1.19), (0.40 * x, -0.10, 1.02), "%s_Shoulder" % s),
+            ("%s_Hand" % s,      (0.40 * x, -0.10, 1.02), (0.46 * x, -0.15, 0.95), "%s_Elbow" % s),
+            ("%s_Hip" % s,       (0.10 * x, 0, 0.96), (0.16 * x, 0, 0.55), "Pelvis"),
+            # Cap xuong goi TRUNG DAU (lech vai phan van nhu rig that):
+            # animation chi nam o KneeLower.
+            ("%s_KneeUpper" % s, (0.16 * x, 0, 0.55), (0.23 * x, 0.05, 0.10), "%s_Hip" % s),
+            ("%s_KneeLower" % s, (0.16 * x, 0.0003, 0.5501), (0.23 * x, 0.05, 0.10), "%s_KneeUpper" % s),
+            ("%s_Foot" % s,      (0.23 * x, 0.05, 0.10), (0.25 * x, -0.08, 0.04), "%s_KneeLower" % s),
+            ("%s_Toe" % s,       (0.25 * x, -0.08, 0.04), (0.25 * x, -0.15, 0.03), "%s_Foot" % s),
+        ]
+    return b
+
+
+lol = build("LOL", lol_bones())
+amap = roles.auto_map(lol.data)
+check(amap.get(("hips", "")) == "Pelvis",
+      "rig game: hips = Pelvis, khong bi 'L_Hip' cuop mat")
+check(amap.get(("thigh", "L")) == "L_Hip" and amap.get(("thigh", "R")) == "R_Hip",
+      "rig game: L_Hip/R_Hip duoc nhan la DUI nho cau truc cha-con")
+check(amap.get(("upperarm", "L")) == "L_Shoulder",
+      "rig game: L_Shoulder duoc nhan la bap tay (cha cua L_Elbow)")
+check(amap.get(("shoulder", "L")) == "L_Clavicle",
+      "rig game: shoulder van la L_Clavicle")
+check(amap.get(("shin", "L")) == "L_KneeLower",
+      "rig game: shin = L_KneeLower (cha truc tiep cua Foot, noi mang anim)")
+lol_pairs = roles.pair_up(lol.data, tgt.data)
+lol_got = {(r, s) for r, s, _, _ in lol_pairs}
+check(lol_got >= expect,
+      "rig game noi duoc du %d vai tro voi rig Mixamo (thieu: %s)"
+      % (len(expect), sorted(expect - lol_got) or "khong"))
+bpy.data.objects.remove(lol, do_unlink=True)
+
+
 class Row:
     def __init__(self, role, side, s, t):
         self.role, self.side, self.src, self.tgt = role, side, s, t
