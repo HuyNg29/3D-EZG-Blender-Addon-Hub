@@ -145,6 +145,24 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
 
     report = []
     arm = ob.data
+
+    # Action cua rig KHAC se khong dieu khien xuong nao o day: lat guong van
+    # "chay" nhung chi bake ra tu the dung im — nguoi dung tuong mirror hong.
+    n_pose = n_match = 0
+    for fc in src_action.fcurves:
+        if not fc.data_path.startswith("pose.bones["):
+            continue
+        n_pose += 1
+        try:
+            if fc.data_path.split('"')[1] in arm.bones:
+                n_match += 1
+        except IndexError:
+            pass
+    if n_pose and not n_match:
+        raise MirrorError(
+            "Action '%s' khong dieu khien xuong nao cua '%s' — no thuoc rig "
+            "khac. Chon dung cap Armature/Action (vi du action da retarget "
+            "thi nam tren rig dich)." % (src_action.name, ob.name))
     if arm.pose_position == 'REST':
         arm.pose_position = 'POSE'
         report.append("Armature dang o Rest Position, da chuyen sang Pose.")

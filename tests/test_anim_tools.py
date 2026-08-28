@@ -281,6 +281,14 @@ check(mirror.mirror_name("thigh_r") == "thigh_l", "mirror_name: hau to _r -> _l"
 check(mirror.mirror_name("mixamorig:Spine1") == "mixamorig:Spine1",
       "mirror_name: xuong giua than khong doi")
 
+# Action cua rig khac phai bi TU CHOI thang, khong duoc im lang bake ra rac.
+# Hoi quy cho bug that: mirror action nguon tren rig dich -> lech 144 do.
+try:
+    mirror.mirror_action(ctx, tgt, bpy.data.actions["SrcMotion"], "PhaiLoi")
+    check(False, "mirror action cua rig khac phai nem MirrorError")
+except mirror.MirrorError:
+    check(True, "mirror action cua rig khac phai nem MirrorError")
+
 # Rest cua rig dich doi xung, nen phai bao "khong lech"
 dt, da, _ = mirror.rest_symmetry_error(tgt)
 check(dt < 1e-4 and da < 0.5,
