@@ -61,7 +61,7 @@ thumbnail = "thumbs/ezg_deco_namer.png"
 recommended = true
 
 [items.ezg_fbx_batch]
-title_vi = "FBX Batch to Blend Converter"
+title_vi = "FBX Batch to Blender"
 summary_vi = """
 Convert hang loat FBX trong 1 folder sang .blend, giu texture (pack vao file).
 Hai che do: moi FBX ra 1 file rieng, hoac gom tat ca vao 1 file.

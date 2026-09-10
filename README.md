@@ -18,7 +18,7 @@ Addon hiện có:
 | id | Tên | Version | Nhóm |
 |---|---|---|---|
 | `ezg_addon_hub` | EZG Addon Hub | 0.1.0 | Hub |
-| `ezg_fbx_batch` | FBX Batch to Blend Converter | 1.5.3 | Pipeline |
+| `ezg_fbx_batch` | FBX Batch to Blender | 1.5.4 | Pipeline |
 | `ezg_deco_namer` | Deco Namer | 1.5.0 | Modeling / UV |
 | `ezg_auto_uv_palette` | Auto UV Palette | 1.0.0 | Modeling / UV |
 | `ezg_gn_info_namer` | GN Info Namer | 1.5.0 | Geometry Nodes |
