@@ -165,6 +165,87 @@ def main():
     check(driven == len(mine),
           f"all generated bones are driven by the Mixamo action ({driven}/{len(mine)})")
 
+    # -----------------------------------------------------------------------
+    # Normalized rig + the Animation Library's action cache
+    #
+    # Regression: applying an animation caches the action by name. Normalizing
+    # the rig afterwards changes what its location keys mean (centimetres ->
+    # metres), and re-applying used to serve the cached centimetre action
+    # verbatim - measured at 140 m of displacement on a real Mixamo idle, which
+    # reads as "the animation does not play".
+    # -----------------------------------------------------------------------
+    print("\n-- Normalized rig vs cached actions --")
+    lib = kit.enable("ezg_mixamo_anim_lib")
+    anim_fbx = RES + r"\Standing Melee Punch.fbx"
+    if not os.path.isfile(anim_fbx):
+        print("  bo qua: khong co", anim_fbx)
+    else:
+        bpy.ops.wm.read_homefile(use_empty=True)
+        rig, _ = import_mixamo(RES + r"\T-Pose.fbx")
+        rig.animation_data_clear()
+        for pb in rig.pose.bones:
+            pb.matrix_basis.identity()
+        bpy.context.view_layer.update()
+
+        props = bpy.context.scene.mixlib
+        props.library_path = RES + "\\"
+        bpy.ops.mixlib.scan()
+        props.in_place = True
+        props.push_nla = True
+        props.set_frame_range = True
+        idx = next((i for i, it in enumerate(props.items)
+                    if it.name == "Standing Melee Punch"), None)
+
+        def apply_current():
+            props.active_index = idx
+            bpy.ops.object.select_all(action='DESELECT')
+            rig.select_set(True)
+            bpy.context.view_layer.objects.active = rig
+            bpy.ops.mixlib.apply()
+            scn = bpy.context.scene
+            act = rig.animation_data.action
+            lo, hi = int(act.frame_range[0]), int(act.frame_range[1])
+            track = []
+            for f in range(lo, min(hi, lo + 60) + 1):
+                scn.frame_set(f)
+                bpy.context.view_layer.update()
+                track.append([rig.matrix_world @ pb.head for pb in rig.pose.bones])
+            move = max((p - q).length for row in track for p, q in zip(row, track[0]))
+            far = max(p.length for row in track for p in row)
+            return move, far
+
+        if idx is None:
+            print("  bo qua: khong thay 'Standing Melee Punch' trong thu vien")
+        else:
+            move_cm, far_cm = apply_current()   # rig still at 0.01, fills the cache
+            check(move_cm > 0.05,
+                  f"anim applies on a 0.01 rig (moved {move_cm:.3f} m)")
+
+            # Detach it: the action stays in the file on its fake user, but the
+            # rig no longer references it. Normalize only converts actions the
+            # rig USES, so this one keeps its centimetre keys - exactly the
+            # state that made a re-apply serve the wrong unit.
+            ad = rig.animation_data
+            ad.action = None
+            for track in list(ad.nla_tracks):
+                ad.nla_tracks.remove(track)
+
+            bpy.ops.object.select_all(action='DESELECT')
+            rig.select_set(True)
+            bpy.context.view_layer.objects.active = rig
+            bpy.ops.mmr.normalize_rig_scale()
+            check(abs(rig.scale.x - 1.0) < 1e-5, "rig normalized to 1,1,1")
+
+            move_m, far_m = apply_current()     # cached action must NOT be reused
+            print(f"    moved {move_m:.4f} m (was {move_cm:.4f}), "
+                  f"furthest bone {far_m:.3f} m (was {far_cm:.3f})")
+            check(far_m < 5.0,
+                  f"cached action is not served in the wrong unit "
+                  f"(furthest bone {far_m:.1f} m, broken case was ~140 m)")
+            check(abs(move_m - move_cm) < 0.05,
+                  "re-applied animation matches the pre-normalize motion")
+            check(move_m > 0.05, "re-applied animation is not flat")
+
     print()
     print("RESULT:", "ALL TESTS PASSED" if not FAILED else f"{len(FAILED)} FAILURES")
     if FAILED:

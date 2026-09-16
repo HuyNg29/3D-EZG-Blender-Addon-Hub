@@ -100,13 +100,44 @@ def _assign_action(target, action):
                 pass
 
 
-def _stamp_source(action, filepath):
-    """Record which FBX (and its mtime) this action was imported from."""
+def _stamp_source(action, filepath, target=None):
+    """Record which FBX (and its mtime) this action was imported from, and the
+    rig scale it was made for."""
     action["mixlib_src_path"] = filepath
     try:
         action["mixlib_src_mtime"] = os.path.getmtime(filepath)
     except OSError:
         pass
+    if target is not None:
+        action["mixlib_rig_scale"] = _rig_scale(target)
+
+
+def _rig_scale(arm):
+    """Average object scale of the rig - the unit its pose-bone location keys
+    are measured in."""
+    s = arm.matrix_world.to_scale()
+    return (abs(s.x) + abs(s.y) + abs(s.z)) / 3.0
+
+
+def _unit_mismatch(action, arm):
+    """True when `action` was built for a rig of a different scale than `arm`.
+
+    Pose-bone location is measured in armature DATA units, so an action baked
+    against a 0.01 Mixamo rig holds centimetres. Handing that same action to a
+    rig normalized to 1,1,1 reads those numbers as metres and throws the
+    character ~100x away - measured at 140 m on a real Mixamo idle. The curves
+    themselves cannot say which unit they are in, hence the stamp.
+
+    Re-importing costs a retarget bake; serving the wrong units costs a broken
+    character, so an unknown stamp errs towards re-importing.
+    """
+    current = _rig_scale(arm)
+    stamped = action.get("mixlib_rig_scale")
+    if stamped is None:
+        # Imported before this stamp existed. Those were all made in Mixamo
+        # space, so only a rig still in Mixamo space may reuse them.
+        return abs(current - 0.01) > 1e-4
+    return abs(stamped - current) > 1e-4 * max(1.0, abs(stamped), abs(current))
 
 
 def _is_stale(action, filepath):
@@ -1008,7 +1039,11 @@ class MIXLIB_OT_apply(Operator):
             # version instead of wiping possible manual key edits.
             _stamp_source(action, item.filepath)
         stale = None
-        if action is not None and _is_stale(action, item.filepath):
+        if action is not None and (_is_stale(action, item.filepath)
+                                   or _unit_mismatch(action, target)):
+            # Unit mismatch means the rig was normalized (or rebuilt at another
+            # scale) after this action was cached. Reusing it verbatim is how a
+            # character ends up 100x away, so re-import and retarget instead.
             stale, action = action, None
         if action is None:
             if not os.path.isfile(item.filepath):
@@ -1023,19 +1058,28 @@ class MIXLIB_OT_apply(Operator):
 
             src_action = src_arm.animation_data.action
             mism = _rest_mismatch(src_arm, target)
-            if mism is not None and mism > _RETARGET_THRESHOLD:
+            # Different object scales mean the two rigs measure bone location in
+            # different units, and a raw F-curve copy would be off by that
+            # factor. Force the bake, which solves in world space, instead of
+            # leaving it to _rest_mismatch - that number happens to be huge when
+            # units differ, but it measures rest pose, not units, and must not
+            # be relied on to catch this.
+            units_differ = abs(_rig_scale(src_arm) - _rig_scale(target)) > 1e-4
+            if units_differ or (mism is not None and mism > _RETARGET_THRESHOLD):
                 # The FBX skeleton's rest pose differs from this rig — a raw
                 # F-curve copy would bend the character. Retarget instead.
                 action = _retarget_bake(context, src_arm, target, src_action)
-                self.report(
-                    {'INFO'},
-                    f"Rest poses differ (~{mism * 100:.0f}% of skeleton size) — "
-                    "retargeted via constraint bake",
-                )
+                if units_differ:
+                    note = (f"rig scale {_rig_scale(target):g} vs {_rig_scale(src_arm):g} "
+                            "in the FBX")
+                else:
+                    note = f"rest poses differ ~{mism * 100:.0f}% of skeleton size"
+                self.report({'INFO'},
+                            f"Retargeted via constraint bake ({note})")
             else:
                 action = src_action.copy()
             action.use_fake_user = True
-            _stamp_source(action, item.filepath)
+            _stamp_source(action, item.filepath, target)
 
             if props.in_place:
                 _strip_root_motion(action)
@@ -1218,19 +1262,25 @@ class MIXLIB_OT_import_all_actions(Operator):
                 stale = bpy.data.actions.get(item.name)
                 if stale is not None and stale.get("mixlib_src_mtime") is None:
                     _stamp_source(stale, item.filepath)  # adopt, keep edits
-                if stale is not None and not _is_stale(stale, item.filepath):
+                if (stale is not None and not _is_stale(stale, item.filepath)
+                        and not (target is not None
+                                 and _unit_mismatch(stale, target))):
                     continue  # already imported and up to date
                 src_arm, imported = _import_fbx(item.filepath)
                 if src_arm and src_arm.animation_data and src_arm.animation_data.action:
                     src_action = src_arm.animation_data.action
                     mism = _rest_mismatch(src_arm, target) if target else None
-                    if mism is not None and mism > _RETARGET_THRESHOLD:
+                    units_differ = (target is not None
+                                    and abs(_rig_scale(src_arm)
+                                            - _rig_scale(target)) > 1e-4)
+                    if units_differ or (mism is not None
+                                        and mism > _RETARGET_THRESHOLD):
                         action = _retarget_bake(context, src_arm, target, src_action)
                         retargeted += 1
                     else:
                         action = src_action.copy()
                     action.use_fake_user = True
-                    _stamp_source(action, item.filepath)
+                    _stamp_source(action, item.filepath, target)
                     if props.in_place:
                         _strip_root_motion(action)
                     _delete_objects(imported)
@@ -1344,17 +1394,20 @@ class MIXLIB_OT_reimport(Operator):
         src_action = src_arm.animation_data.action
         target = _active_armature(context)
         mism = _rest_mismatch(src_arm, target) if target else None
-        if mism is not None and mism > _RETARGET_THRESHOLD:
+        units_differ = (target is not None
+                        and abs(_rig_scale(src_arm) - _rig_scale(target)) > 1e-4)
+        if units_differ or (mism is not None and mism > _RETARGET_THRESHOLD):
             action = _retarget_bake(context, src_arm, target, src_action)
-            self.report(
-                {'INFO'},
-                f"Rest poses differ (~{mism * 100:.0f}% of skeleton size) — "
-                "retargeted via constraint bake",
-            )
+            if units_differ:
+                note = (f"rig scale {_rig_scale(target):g} vs "
+                        f"{_rig_scale(src_arm):g} in the FBX")
+            else:
+                note = f"rest poses differ ~{mism * 100:.0f}% of skeleton size"
+            self.report({'INFO'}, f"Retargeted via constraint bake ({note})")
         else:
             action = src_action.copy()
         action.use_fake_user = True
-        _stamp_source(action, item.filepath)
+        _stamp_source(action, item.filepath, target)
         if props.in_place:
             _strip_root_motion(action)
 
@@ -1533,8 +1586,11 @@ class MIXLIB_UL_anims(UIList):
         action = bpy.data.actions.get(item.name)
         if action is not None:
             # FILE_REFRESH: the FBX on disk changed since this action was
-            # imported — Apply will re-import it.
-            stale = _is_stale(action, item.filepath)
+            # imported, or the rig has been rescaled since — either way Apply
+            # will re-import it, so the tick must not claim it is ready to use.
+            target = _active_armature(context)
+            stale = (_is_stale(action, item.filepath)
+                     or (target is not None and _unit_mismatch(action, target)))
             row.label(text="", icon='FILE_REFRESH' if stale else 'CHECKMARK')
 
 
