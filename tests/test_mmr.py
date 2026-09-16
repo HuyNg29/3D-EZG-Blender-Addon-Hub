@@ -339,6 +339,47 @@ def main():
     r = bpy.ops.mmr.bind_auto_weights()
     check(r == {'FINISHED'}, "bind_auto_weights")
 
+    # --- Re-bind must not blow the mesh up (Mixamo parenting) ---------------
+    # A mesh imported from a Mixamo FBX is already a CHILD of the armature and
+    # carries a compensating local scale (armature 0.01, mesh 100) with an
+    # identity parent inverse. parent_set() overwrites that inverse with the
+    # armature's inverted world matrix (scale 100), which used to multiply with
+    # the local scale and scale the mesh up 100x on every re-bind.
+    def world_dims(obj):
+        dg = bpy.context.evaluated_depsgraph_get()
+        bb = [obj.matrix_world @ Vector(c) for c in obj.evaluated_get(dg).bound_box]
+        return Vector((max(v.x for v in bb) - min(v.x for v in bb),
+                       max(v.y for v in bb) - min(v.y for v in bb),
+                       max(v.z for v in bb) - min(v.z for v in bb)))
+
+    # Done on throwaway copies so the shared arm/mesh state stays untouched.
+    arm2 = arm.copy()
+    arm2.data = arm.data.copy()
+    arm2.name = "MMR_ScaleTestArm"
+    bpy.context.scene.collection.objects.link(arm2)
+    arm2.scale = (0.01, 0.01, 0.01)
+    scaled = bpy.data.objects.new("MMR_ScaledChild", mesh.data.copy())
+    bpy.context.scene.collection.objects.link(scaled)
+    scaled.parent = arm2
+    scaled.scale = (100.0, 100.0, 100.0)
+    scaled.matrix_parent_inverse.identity()
+    bpy.context.view_layer.update()
+    dims_before = world_dims(scaled)
+
+    err = mmr.bind_automatic_weights(bpy.context, scaled, arm2)
+    bpy.context.view_layer.update()
+    dims_after = world_dims(scaled)
+    check(err is None, f"re-bind of an already-parented mesh succeeds ({err})")
+    check((dims_after - dims_before).length < 1e-3,
+          "re-bind keeps world size on a Mixamo-parented mesh "
+          f"(before {tuple(round(v, 3) for v in dims_before)}, "
+          f"after {tuple(round(v, 3) for v in dims_after)})")
+
+    bpy.data.objects.remove(scaled, do_unlink=True)
+    bpy.data.objects.remove(arm2, do_unlink=True)
+    mmr.select_only(bpy.context, [mesh, arm], active=arm)
+    bpy.context.view_layer.update()
+
     # --- Symmetrize Weights: mirror one half onto the other (flip L/R) -------
     def group_total(name):
         vg = mesh.vertex_groups.get(name)

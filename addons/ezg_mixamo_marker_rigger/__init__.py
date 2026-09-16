@@ -970,11 +970,19 @@ def build_mixamo_armature(context, keep_existing=False):
 def bind_automatic_weights(context, mesh_obj, arm_obj):
     """Parent mesh to armature with automatic weights. Returns error or None."""
     ensure_object_mode(context)
+    # parent_set overwrites matrix_parent_inverse with the armature's inverted
+    # world matrix. On a mesh that is ALREADY a child of the armature and
+    # carries a compensating local scale - exactly how the FBX importer sets up
+    # a Mixamo character (armature scale 0.01, mesh scale 100) - the new inverse
+    # multiplies with that scale and the mesh blows up 100x. Put the world
+    # matrix back afterwards; harmless when parent_set already kept it.
+    world_before = mesh_obj.matrix_world.copy()
     select_only(context, [mesh_obj, arm_obj], active=arm_obj)
     try:
         bpy.ops.object.parent_set(type='ARMATURE_AUTO')
     except RuntimeError as exc:
         return f"Automatic weighting failed: {exc}"
+    mesh_obj.matrix_world = world_before
 
     # Verify / repair the armature modifier.
     mod = next((m for m in mesh_obj.modifiers

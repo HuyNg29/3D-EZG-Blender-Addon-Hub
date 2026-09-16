@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_mixamo_marker_rigger"
-version = "0.22.0"
+version = "0.23.0"
 name = "Manual Marker Mixamo Rigger"
 tagline = "Dat marker tren T-Pose de sinh armature Mixamo va bind weight"
 maintainer = "EasyGoing Visual <visual@easygoing.vn>"
