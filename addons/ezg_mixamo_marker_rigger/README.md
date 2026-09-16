@@ -66,6 +66,30 @@ expected — exactly how imported Mixamo characters are set up. If you
 accidentally changed the transform, the panel shows a warning; just click
 **Build Mixamo Armature** again to restore it.
 
+### Normalize Rig Scale (when the engine insists on 1,1,1)
+
+Ctrl+A by hand is what the warning above is about. **Rig Scale → Normalize Rig
+Scale** is the supported way to do the same thing safely: it applies the
+rotation and scale *and* converts every `pose.bones[...].location` key by the
+same factor, so nothing moves. Measured drift on a real Mixamo action:
+**0.000005 m**, versus **13.4 m** when the transform is applied on its own.
+
+- Runs on every selected armature at once.
+- Refuses (changing nothing) when the armature/mesh data is shared with another
+  object, or when an action is also used by a rig you did not select —
+  rescaling it for one rig would break the other. Select them together instead.
+- Object-level location keys (root motion on the armature object) are left
+  alone: they are in world units, so the object's own scale never affected them.
+- Safe to run twice; a rig already at 1,1,1 is skipped, never rescaled again.
+
+Afterwards the rig is tagged, the Mixamo-space warning stops firing for it, and
+new Mixamo animations still apply: the Animation Library sees the rest poses no
+longer match and switches to its constraint-bake retarget, which works in world
+space. Accuracy is identical to a 0.01 rig (measured 0.000001 m on both), it is
+just slower than the raw F-curve copy, and the report will mention a huge
+"rest poses differ" percentage — that is the centimetre/metre difference, not a
+broken rest pose.
+
 ### Applying animations
 
 1. In the Mixamo Animation Library, select your generated `MMR_Mixamo_Armature`.

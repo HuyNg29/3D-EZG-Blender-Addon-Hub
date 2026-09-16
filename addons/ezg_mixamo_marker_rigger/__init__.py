@@ -21,6 +21,7 @@ ARMATURE_NAME = "MMR_Mixamo_Armature"
 SYMMETRY_CENTER_NAME = "MMR_SYMMETRY_CENTER"
 BONE_PREFIX = "mixamorig:"
 GENERATED_TAG = "mmr_generated"  # custom property tag on generated armatures
+NORMALIZED_TAG = "mmr_scale_normalized"  # set by 'Normalize Rig Scale'
 
 CENTER_X = 0.0  # default symmetry center on the X axis
 
@@ -279,6 +280,28 @@ def armature_in_mixamo_space(arm_obj):
     rot_ok = abs(arm_obj.rotation_euler.x - MIXAMO_ARM_ROT_X) < 0.02
     scale_ok = all(abs(s - MIXAMO_ARM_SCALE) < 1e-4 for s in arm_obj.scale)
     return rot_ok and scale_ok
+
+
+def armature_normalized(arm_obj):
+    """True if this rig was taken out of Mixamo space ON PURPOSE, by
+    'Normalize Rig Scale' - object transform at identity AND every pose-bone
+    location key already converted to match.
+
+    The tag is what counts, not the transform. A rig somebody applied by hand
+    looks identical but still holds centimetre location keys, and that is the
+    exact case the Mixamo-space warning exists to catch - so it must keep
+    warning for it.
+    """
+    if arm_obj is None:
+        return False
+    return (bool(arm_obj.get(NORMALIZED_TAG))
+            and all(abs(s - 1.0) < 1e-4 for s in arm_obj.scale))
+
+
+def armature_space_ok(arm_obj):
+    """Rig sits in a space where animations stay correct: either untouched
+    Mixamo space, or normalized through the add-on."""
+    return armature_in_mixamo_space(arm_obj) or armature_normalized(arm_obj)
 
 
 def ensure_object_mode(context):
@@ -2115,7 +2138,7 @@ class MMR_OT_set_selected_armature(bpy.types.Operator):
             self.report({'WARNING'},
                         f"'{obj.name}' has no 'mixamorig:' bones â€” binding works, "
                         "but Mixamo animations will not match by bone name.")
-        elif not armature_in_mixamo_space(obj):
+        elif not armature_space_ok(obj):
             self.report({'WARNING'},
                         f"'{obj.name}' is not in Mixamo object space (rot X=90, "
                         "scale 0.01) â€” Mixamo animations may play wrong on it.")
@@ -3171,6 +3194,208 @@ class MMR_OT_retarget_actions(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# ---------------------------------------------------------------------------
+# Rig scale normalization
+#
+# Mixamo space (rot X +90, scale 0.01) is what the rest of this add-on builds,
+# and animations import cleanly into it. Game engines see that 0.01 on the
+# armature NODE though, which is a nuisance the moment anything is attached to
+# a bone. This converts a rig to 1,1,1 without moving a thing.
+#
+# The catch is that pose-bone location is measured in armature DATA units:
+# applying the object's scale silently reinterprets Mixamo's centimetres as
+# metres, and the character jumps ~13 m. So the keys have to be converted in
+# the same breath as the transform - never one without the other.
+# ---------------------------------------------------------------------------
+
+def rig_deformed_meshes(arm_obj):
+    """Meshes this armature actually deforms. Parenting alone does not deform,
+    the Armature modifier does, so that is what is matched."""
+    return [ob for ob in bpy.data.objects
+            if ob.type == 'MESH'
+            and any(m.type == 'ARMATURE' and m.object is arm_obj
+                    for m in ob.modifiers)]
+
+
+def rig_actions(arm_obj):
+    """Actions driving this rig: the assigned one plus every NLA strip's."""
+    out = []
+    ad = arm_obj.animation_data
+    if ad is None:
+        return out
+    if ad.action is not None:
+        out.append(ad.action)
+    for track in ad.nla_tracks:
+        for strip in track.strips:
+            if strip.action is not None and strip.action not in out:
+                out.append(strip.action)
+    return out
+
+
+def action_user_objects(action):
+    """Objects whose animation data references `action`.
+
+    `action.users` cannot answer this: the Animation Library sets a fake user
+    on every imported action, so the count is off by one and says nothing
+    about WHICH rigs would break if the action is rescaled.
+    """
+    users = []
+    for ob in bpy.data.objects:
+        ad = ob.animation_data
+        if ad is None:
+            continue
+        if ad.action is action or any(st.action is action
+                                      for tr in ad.nla_tracks
+                                      for st in tr.strips):
+            users.append(ob)
+    return users
+
+
+def scale_bone_location_keys(action, factor):
+    """Multiply every pose-bone location channel of `action` by `factor`.
+
+    Only `pose.bones[...].location` is touched. The object-level `location`
+    channel (root motion on the armature object) is in world units, unaffected
+    by the object's own scale, and rescaling it would be a bug - hence the
+    bone-path test instead of a plain endswith.
+    """
+    count = 0
+    for container in action_channel_containers(action):
+        for fcurve in container.fcurves:
+            if bone_of_path(fcurve.data_path) is None:
+                continue
+            if not fcurve.data_path.endswith(".location"):
+                continue
+            for key in fcurve.keyframe_points:
+                key.co.y *= factor
+                key.handle_left.y *= factor
+                key.handle_right.y *= factor
+            fcurve.update()
+            count += 1
+    return count
+
+
+def normalize_check(arm_obj, targets):
+    """Reason `arm_obj` cannot be normalized, or None when it can.
+
+    Validated up front for every rig so a multi-rig run either happens or does
+    not - a run that dies halfway leaves some rigs converted and some not,
+    which is the worst possible state to debug.
+    """
+    scale = arm_obj.scale
+    if (abs(scale.x - scale.y) > 1e-6) or (abs(scale.y - scale.z) > 1e-6):
+        return ("'%s': scale is not uniform (%.4f, %.4f, %.4f)."
+                % (arm_obj.name, scale.x, scale.y, scale.z))
+    if abs(scale.x) < 1e-9:
+        return "'%s': scale is zero." % arm_obj.name
+
+    shared_data = [ob.name for ob in [arm_obj] + rig_deformed_meshes(arm_obj)
+                   if ob.data.users > 1]
+    if shared_data:
+        return ("'%s': data shared with another object (%s) - Blender refuses to "
+                "apply transforms. Make it single-user first."
+                % (arm_obj.name, ", ".join(sorted(set(shared_data)))))
+
+    # An action shared with a rig that stays at 0.01 cannot be rescaled for one
+    # without breaking the other. Normalizing them together is fine.
+    for action in rig_actions(arm_obj):
+        outside = [ob.name for ob in action_user_objects(action)
+                   if ob not in targets]
+        if outside:
+            return ("'%s': action '%s' is also used by %s. Select those rigs too, "
+                    "or make the action single-user."
+                    % (arm_obj.name, action.name, ", ".join(sorted(set(outside)))))
+    return None
+
+
+def normalize_rig_scale(context, arm_obj, converted_actions):
+    """Put `arm_obj` at scale 1 without moving anything. Returns a message.
+
+    `converted_actions` is shared across the whole run: two rigs in one
+    selection can share an action, and scaling it twice would shrink it by
+    10000x.
+    """
+    factor = arm_obj.scale.x
+    rot = arm_obj.rotation_euler
+    if abs(factor - 1.0) < 1e-6 and all(abs(r) < 1e-6 for r in rot):
+        arm_obj[NORMALIZED_TAG] = True
+        return "'%s' was already at 1,1,1." % arm_obj.name
+
+    meshes = rig_deformed_meshes(arm_obj)
+    select_only(context, [arm_obj] + meshes, active=arm_obj)
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+    curves = 0
+    actions = rig_actions(arm_obj)
+    for action in actions:
+        if action in converted_actions:
+            continue
+        curves += scale_bone_location_keys(action, factor)
+        converted_actions.add(action)
+
+    arm_obj[NORMALIZED_TAG] = True
+    return ("'%s': scale %g -> 1 (%d mesh, %d action, %d location curve%s)."
+            % (arm_obj.name, factor, len(meshes), len(actions), curves,
+               "" if curves == 1 else "s"))
+
+
+class MMR_OT_normalize_rig_scale(bpy.types.Operator):
+    bl_idname = "mmr.normalize_rig_scale"
+    bl_label = "Normalize Rig Scale"
+    bl_description = (
+        "Apply the armature's rotation and scale so it reads 1,1,1 - for engines "
+        "that dislike a 0.01 rig node. Pose-bone location keys are converted at "
+        "the same time, so existing animations do not move. Runs on every "
+        "selected armature")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        if any(ob.type == 'ARMATURE' for ob in context.selected_objects):
+            return True
+        cls.poll_message_set("Select the armature(s) to normalize.")
+        return get_generated_armature(context) is not None
+
+    def execute(self, context):
+        ensure_object_mode(context)
+        targets = [ob for ob in context.selected_objects if ob.type == 'ARMATURE']
+        if not targets:
+            arm_obj = get_generated_armature(context)
+            targets = [arm_obj] if arm_obj is not None else []
+        if not targets:
+            self.report({'ERROR'}, "Select an armature, or set a rig target first.")
+            return {'CANCELLED'}
+
+        problems = [msg for msg in (normalize_check(ob, targets) for ob in targets)
+                    if msg]
+        if problems:
+            for msg in problems:
+                print("[MMR] normalize refused: " + msg)
+            self.report({'ERROR'}, problems[0] if len(problems) == 1 else
+                        "%d rig(s) cannot be normalized, nothing changed. First: %s"
+                        % (len(problems), problems[0]))
+            return {'CANCELLED'}
+
+        converted_actions = set()
+        messages = []
+        for arm_obj in targets:
+            try:
+                messages.append(normalize_rig_scale(context, arm_obj,
+                                                    converted_actions))
+            except RuntimeError as exc:
+                # Undo puts back whatever the loop already converted.
+                self.report({'ERROR'},
+                            "'%s': %s" % (arm_obj.name, exc))
+                return {'CANCELLED'}
+
+        for msg in messages:
+            print("[MMR] " + msg)
+        self.report({'INFO'}, messages[0] if len(messages) == 1 else
+                    "Normalized %d rigs (details in the System Console)."
+                    % len(messages))
+        return {'FINISHED'}
+
+
 class MMR_PT_main_panel(bpy.types.Panel):
     bl_label = "Mixamo Marker Rigger"
     bl_idname = "MMR_PT_main_panel"
@@ -3219,12 +3444,13 @@ class MMR_PT_main_panel(bpy.types.Panel):
         elif arm_obj is None:
             box.label(text="Markers ready. Build the armature.", icon='CHECKMARK')
 
-        # Mixamo-space guard: applying/zeroing the transform breaks animations.
-        if arm_obj is not None and not armature_in_mixamo_space(arm_obj):
+        # Mixamo-space guard: applying/zeroing the transform breaks animations,
+        # UNLESS it went through Normalize Rig Scale, which converts the keys.
+        if arm_obj is not None and not armature_space_ok(arm_obj):
             warn = box.column(align=True)
             warn.label(text="Armature transform changed!", icon='ERROR')
             warn.label(text="Keep rot X=90, scale 0.01 for Mixamo anims.")
-            warn.label(text="Do NOT Apply rotation/scale. Rebuild armature.")
+            warn.label(text="Do NOT Apply by hand - use Normalize Rig Scale.")
 
         # Workflow
         col = layout.column(align=True)
@@ -3290,6 +3516,18 @@ class MMR_PT_main_panel(bpy.types.Panel):
         col = layout.column(align=True)
         col.operator("mmr.build_armature", icon='ARMATURE_DATA')
         col.operator("mmr.build_new_armature", icon='OUTLINER_OB_ARMATURE')
+
+        # Optional, and deliberately after the build buttons: Mixamo space is
+        # still the default. This is for engines that dislike a 0.01 rig node.
+        nbox = layout.box()
+        nbox.label(text="Rig Scale", icon='CON_SIZELIKE')
+        if arm_obj is not None and armature_normalized(arm_obj):
+            nbox.label(text="Normalized to 1,1,1.", icon='CHECKMARK')
+            nbox.label(text="New anims still apply (retarget bake).")
+        else:
+            nbox.label(text="Mixamo rigs sit at 0.01 by design.", icon='INFO')
+            nbox.label(text="Only normalize if your engine needs 1.")
+        nbox.operator("mmr.normalize_rig_scale", icon='CON_SIZELIKE')
 
         # Weight tools
         wbox = layout.box()
@@ -3380,6 +3618,7 @@ CLASSES = (
     MMR_OT_set_selected_armature,
     MMR_OT_clear_armature,
     MMR_OT_flip_foot_direction,
+    MMR_OT_normalize_rig_scale,
     MMR_OT_bind_auto_weights,
     MMR_OT_symmetrize_weights,
     MMR_OT_zero_weights,

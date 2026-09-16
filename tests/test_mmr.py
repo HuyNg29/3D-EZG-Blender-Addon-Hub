@@ -953,6 +953,114 @@ def main():
     check(high_legs >= 1, "high reach: skirt picks up the lower-leg (Leg) bone")
     check(high_legs >= low_legs, "higher reach reaches at least as many leg bones")
 
+    # -----------------------------------------------------------------------
+    # Normalize Rig Scale
+    #
+    # The point of the operator is that NOTHING moves: applying the 0.01 scale
+    # without converting the centimetre location keys throws the character
+    # metres away, so the test measures bone world positions across the whole
+    # action rather than just checking obj.scale.
+    # -----------------------------------------------------------------------
+    print("\n-- Normalize Rig Scale --")
+    bpy.ops.wm.read_homefile(use_empty=True)
+
+    def mixamo_rig(name, bone_len_cm=50.0):
+        """Armature in Mixamo space: rot X +90, scale 0.01, bone data in cm."""
+        arm_data = bpy.data.armatures.new(name)
+        arm = bpy.data.objects.new(name, arm_data)
+        bpy.context.collection.objects.link(arm)
+        arm.rotation_euler = (mmr.MIXAMO_ARM_ROT_X, 0.0, 0.0)
+        arm.scale = (mmr.MIXAMO_ARM_SCALE,) * 3
+        bpy.context.view_layer.objects.active = arm
+        bpy.ops.object.mode_set(mode='EDIT')
+        root = arm_data.edit_bones.new(mmr.BONE_PREFIX + "Hips")
+        root.head = (0.0, 0.0, 0.0)
+        root.tail = (0.0, 0.0, bone_len_cm)
+        child = arm_data.edit_bones.new(mmr.BONE_PREFIX + "Spine")
+        child.head = root.tail
+        child.tail = (0.0, 0.0, bone_len_cm * 2.0)
+        child.parent = root
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return arm
+
+    def keyed_action(arm, hips_cm):
+        """Action with a pose-bone location key in armature (cm) units."""
+        act = bpy.data.actions.new("PunchLike")
+        arm.animation_data_create().action = act
+        if hasattr(arm.animation_data, "action_slot") and len(act.slots):
+            arm.animation_data.action_slot = act.slots[0]
+        pb = arm.pose.bones[mmr.BONE_PREFIX + "Hips"]
+        for frame, amount in ((1, 0.0), (10, hips_cm)):
+            pb.location = (0.0, amount, 0.0)
+            pb.keyframe_insert("location", frame=frame)
+        return act
+
+    def bone_track(arm):
+        out = []
+        for frame in range(1, 11):
+            bpy.context.scene.frame_set(frame)
+            bpy.context.view_layer.update()
+            out.append([arm.matrix_world @ pb.head for pb in arm.pose.bones])
+        return out
+
+    def drift(arm, baseline):
+        return max((a - b).length
+                   for fa, fb in zip(bone_track(arm), baseline)
+                   for a, b in zip(fa, fb))
+
+    rig = mixamo_rig("NormRig")
+    keyed_action(rig, hips_cm=30.0)
+    baseline = bone_track(rig)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    rig.select_set(True)
+    bpy.context.view_layer.objects.active = rig
+    res = bpy.ops.mmr.normalize_rig_scale()
+
+    check(res == {'FINISHED'}, "normalize: operator finished")
+    check(all(abs(s - 1.0) < 1e-5 for s in rig.scale), "normalize: scale is 1,1,1")
+    check(all(abs(r) < 1e-5 for r in rig.rotation_euler), "normalize: rotation zeroed")
+    moved = drift(rig, baseline)
+    print(f"    bone drift after normalize: {moved:.9f} m")
+    check(moved < 1e-4, "normalize: animated bones do not move")
+    check(mmr.armature_normalized(rig), "normalize: rig is tagged normalized")
+    check(mmr.armature_space_ok(rig), "normalize: no false Mixamo-space warning")
+
+    # Running twice must not rescale the keys a second time.
+    bpy.ops.mmr.normalize_rig_scale()
+    check(drift(rig, baseline) < 1e-4, "normalize: second run changes nothing")
+
+    # An action shared with a rig that is NOT selected cannot be converted for
+    # one rig without breaking the other - the operator must refuse outright.
+    other = mixamo_rig("SharedRig")
+    shared = mixamo_rig("KeepsMixamoSpace")
+    act = keyed_action(other, hips_cm=30.0)
+    shared.animation_data_create().action = act
+    if hasattr(shared.animation_data, "action_slot") and len(act.slots):
+        shared.animation_data.action_slot = act.slots[0]
+    shared_baseline = bone_track(shared)
+
+    bpy.ops.object.select_all(action='DESELECT')
+    other.select_set(True)
+    bpy.context.view_layer.objects.active = other
+    expect_error(bpy.ops.mmr.normalize_rig_scale,
+                 "normalize: refuses an action shared with another rig")
+    check(abs(other.scale.x - mmr.MIXAMO_ARM_SCALE) < 1e-6,
+          "normalize: refused run leaves the rig untouched")
+    check(drift(shared, shared_baseline) < 1e-4,
+          "normalize: refused run leaves the other rig's animation intact")
+
+    # Selecting both rigs makes it legal, and the shared action is converted
+    # exactly once for the pair.
+    bpy.ops.object.select_all(action='DESELECT')
+    other.select_set(True)
+    shared.select_set(True)
+    bpy.context.view_layer.objects.active = other
+    res = bpy.ops.mmr.normalize_rig_scale()
+    check(res == {'FINISHED'}, "normalize: both rigs selected is accepted")
+    check(drift(shared, shared_baseline) < 1e-4,
+          "normalize: shared action rescaled once, not twice")
+
     print()
     if FAILED:
         print(f"RESULT: {len(FAILED)} FAILURES")
