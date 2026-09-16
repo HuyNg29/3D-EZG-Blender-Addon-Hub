@@ -92,6 +92,34 @@ Single file: `mixamo_marker_rigger.py`
 2. Pick `mixamo_marker_rigger.py`, enable **Manual Marker Mixamo Rigger**.
 3. Panel appears in **3D Viewport → Sidebar (N) → "Mixamo Rigger" tab**.
 
+## Using an armature you already have (e.g. dragged in from Mixamo)
+
+You do **not** have to build a rig from markers. If the character already has a
+skeleton - a Mixamo FBX you imported, a rig from another character, or a rig
+this add-on built earlier - point the add-on at it and go straight to the
+weight tools:
+
+1. Select your mesh -> **Set Selected Mesh**
+2. Select the armature object -> **Set Selected Armature**
+   (the **Existing Armature (optional)** box, right under step 1; the same
+   box has an object picker and an **X** button to clear the target)
+3. Skip steps 2 and 3 of the workflow below - no markers, no Build.
+4. Go to **Weight Tools**: **Bind With Automatic Weights**, then
+   **Smart Mixamo Weight Refine** / **Clean Weights** as usual.
+
+The Status box shows the target as `Armature: <name> (external)` for a rig you
+picked, versus `(built)` for one the add-on generated. **Build Mixamo Armature**
+only ever deletes rigs the add-on itself tagged, so your imported Mixamo rig is
+never removed by it.
+
+Two warnings you may see when picking a rig (both are warnings, not errors -
+binding still works):
+
+- *no `mixamorig:` bones* - Mixamo animations won't match by bone name.
+- *not in Mixamo object space (rot X=90, scale 0.01)* - Mixamo animations may
+  play wrong on it. An armature imported straight from a Mixamo FBX with
+  `automatic_bone_orientation=False` is already in that space.
+
 ## Workflow (like Mixamo)
 
 1. Select your T-Pose character mesh → **Set Selected Mesh**
@@ -137,11 +165,9 @@ Single file: `mixamo_marker_rigger.py`
    rig is untagged, so later normal rebuilds never delete it, and it becomes
    the Bind target. (Normal **Build Mixamo Armature** only ever replaces the
    add-on's own managed rig.)
-   **Set Selected Armature** — reuse an EXISTING armature as the rig target
-   instead of building: select the armature object and click it; Bind and all
-   weight tools then use that rig. Warns if the armature has no `mixamorig:`
-   bones (animations won't match by name) or isn't in Mixamo object space
-   (rot X=90, scale 0.01 — animations may play wrong).
+   (To reuse an armature you already have instead of building one, use
+   **Set Selected Armature** in the **Existing Armature (optional)** box near
+   the top of the panel - see "Using an armature you already have" above.)
 6. **Bind With Automatic Weights**
 7. **Smart Mixamo Weight Refine** (recommended) — see "Weight Tools" below
 8. **Clean Weights** (normalize → clean tiny weights → limit to 4 → normalize)

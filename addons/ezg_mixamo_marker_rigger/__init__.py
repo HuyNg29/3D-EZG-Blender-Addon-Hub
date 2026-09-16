@@ -2117,6 +2117,21 @@ class MMR_OT_set_selected_armature(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class MMR_OT_clear_armature(bpy.types.Operator):
+    bl_idname = "mmr.clear_armature"
+    bl_label = "Clear Armature Target"
+    bl_description = ("Forget the current rig target, so Bind / weight tools "
+                      "stop using it. Does not delete the armature object")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        old = valid_object(context.scene.mmr_armature, 'ARMATURE')
+        context.scene.mmr_armature = None
+        self.report({'INFO'}, "Rig target cleared"
+                              + (f" (was '{old.name}')." if old else "."))
+        return {'FINISHED'}
+
+
 class MMR_OT_build_new_armature(bpy.types.Operator):
     bl_idname = "mmr.build_new_armature"
     bl_label = "Build As New Armature"
@@ -3168,7 +3183,12 @@ class MMR_PT_main_panel(bpy.types.Panel):
         box.label(text="Status", icon='INFO')
         box.label(text=f"Mesh: {mesh_obj.name if mesh_obj else '-'}",
                   icon='MESH_DATA' if mesh_obj else 'ERROR')
-        box.label(text=f"Armature: {arm_obj.name if arm_obj else '-'}",
+        if arm_obj is None:
+            arm_text = "Armature: -"
+        else:
+            source = "built" if arm_obj.get(GENERATED_TAG) else "external"
+            arm_text = f"Armature: {arm_obj.name} ({source})"
+        box.label(text=arm_text,
                   icon='ARMATURE_DATA' if arm_obj else 'ERROR')
         placed = len(ALL_MARKERS) - len(missing)
         box.label(text=f"Markers: {placed} / {len(ALL_MARKERS)}",
@@ -3180,6 +3200,10 @@ class MMR_PT_main_panel(bpy.types.Panel):
         # Warnings
         if mesh_obj is None:
             box.label(text="Select a mesh, then 'Set Selected Mesh'.", icon='ERROR')
+        elif arm_obj is not None and missing:
+            # Rig already set (e.g. imported from Mixamo): markers are optional.
+            box.label(text="Rig ready. Markers not needed - use Weight Tools.",
+                      icon='CHECKMARK')
         elif missing and placed > 0:
             box.label(text="Some markers are missing. Recreate them.", icon='ERROR')
         elif missing:
@@ -3199,6 +3223,20 @@ class MMR_PT_main_panel(bpy.types.Panel):
         col.label(text="1. Mesh")
         col.operator("mmr.set_selected_mesh", icon='RESTRICT_SELECT_OFF')
         col.operator("mmr.prepare_mesh", icon='CON_SIZELIKE')
+
+        # Existing-rig shortcut: an armature imported from Mixamo (or any rig
+        # already in the file) can be used directly, skipping markers + build.
+        abox = layout.box()
+        abox.label(text="Existing Armature (optional)", icon='OUTLINER_OB_ARMATURE')
+        abox.label(text="Have a Mixamo rig already? Pick it here,", icon='INFO')
+        abox.label(text="then skip to Weight Tools.")
+        row = abox.row(align=True)
+        row.operator("mmr.set_selected_armature",
+                     text="Set Selected Armature", icon='RESTRICT_SELECT_OFF')
+        sub = row.row(align=True)
+        sub.enabled = arm_obj is not None
+        sub.operator("mmr.clear_armature", text="", icon='X')
+        abox.prop(scene, "mmr_armature", text="")
 
         col = layout.column(align=True)
         col.label(text="2. Markers")
@@ -3244,7 +3282,6 @@ class MMR_PT_main_panel(bpy.types.Panel):
         col = layout.column(align=True)
         col.operator("mmr.build_armature", icon='ARMATURE_DATA')
         col.operator("mmr.build_new_armature", icon='OUTLINER_OB_ARMATURE')
-        col.operator("mmr.set_selected_armature", icon='RESTRICT_SELECT_OFF')
 
         # Weight tools
         wbox = layout.box()
@@ -3333,6 +3370,7 @@ CLASSES = (
     MMR_OT_build_armature,
     MMR_OT_build_new_armature,
     MMR_OT_set_selected_armature,
+    MMR_OT_clear_armature,
     MMR_OT_flip_foot_direction,
     MMR_OT_bind_auto_weights,
     MMR_OT_symmetrize_weights,
@@ -3368,7 +3406,7 @@ def register():
     bpy.types.Scene.mmr_target_mesh = bpy.props.PointerProperty(
         name="Target Mesh", type=bpy.types.Object, poll=_poll_mesh)
     bpy.types.Scene.mmr_armature = bpy.props.PointerProperty(
-        name="Generated Armature", type=bpy.types.Object, poll=_poll_armature)
+        name="Rig Target", type=bpy.types.Object, poll=_poll_armature)
     bpy.types.Scene.mmr_use_symmetry = bpy.props.BoolProperty(
         name="Use Symmetry",
         description="Right-side markers follow the left side in realtime via drivers",
