@@ -246,6 +246,13 @@ không đụng tới:
 qua nguồn này và chỉ dựa vào object trong scene. Giữ nền trong suốt khi export
 palette ra PNG nếu muốn lưới an toàn thứ hai này còn tác dụng.
 
+Ảnh lớn được quét trên bản thu nhỏ (ảnh 8K đọc thẳng là ~1 GB). Bản thu nhỏ
+luôn là **bội số nguyên của grid** để biên ô rơi trúng biên pixel, và khi quét
+add-on **chừa mép ô ra** — thu nhỏ có lọc nên dòng pixel sát ô đặc lấy được một
+phần alpha của nó, không chừa thì chỉ một dòng nhoè cũng đủ kết luận ô bên cạnh
+đã có texture. (Bản 1.3.1 trở về trước dính đúng lỗi này: palette 3x3 canvas
+1536 có 3 texture ở hàng 1, object mới nhảy xuống **H3 C1** thay vì H2 C1.)
+
 Add-on từ chối và **không đổi gì** khi: `Columns x Rows` không khớp và cũng
 không chia hết cho grid của palette nào; có nhiều palette cùng grid mà không
 phân biệt được; object đã chọn **đã nằm trong palette** (chạy tiếp sẽ thu nhỏ

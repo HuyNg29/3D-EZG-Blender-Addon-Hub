@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 3, 1),
+    "version": (1, 3, 2),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -541,34 +541,46 @@ def _image_occupancy(image, rows, cols):
     if src_w < cols or src_h < rows:
         return None
 
-    # Đọc trên bản thu nhỏ: ảnh gốc 8K là ~1 GB float32.
+    # Đọc trên bản thu nhỏ: ảnh gốc 8K là ~1 GB float32. Thu về đúng BỘI SỐ
+    # của grid để biên ô rơi trúng biên pixel — canvas 1536 với grid 3x3 mà
+    # thu thẳng về 1024 thì biên ô rơi vào 682.67, lệch nửa pixel.
+    src_cell = min(src_w // cols, src_h // rows)
+    if src_cell < 1:
+        return None
+    cell = min(src_cell, max(1, _ALPHA_SCAN_PX // max(cols, rows)))
+    width, height = cell * cols, cell * rows
+
     copy = None
     work = image
-    if max(src_w, src_h) > _ALPHA_SCAN_PX:
-        ratio = _ALPHA_SCAN_PX / max(src_w, src_h)
+    if (width, height) != (src_w, src_h):
         copy = image.copy()
-        copy.scale(max(cols, int(src_w * ratio)), max(rows, int(src_h * ratio)))
+        copy.scale(width, height)
         work = copy
 
     try:
-        width, height = work.size
-        channels = work.channels
-        if width < cols or height < rows or channels < 4:
+        if tuple(work.size) != (width, height) or work.channels < 4:
             return None
+        channels = work.channels
         buf = np.empty(width * height * channels, dtype=np.float32)
         work.pixels.foreach_get(buf)
         alpha = buf.reshape(height, width, channels)[:, :, 3]
         if float(alpha.min()) > 1.0 - _ALPHA_EMPTY:
             return None                 # đục đặc -> không có thông tin ô trống
 
+        # Thu nhỏ có lọc nên biên ô bị nhoè: dòng pixel ngay sát ô đặc lấy
+        # được một phần alpha của nó. Dùng max() thì chỉ một dòng nhoè cũng đủ
+        # kết luận cả ô bên cạnh "đã có texture" — ô trống bị bỏ qua, texture
+        # mới nhảy xuống hàng dưới. Chừa mép ra để không đọc phải dòng đó.
+        inset = max(1, cell // 32) if (copy is not None and cell >= 8) else 0
+
         occupied = set()
         for row in range(rows):
             # pixel của Blender bắt đầu từ đáy ảnh, ô 0 lại nằm trên cùng
-            y0 = round(height * (rows - 1 - row) / rows)
-            y1 = round(height * (rows - row) / rows)
+            y0 = (rows - 1 - row) * cell + inset
+            y1 = (rows - row) * cell - inset
             for col in range(cols):
-                x0 = round(width * col / cols)
-                x1 = round(width * (col + 1) / cols)
+                x0 = col * cell + inset
+                x1 = (col + 1) * cell - inset
                 tile = alpha[y0:y1, x0:x1]
                 if tile.size and float(tile.max()) > _ALPHA_EMPTY:
                     occupied.add(row * cols + col)

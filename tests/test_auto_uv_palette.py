@@ -109,6 +109,74 @@ check("pal_big.001" not in bpy.data.images,
       "ban copy tam de quet alpha da duoc xoa, khong ket lai trong file")
 bpy.data.images.remove(big)
 
+# Thu nho anh de quet alpha lam NHOE bien o: dong pixel sat o dac lay duoc
+# mot phan alpha cua no, ma tile.max() thi chi can 1 dong la ket luan ca o
+# ben canh "da co texture". Hau qua that: palette 3x3 canvas 1536 co 3
+# texture o hang 1, texture moi nhay xuong H3C1 thay vi H2C1.
+def palette_png(size_w, size_h, cells, cols, rows, name):
+    """Anh palette co dung cac o trong `cells` la duc, ghi ra file roi nap lai.
+
+    Phai la anh tu file: anh "generated" bi Blender dung generated_color dung
+    lai buffer khi copy, khong phai truong hop that.
+    """
+    img = bpy.data.images.new(name, size_w, size_h, alpha=True)
+    buf = np.zeros((size_h, size_w, 4), dtype=np.float32)
+    for index in cells:
+        cell_row, cell_col = divmod(index, cols)
+        # pixel Blender tu day len: hang tren cung nam o cuoi mang
+        y0 = int(round(size_h * (rows - 1 - cell_row) / rows))
+        y1 = int(round(size_h * (rows - cell_row) / rows))
+        x0 = int(round(size_w * cell_col / cols))
+        x1 = int(round(size_w * (cell_col + 1) / cols))
+        buf[y0:y1, x0:x1, 3] = 1.0
+    img.pixels.foreach_set(buf.ravel())
+    path = os.path.join(bpy.app.tempdir, name + ".png")
+    img.filepath_raw, img.file_format = path, 'PNG'
+    img.save()
+    bpy.data.images.remove(img)
+    return bpy.data.images.load(path)
+
+
+scan = palette_png(1536, 1536, {0, 1, 2}, 3, 3, "pal_1536")
+check(mod._image_occupancy(scan, 3, 3) == {0, 1, 2},
+      "canvas 1536 grid 3x3, hang 1 day -> dung 3 o, hang 2 khong bi nhoe "
+      "sang (duoc %s)" % mod._image_occupancy(scan, 3, 3))
+bpy.data.images.remove(scan)
+
+# Grid le, grid khong vuong, canvas khong chia het — deu phai doc dung.
+for _cols, _rows, _w, _h in ((3, 3, 1536, 1536), (11, 11, 1536, 1536),
+                             (4, 2, 1536, 768), (3, 5, 1500, 2500),
+                             (5, 3, 2048, 2048), (6, 6, 3000, 3000),
+                             (8, 8, 4096, 4096), (16, 16, 4096, 4096),
+                             (3, 3, 8192, 8192)):
+    _want = set(range(_cols))           # ca hang 1
+    _img = palette_png(_w, _h, _want, _cols, _rows,
+                       "pal_%dx%d_%dx%d" % (_cols, _rows, _w, _h))
+    _got = mod._image_occupancy(_img, _rows, _cols)
+    check(_got == _want, "grid %dx%d canvas %dx%d: doc dung hang 1 (duoc %s)"
+                         % (_cols, _rows, _w, _h,
+                            sorted(_got) if _got else _got))
+    bpy.data.images.remove(_img)
+
+# O le loi giua palette cung phai ra dung mot o, khong lem sang hang xom.
+for _cols, _size in ((3, 1536), (5, 2048), (7, 3000)):
+    _want = {_cols + 1}                 # H2 C2
+    _img = palette_png(_size, _size, _want, _cols, _cols,
+                       "pal_mid_%d_%d" % (_cols, _size))
+    _got = mod._image_occupancy(_img, _cols, _cols)
+    check(_got == _want, "grid %dx%d canvas %d: o le giua ra dung 1 o (duoc %s)"
+                         % (_cols, _cols, _size,
+                            sorted(_got) if _got else _got))
+    bpy.data.images.remove(_img)
+
+# Thu tu o trong khi xuong hang — grid le khong duoc nhay coc.
+for _occ, _want in (({0, 1, 2}, 3), ({0, 1, 2, 3}, 4), ({0}, 1),
+                    ({0, 1, 2, 3, 4, 5}, 6), (set(), 0)):
+    _free = mod._free_cells(_occ, 3, 3, 3, 3)
+    check(_free[0] == _want,
+          "3x3 occupied=%s -> o trong dau tien %d (duoc %s)"
+          % (sorted(_occ), _want, _free[0]))
+
 opaque = bpy.data.images.new("pal_opaque", 90, 90, alpha=True)
 obuf = np.ones((90, 90, 4), dtype=np.float32)
 opaque.pixels.foreach_set(obuf.ravel())
