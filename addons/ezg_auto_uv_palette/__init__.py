@@ -3,11 +3,13 @@
 # Nhập số cột x hàng, UV của mỗi object được scale xuống đúng bằng kích thước ô
 # (grid 3x3 -> nhân 1/3) rồi dịch vào ô của nó. Thứ tự: theo tên object
 # (hiểu số, "2." trước "10."), trái → phải, trên → dưới.
+# Object mới đến sau thì xếp vào ô còn trống của palette đã có, không phải làm
+# lại từ đầu — ô trống đọc từ object trong scene lẫn alpha của ảnh palette.
 
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 1, 0),
+    "version": (1, 2, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -36,6 +38,15 @@ _PREVIEW_ROWS = 10
 _MIN_SOURCE_PX = 2048
 _ILLEGAL_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _JSX_NAME = "auto_uv_palette_build.jsx"
+_JSX_APPEND_NAME = "auto_uv_palette_append.jsx"
+
+# Tên material palette do Pack UVs tạo — cũng là chỗ đọc ra grid của palette cũ.
+_PALETTE_NAME = re.compile(r"^UVPalette_(\d+)x(\d+)")
+# Quét alpha trên bản thu nhỏ: ảnh 8K đọc thẳng là ~1 GB float.
+_ALPHA_SCAN_PX = 1024
+# Ô có pixel đục hơn mức này coi như đã có texture. Thu nhỏ ảnh làm alpha bị
+# trung bình hoá nên ngưỡng phải cao hơn 1/255 một chút.
+_ALPHA_EMPTY = 0.02
 
 # Script Photoshop: dựng document rồi Place từng PNG thành Smart Object.
 # Place đặt layer mới NGAY TRÊN layer đang active, nên vòng lặp chạy ngược để
@@ -107,6 +118,82 @@ _JSX_TEMPLATE = """\
 })();
 """
 
+# Script Photoshop: mở (hoặc dùng) palette đã có rồi Place thêm PNG vào đúng ô
+# trống. Kích thước ô lấy từ document thật, không lấy từ Canvas trong panel.
+_JSX_APPEND_TEMPLATE = """\
+#target photoshop
+// Sinh tự động bởi add-on Auto UV Palette — đừng sửa tay, chạy lại add-on.
+(function () {
+    var COLS = %(cols)d;
+    var ROWS = %(rows)d;
+    var LINKED = %(linked)s;
+    var PSD = %(psd)s;
+    var ITEMS = [
+%(items)s
+    ];
+
+    function placeSmartObject(path, linked) {
+        var d = new ActionDescriptor();
+        d.putPath(stringIDToTypeID("null"), new File(path));
+        if (linked) {
+            d.putBoolean(stringIDToTypeID("linked"), true);
+        }
+        executeAction(stringIDToTypeID("placeEvent"), d, DialogModes.NO);
+    }
+
+    function sizeOf(layer) {
+        var b = layer.bounds;
+        return {
+            w: b[2].as("px") - b[0].as("px"),
+            h: b[3].as("px") - b[1].as("px"),
+            cx: (b[0].as("px") + b[2].as("px")) / 2,
+            cy: (b[1].as("px") + b[3].as("px")) / 2
+        };
+    }
+
+    var oldUnits = app.preferences.rulerUnits;
+    app.preferences.rulerUnits = Units.PIXELS;
+    try {
+        var doc = null;
+        if (PSD !== "") {
+            doc = app.open(new File(PSD));
+        } else if (app.documents.length > 0) {
+            doc = app.activeDocument;
+        }
+        if (doc === null) {
+            alert("Auto UV Palette: chua mo file palette nao trong Photoshop, "
+                  + "va cung chua chon duong dan PSD trong add-on.");
+            return;
+        }
+        app.activeDocument = doc;
+
+        var cellW = doc.width.as("px") / COLS;
+        var cellH = doc.height.as("px") / ROWS;
+
+        // Place đặt layer mới ngay trên layer đang active -> đưa active lên
+        // trên cùng để layer mới không chui vào giữa các layer cũ.
+        doc.activeLayer = doc.layers[0];
+        for (var i = ITEMS.length - 1; i >= 0; i--) {
+            var it = ITEMS[i];
+            placeSmartObject(it.file, LINKED);
+            var layer = doc.activeLayer;
+
+            var s = sizeOf(layer);
+            if (s.w > 0 && s.h > 0) {
+                layer.resize(cellW / s.w * 100, cellH / s.h * 100,
+                             AnchorPosition.MIDDLECENTER);
+            }
+            s = sizeOf(layer);
+            layer.translate((it.col + 0.5) * cellW - s.cx,
+                            (it.row + 0.5) * cellH - s.cy);
+            layer.name = it.name;
+        }
+    } finally {
+        app.preferences.rulerUnits = oldUnits;
+    }
+})();
+"""
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -157,6 +244,175 @@ def _place_uv_in_cell(mesh, rect):
 
     uv_data.foreach_set("uv", co.ravel())
     mesh.update()
+
+
+def _uv_problem(targets):
+    """Lý do không xếp UV được cho danh sách object, hoặc None nếu ổn."""
+    no_uv = [ob.name for ob in targets if not ob.data.uv_layers]
+    if no_uv:
+        return "Chưa có UV map: " + ", ".join(no_uv)
+
+    empty = [ob.name for ob in targets if not ob.data.loops]
+    if empty:
+        return "Mesh rỗng, không có UV để xếp: " + ", ".join(empty)
+
+    # Nhiều object dùng chung một mesh data thì không thể xếp vào 2 ô khác
+    # nhau — sửa UV của cái này là sửa luôn cái kia.
+    by_mesh = {}
+    for ob in targets:
+        by_mesh.setdefault(ob.data, []).append(ob.name)
+    shared = [names for names in by_mesh.values() if len(names) > 1]
+    if shared:
+        groups = "; ".join(", ".join(names) for names in shared)
+        return (f"Các object này dùng chung mesh data ({groups}). Chạy Object > "
+                "Relations > Make Single User > Object & Data trước.")
+    return None
+
+
+def _uv_cell_index(mesh, rows, cols):
+    """Ô mà UV của `mesh` đang nằm trong, hoặc None nếu không đọc được.
+
+    Lấy tâm bounding box của UV rồi quy ra ô — đủ để nhận ra object đã được
+    Pack/Add xếp vào ô nào, kể cả khi UV không lấp kín ô.
+    """
+    if not mesh.uv_layers:
+        return None
+    uv_data = (mesh.uv_layers.active or mesh.uv_layers[0]).data
+    if not len(uv_data):
+        return None
+
+    co = np.empty(len(uv_data) * 2, dtype=np.float32)
+    uv_data.foreach_get("uv", co)
+    co.shape = (-1, 2)
+
+    center_u = float(co[:, 0].min() + co[:, 0].max()) * 0.5
+    center_v = float(co[:, 1].min() + co[:, 1].max()) * 0.5
+    col = min(cols - 1, max(0, int(center_u * cols)))
+    row = min(rows - 1, max(0, int((1.0 - center_v) * rows)))
+    return row * cols + col
+
+
+def _palette_grids():
+    """[(material, cols, rows)] — mọi material palette do add-on tạo."""
+    out = []
+    for mat in bpy.data.materials:
+        match = _PALETTE_NAME.match(mat.name)
+        if match:
+            out.append((mat, int(match.group(1)), int(match.group(2))))
+    return out
+
+
+def _pick_palette_material(context, cols, rows, skip):
+    """(material, lỗi) — material palette đúng grid `cols`x`rows`.
+
+    Nhiều material cùng grid thì ưu tiên cái đang có object trong scene dùng
+    (ngoài `skip`); vẫn còn nhiều thì trả lỗi chứ không đoán.
+    """
+    grids = _palette_grids()
+    if not grids:
+        return None, ("Chưa có material palette nào (UVPalette_*). Chạy Pack "
+                      "UVs into Palette để tạo palette trước.")
+
+    same = [mat for mat, c, r in grids if (c, r) == (cols, rows)]
+    if not same:
+        have = ", ".join(sorted({"%s (%dx%d)" % (mat.name, c, r)
+                                 for mat, c, r in grids}))
+        return None, ("Không có palette nào là grid %dx%d. Đang có: %s. Chỉnh "
+                      "Columns/Rows cho khớp palette muốn thêm vào."
+                      % (cols, rows, have))
+
+    if len(same) > 1:
+        used = [mat for mat in same
+                if any(ob.type == 'MESH' and ob not in skip
+                       and any(slot.material is mat
+                               for slot in ob.material_slots)
+                       for ob in context.scene.objects)]
+        if len(used) == 1:
+            return used[0], None
+        pool = used or same
+        return None, ("Có %d material palette %dx%d (%s) — không rõ thêm vào "
+                      "cái nào. Xóa/đổi tên bớt rồi chạy lại."
+                      % (len(pool), cols, rows,
+                         ", ".join(mat.name for mat in pool)))
+    return same[0], None
+
+
+def _scene_occupancy(context, mat, rows, cols, skip):
+    """{ô: [tên object]} — ô đã bị object trong scene dùng material palette chiếm."""
+    occupied = {}
+    for ob in context.scene.objects:
+        if ob.type != 'MESH' or ob in skip:
+            continue
+        if not any(slot.material is mat for slot in ob.material_slots):
+            continue
+        index = _uv_cell_index(ob.data, rows, cols)
+        if index is not None:
+            occupied.setdefault(index, []).append(ob.name)
+    return occupied
+
+
+def _image_occupancy(image, rows, cols):
+    """Set các ô đã có pixel đục trong ảnh palette, hoặc None nếu không biết.
+
+    None khi ảnh không có alpha, hoặc đục đặc toàn bộ (palette đã flatten lên
+    nền) — lúc đó alpha không nói được ô nào trống nên đừng dựa vào nó.
+    """
+    if image is None or image.channels < 4:
+        return None
+    src_w, src_h = image.size
+    if src_w < cols or src_h < rows:
+        return None
+
+    # Đọc trên bản thu nhỏ: ảnh gốc 8K là ~1 GB float32.
+    copy = None
+    work = image
+    if max(src_w, src_h) > _ALPHA_SCAN_PX:
+        ratio = _ALPHA_SCAN_PX / max(src_w, src_h)
+        copy = image.copy()
+        copy.scale(max(cols, int(src_w * ratio)), max(rows, int(src_h * ratio)))
+        work = copy
+
+    try:
+        width, height = work.size
+        channels = work.channels
+        if width < cols or height < rows or channels < 4:
+            return None
+        buf = np.empty(width * height * channels, dtype=np.float32)
+        work.pixels.foreach_get(buf)
+        alpha = buf.reshape(height, width, channels)[:, :, 3]
+        if float(alpha.min()) > 1.0 - _ALPHA_EMPTY:
+            return None                 # đục đặc -> không có thông tin ô trống
+
+        occupied = set()
+        for row in range(rows):
+            # pixel của Blender bắt đầu từ đáy ảnh, ô 0 lại nằm trên cùng
+            y0 = round(height * (rows - 1 - row) / rows)
+            y1 = round(height * (rows - row) / rows)
+            for col in range(cols):
+                x0 = round(width * col / cols)
+                x1 = round(width * (col + 1) / cols)
+                tile = alpha[y0:y1, x0:x1]
+                if tile.size and float(tile.max()) > _ALPHA_EMPTY:
+                    occupied.add(row * cols + col)
+        return occupied
+    finally:
+        if copy is not None:
+            bpy.data.images.remove(copy)
+
+
+def _palette_image_datablock(props):
+    """(image, lỗi) — ảnh palette đang trỏ tới, hoặc (None, None) nếu bỏ trống."""
+    if not props.palette_image:
+        return None, None
+    path = bpy.path.abspath(props.palette_image)
+    if not os.path.isfile(path):
+        return None, "file palette không tồn tại: " + path
+    try:
+        image = bpy.data.images.load(path, check_existing=True)
+        image.reload()
+    except RuntimeError as err:
+        return None, "không đọc được ảnh palette (%s)" % err
+    return image, None
 
 
 def _iter_tex_image_nodes(node_tree, seen=None, depth=0):
@@ -218,6 +474,26 @@ def _object_texture(ob):
         return None, "có %d texture (%s), không rõ lấy cái nào" % (
             len(images), ", ".join(img.name for img in images))
     return images[0], None
+
+
+def _unexported_textures(targets, props):
+    """Tên các object còn texture chưa có PNG trong thư mục export.
+
+    Gán material palette đè lên sẽ làm material cũ thành mồ côi — lưu file là
+    Blender purge, texture chưa export mất luôn. Cả Pack lẫn Add đều cảnh báo.
+    """
+    directory = (bpy.path.abspath(props.export_dir)
+                 if props.export_dir else None)
+    names = []
+    for ob in targets:
+        image, _reason = _object_texture(ob)
+        if image is None:
+            continue
+        png = (os.path.join(directory, _safe_filename(ob.name) + ".png")
+               if directory else None)
+        if png is None or not os.path.isfile(png):
+            names.append(ob.name)
+    return names
 
 
 def _safe_filename(name):
@@ -306,6 +582,22 @@ def _build_jsx(items, canvas, cols, rows, linked):
     }
 
 
+def _build_append_jsx(items, cols, rows, linked, psd_path):
+    """items: list (tên object, đường dẫn png, col, row). psd_path "" = doc đang mở."""
+    lines = [
+        "        {name: %s, file: %s, col: %d, row: %d},"
+        % (_js_string(name), _js_string(path.replace("\\", "/")), col, row)
+        for name, path, col, row in items
+    ]
+    return _JSX_APPEND_TEMPLATE % {
+        "cols": cols,
+        "rows": rows,
+        "linked": "true" if linked else "false",
+        "psd": _js_string(psd_path.replace("\\", "/")),
+        "items": "\n".join(lines),
+    }
+
+
 def _export_image_png(image, size, filepath):
     """Ghi `image` ra PNG vuông `size` px. Không sửa ảnh gốc."""
     copy = image.copy()
@@ -373,6 +665,13 @@ class AUTOUVPAL_Props(PropertyGroup):
         subtype='FILE_PATH',
         default="",
     )
+    palette_psd: StringProperty(
+        name="PSD",
+        description=("File PSD palette đã có, để thêm texture mới vào. Bỏ "
+                     "trống thì dùng document đang mở sẵn trong Photoshop"),
+        subtype='FILE_PATH',
+        default="",
+    )
     smart_object_mode: EnumProperty(
         name="Smart Object",
         description="Nhúng ảnh vào PSD hay chỉ trỏ tới file PNG",
@@ -421,45 +720,14 @@ class AUTOUVPAL_OT_pack(Operator):
             )
             return {'CANCELLED'}
 
-        no_uv = [ob.name for ob in targets if not ob.data.uv_layers]
-        if no_uv:
-            self.report({'ERROR'}, "Chưa có UV map: " + ", ".join(no_uv))
-            return {'CANCELLED'}
-
-        empty = [ob.name for ob in targets if not ob.data.loops]
-        if empty:
-            self.report({'ERROR'}, "Mesh rỗng, không có UV để xếp: "
-                                   + ", ".join(empty))
-            return {'CANCELLED'}
-
-        # Nhiều object dùng chung một mesh data thì không thể xếp vào 2 ô khác
-        # nhau — sửa UV của cái này là sửa luôn cái kia.
-        by_mesh = {}
-        for ob in targets:
-            by_mesh.setdefault(ob.data, []).append(ob.name)
-        shared = [names for names in by_mesh.values() if len(names) > 1]
-        if shared:
-            groups = "; ".join(", ".join(names) for names in shared)
-            self.report(
-                {'ERROR'},
-                f"Các object này dùng chung mesh data ({groups}). Chạy Object > "
-                "Relations > Make Single User > Object & Data trước.",
-            )
+        problem = _uv_problem(targets)
+        if problem:
+            self.report({'ERROR'}, problem)
             return {'CANCELLED'}
 
         # Texture trong material cũ mà chưa export thì sau khi gán material
         # mới sẽ thành orphan — lưu file là Blender purge mất. Cảnh báo trước.
-        directory = (bpy.path.abspath(props.export_dir)
-                     if props.export_dir else None)
-        unexported = []
-        for ob in targets:
-            image, _reason = _object_texture(ob)
-            if image is None:
-                continue
-            png = (os.path.join(directory, _safe_filename(ob.name) + ".png")
-                   if directory else None)
-            if png is None or not os.path.isfile(png):
-                unexported.append(ob.name)
+        unexported = _unexported_textures(targets, props)
 
         for index, ob in enumerate(targets):
             _place_uv_in_cell(ob.data, _cell_rect(index, rows, cols))
@@ -937,6 +1205,236 @@ class AUTOUVPAL_OT_assign_palette(Operator):
         return {'FINISHED'}
 
 
+class AUTOUVPAL_OT_add_to_palette(Operator):
+    bl_idname = "object.auto_uv_palette_add"
+    bl_label = "Add Selected to Empty Cells"
+    bl_description = ("Xếp UV của các object đã chọn vào những ô còn trống của "
+                      "palette đã có, rồi gán luôn material palette đó. Ô đã "
+                      "có object hoặc đã có texture trong ảnh palette sẽ được "
+                      "chừa ra")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        props = context.scene.auto_uv_palette
+        rows, cols = props.rows, props.cols
+        cells = rows * cols
+
+        targets = _sorted_targets(context)
+        if not targets:
+            self.report({'ERROR'}, "Chưa chọn mesh object nào.")
+            return {'CANCELLED'}
+
+        problem = _uv_problem(targets)
+        if problem:
+            self.report({'ERROR'}, problem)
+            return {'CANCELLED'}
+
+        mat, error = _pick_palette_material(context, cols, rows, set(targets))
+        if mat is None:
+            self.report({'ERROR'}, error)
+            return {'CANCELLED'}
+
+        # Object đã nằm trong palette thì UV của nó đã bị thu nhỏ vào ô rồi —
+        # chạy tiếp là thu nhỏ thêm một lần nữa.
+        already = [ob.name for ob in targets
+                   if any(slot.material is mat for slot in ob.material_slots)]
+        if already:
+            self.report(
+                {'ERROR'},
+                "Đã nằm trong palette \"%s\" rồi, bỏ khỏi selection: %s."
+                % (mat.name, ", ".join(already)),
+            )
+            return {'CANCELLED'}
+
+        # Hai nguồn "ô đã dùng", lấy hợp của cả hai cho chắc: object trong
+        # scene đang dùng material palette, và pixel đục trong ảnh palette.
+        taken = _scene_occupancy(context, mat, rows, cols, set(targets))
+        occupied = set(taken)
+        sources = ["%d ô có object" % len(taken)] if taken else []
+
+        image, image_error = _palette_image_datablock(props)
+        image_cells = _image_occupancy(image, rows, cols) if image else None
+        if image_cells is not None:
+            occupied |= image_cells
+            sources.append("%d ô có texture trong \"%s\"" % (len(image_cells),
+                                                            image.name))
+
+        if not occupied:
+            notes = []
+            if image_error:
+                notes.append(image_error)
+            elif image is not None and image_cells is None:
+                notes.append("ảnh palette không có vùng trong suốt nên không "
+                             "đọc được ô trống từ nó")
+            elif image is None:
+                notes.append("chưa trỏ Palette tới ảnh nào")
+            self.report(
+                {'ERROR'},
+                "Không thấy ô nào đã dùng trong palette \"%s\" (%s) — dùng "
+                "Pack UVs into Palette thay vì thêm vào."
+                % (mat.name, "; ".join(notes) or "palette rỗng"),
+            )
+            return {'CANCELLED'}
+
+        free = [index for index in range(cells) if index not in occupied]
+        if len(free) < len(targets):
+            self.report(
+                {'ERROR'},
+                "Palette \"%s\" chỉ còn %d ô trống, cần %d. Tăng grid rồi xếp "
+                "lại từ đầu bằng Pack UVs."
+                % (mat.name, len(free), len(targets)),
+            )
+            return {'CANCELLED'}
+
+        unexported = _unexported_textures(targets, props)
+
+        placed = []
+        for ob, index in zip(targets, free):
+            _place_uv_in_cell(ob.data, _cell_rect(index, rows, cols))
+            ob.data.materials.clear()
+            ob.data.materials.append(mat)
+            row, col = divmod(index, cols)
+            placed.append("%s -> H%d C%d" % (ob.name, row + 1, col + 1))
+
+        message = ("Đã thêm %d object vào palette \"%s\" (%s). Còn %d ô trống. "
+                   "Nguồn ô đã dùng: %s."
+                   % (len(placed), mat.name, "; ".join(placed),
+                      len(free) - len(placed), ", ".join(sources)))
+        warnings = []
+        if image_error:
+            warnings.append(image_error + " — chỉ dựa vào object trong scene")
+        if unexported:
+            warnings.append(
+                "texture của %s chưa export — material cũ giờ không còn ai "
+                "dùng, lưu file là mất texture. Ctrl+Z rồi chạy Export "
+                "Selected Textures trước nếu cần giữ" % ", ".join(unexported))
+        if warnings:
+            self.report({'WARNING'},
+                        message + " Lưu ý: " + "; ".join(warnings) + ".")
+        else:
+            self.report({'INFO'}, message)
+        return {'FINISHED'}
+
+
+class AUTOUVPAL_OT_append_psd(Operator):
+    bl_idname = "object.auto_uv_palette_append_psd"
+    bl_label = "Append Textures to PSD"
+    bl_description = ("Sinh script Photoshop đặt PNG của các object đã chọn "
+                      "vào đúng ô của chúng trong file PSD palette đã có, rồi "
+                      "mở Photoshop chạy nó")
+    bl_options = {'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        props = context.scene.auto_uv_palette
+        cols, rows = props.cols, props.rows
+
+        targets = _sorted_targets(context)
+        if not targets:
+            self.report({'ERROR'}, "Chưa chọn mesh object nào.")
+            return {'CANCELLED'}
+
+        if not props.export_dir:
+            self.report({'ERROR'}, "Chưa chọn đường dẫn export.")
+            return {'CANCELLED'}
+        directory = bpy.path.abspath(props.export_dir)
+        if not os.path.isdir(directory):
+            self.report({'ERROR'}, "Thư mục export không tồn tại: " + directory)
+            return {'CANCELLED'}
+
+        psd_path = ""
+        if props.palette_psd:
+            psd_path = bpy.path.abspath(props.palette_psd)
+            if not os.path.isfile(psd_path):
+                self.report({'ERROR'}, "File PSD không tồn tại: " + psd_path)
+                return {'CANCELLED'}
+
+        # Ô lấy thẳng từ UV hiện tại — Add Selected to Empty Cells đã xếp rồi.
+        items, missing, no_cell, clashes = [], [], [], []
+        seen = {}
+        for ob in targets:
+            index = _uv_cell_index(ob.data, rows, cols)
+            if index is None:
+                no_cell.append(ob.name)
+                continue
+            path = os.path.join(directory, _safe_filename(ob.name) + ".png")
+            if not os.path.isfile(path):
+                missing.append(os.path.basename(path))
+                continue
+            if index in seen:
+                clashes.append("%s và %s cùng ô" % (seen[index], ob.name))
+                continue
+            seen[index] = ob.name
+            row, col = divmod(index, cols)
+            items.append((ob.name, path, col, row))
+
+        if no_cell:
+            self.report({'ERROR'}, "Không đọc được UV để biết ô: "
+                                   + ", ".join(no_cell))
+            return {'CANCELLED'}
+        if missing:
+            self.report(
+                {'ERROR'},
+                "Chưa có PNG cho: %s. Chạy Export Selected Textures trước."
+                % ", ".join(missing),
+            )
+            return {'CANCELLED'}
+        if clashes:
+            self.report(
+                {'ERROR'},
+                "UV của các object này nằm cùng một ô (%s) — chạy Add Selected "
+                "to Empty Cells trước." % "; ".join(clashes),
+            )
+            return {'CANCELLED'}
+
+        jsx_path = os.path.join(directory, _JSX_APPEND_NAME)
+        script = _build_append_jsx(items, cols, rows,
+                                   props.smart_object_mode == 'LINKED',
+                                   psd_path)
+        try:
+            with open(jsx_path, "w", encoding="utf-8") as handle:
+                handle.write(script)
+        except OSError as err:
+            self.report({'ERROR'}, "Không ghi được script: %s" % err)
+            return {'CANCELLED'}
+
+        where = (os.path.basename(psd_path) if psd_path
+                 else "document đang mở trong Photoshop")
+        exe = _find_photoshop()
+        if exe is None:
+            self.report(
+                {'WARNING'},
+                "Đã ghi %s nhưng không tìm thấy Photoshop.exe — chạy tay bằng "
+                "File > Scripts > Browse." % jsx_path,
+            )
+            return {'FINISHED'}
+
+        try:
+            subprocess.Popen([exe, jsx_path], close_fds=True)
+        except OSError as err:
+            self.report(
+                {'WARNING'},
+                "Đã ghi %s nhưng không mở được Photoshop (%s) — chạy tay bằng "
+                "File > Scripts > Browse." % (jsx_path, err),
+            )
+            return {'FINISHED'}
+
+        mode = "Linked" if props.smart_object_mode == 'LINKED' else "Embedded"
+        self.report(
+            {'INFO'},
+            "Đã ghi %s (%d layer %s Smart Object vào %s) và mở Photoshop. Nhớ "
+            "Save lại palette." % (_JSX_APPEND_NAME, len(items), mode, where),
+        )
+        return {'FINISHED'}
+
+
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
@@ -1038,6 +1536,39 @@ class AUTOUVPAL_PT_mixin:
         row.enabled = bool(props.palette_image)
         row.operator(AUTOUVPAL_OT_assign_palette.bl_idname, icon='LINKED')
 
+        layout.separator()
+        layout.label(text="Add to Existing Palette", icon='ADD')
+
+        # Chỉ đọc tên material ở đây — tìm ô trống phải quét UV/pixel nên để
+        # operator làm, panel vẽ lại liên tục.
+        info = layout.box()
+        selected = set(targets)
+        grids = _palette_grids()
+        match = [mat for mat, c, r in grids if (c, r) == (cols, rows)]
+        chosen = (_pick_palette_material(context, cols, rows, selected)[0]
+                  if match else None)
+        if chosen is not None:
+            users = sum(1 for ob in context.scene.objects
+                        if ob.type == 'MESH' and ob not in selected
+                        and any(slot.material is chosen
+                                for slot in ob.material_slots))
+            info.label(text="%s · %d object đã trong palette"
+                            % (chosen.name, users), icon='MATERIAL')
+        elif match:
+            info.label(text="Có %d palette %dx%d — không rõ cái nào"
+                            % (len(match), cols, rows), icon='ERROR')
+        else:
+            info.label(text="Chưa có palette %dx%d" % (cols, rows), icon='ERROR')
+            if grids:
+                info.label(text="Đang có: " + ", ".join(
+                    sorted({"%dx%d" % (c, r) for _mat, c, r in grids})))
+
+        layout.operator(AUTOUVPAL_OT_add_to_palette.bl_idname, icon='ADD')
+        layout.prop(props, "palette_psd")
+        row = layout.row()
+        row.enabled = bool(props.export_dir)
+        row.operator(AUTOUVPAL_OT_append_psd.bl_idname, icon='FILE_IMAGE')
+
 
 class AUTOUVPAL_PT_view3d(AUTOUVPAL_PT_mixin, Panel):
     bl_idname = "AUTOUVPAL_PT_view3d"
@@ -1061,6 +1592,8 @@ _classes = (
     AUTOUVPAL_OT_cleanup_materials,
     AUTOUVPAL_OT_build_psd,
     AUTOUVPAL_OT_assign_palette,
+    AUTOUVPAL_OT_add_to_palette,
+    AUTOUVPAL_OT_append_psd,
     AUTOUVPAL_PT_view3d,
     AUTOUVPAL_PT_image,
 )

@@ -5,7 +5,7 @@ Add-on Blender: xếp UV của nhiều object vào các ô của một tấm pal
 ## Cài đặt
 
 Blender > Edit > Preferences > Add-ons > mũi tên góc trên phải > **Install from Disk…**
-> chọn `auto_uv_palette-1.0.0.zip`.
+> chọn file `ezg_auto_uv_palette-<version>.zip`.
 
 Yêu cầu Blender 4.2 trở lên.
 
@@ -28,6 +28,9 @@ bị thay sẽ không còn ai dùng — lưu file là Blender purge, texture ch�
 sẽ mất. Pack sẽ tự cảnh báo nếu phát hiện object có texture chưa export.
 
 Quy trình đầy đủ: **Export → Clean Up → Pack → Build PSD → Assign Palette**.
+
+Về sau có object mới cần nhét vào tấm palette đó thì không phải làm lại từ đầu
+— xem mục [Add to Existing Palette](#add-to-existing-palette).
 
 ## Quy tắc xếp
 
@@ -154,6 +157,51 @@ Add-on nạp ảnh và gắn vào node Image Texture **trống** mà Pack đã t
 trong `UVPalette_*`. Nếu material không có node trống thì dùng node đang nối
 Base Color; không có node nào thì tạo mới và tự nối vào Base Color. Chạy lại
 nhiều lần không tạo ảnh trùng lặp (ảnh đã nạp được reload thay vì nạp bản mới).
+
+## Add to Existing Palette
+
+Thêm object mới vào một palette **đã ghép xong** mà không phải xếp lại từ đầu:
+UV của object mới được xếp vào **ô còn trống**, và texture của nó được Place
+thêm vào file PSD palette cũ.
+
+1. Đặt **Columns / Rows** đúng bằng grid của palette cũ (panel hiện tên
+   material palette tìm được, ví dụ `UVPalette_3x3 · 6 object đã trong palette`).
+2. **Palette**: trỏ tới ảnh palette hiện tại (mục *Assign Palette* ở trên) —
+   không bắt buộc, nhưng nên có, xem phần "Ô nào là trống" bên dưới.
+3. Chọn **các object mới** (chỉ object mới — object đã trong palette phải bỏ ra).
+4. Bấm **Add Selected to Empty Cells** — add-on xếp UV vào các ô trống theo thứ
+   tự trái → phải, trên → dưới, rồi gán material palette cho chúng. Thông báo
+   cho biết object nào vào ô nào và còn bao nhiêu ô trống. `Ctrl+Z` hoàn tác được.
+5. Chạy **Export Selected Textures** cho các object mới (vẫn selection đó).
+6. **PSD**: trỏ tới file PSD palette đã lưu. Bỏ trống thì script chạy trên
+   document đang mở sẵn trong Photoshop.
+7. Bấm **Append Textures to PSD** — add-on ghi `auto_uv_palette_append.jsx` và
+   mở Photoshop, Place các PNG mới thành Smart Object vào đúng ô của chúng,
+   nằm trên cùng bảng Layers. **Save lại** PSD, rồi **Assign Palette** để
+   Blender thấy bản mới.
+
+Kích thước ô khi append lấy từ **document thật** (rộng ÷ số cột), không lấy từ
+ô **Canvas** trong panel — nên palette cũ dựng ở canvas nào cũng khớp.
+
+### Ô nào được coi là "trống"
+
+Add-on lấy **hợp của hai nguồn**, ô nào một trong hai nguồn báo là đã dùng thì
+không đụng tới:
+
+- **Object trong scene** đang dùng material palette đó — ô của nó đọc ra từ tâm
+  bounding box UV.
+- **Alpha của ảnh palette** đang trỏ ở mục *Palette* — ô nào còn trong suốt
+  hoàn toàn thì trống. Nhờ nguồn này mà object cũ đã xoá khỏi scene (hoặc nằm
+  ở file .blend khác) vẫn không bị ghi đè.
+
+Ảnh palette **đã flatten lên nền đục** thì alpha không nói được gì — add-on bỏ
+qua nguồn này và chỉ dựa vào object trong scene. Giữ nền trong suốt khi export
+palette ra PNG nếu muốn lưới an toàn thứ hai này còn tác dụng.
+
+Add-on từ chối và **không đổi gì** khi: chưa có material palette đúng grid
+`Columns x Rows`; có nhiều palette cùng grid mà không phân biệt được; object
+đã chọn **đã nằm trong palette** (chạy tiếp sẽ thu nhỏ UV thêm một lần nữa);
+hoặc số ô trống ít hơn số object.
 
 ## Add-on sẽ báo lỗi và không làm gì khi
 
