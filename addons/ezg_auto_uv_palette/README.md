@@ -72,11 +72,19 @@ Quy tắc:
   node nào nối Base Color thì lấy ảnh duy nhất tìm được trong material (tìm cả
   trong node group). Nếu có nhiều ảnh mà không phân biệt được, object đó bị bỏ
   qua kèm thông báo — add-on không đoán bừa.
-- **Texture gốc nhỏ hơn Size thì xuất ở đúng cỡ gốc**, không phóng to cho đủ
-  Size — Photoshop resize layer về bằng ô rồi, phóng to ở bước này chỉ làm file
-  nặng chứ không thêm chi tiết. Nhỏ hơn cả ô (`Canvas ÷ Columns`) thì mới phóng
-  lên bằng ô. Danh sách có trong thông báo kết quả. (Bản trước 1.3.0 **bỏ qua**
-  texture dưới 2048px — asset decor nhỏ vì thế không có PNG để ghép.)
+- **Không bao giờ phóng to**: texture gốc nhỏ hơn Size thì xuất ở **đúng cỡ
+  gốc**. Photoshop resize layer về bằng ô rồi, phóng to ở bước này chỉ làm file
+  nặng chứ không thêm chi tiết. Size chỉ là **trần**, không phải đích:
+
+  | Texture gốc | Size chọn | PNG xuất ra |
+  |---|---|---|
+  | 1024 | 4K | 1024 |
+  | 256 | 4K | 256 |
+  | 2048 x 1024 | 4K | 2048 (lấy cạnh lớn — ảnh ra luôn vuông) |
+  | 8192 | 4K | 4096 |
+
+  Danh sách xuất dưới Size có trong thông báo kết quả. (Bản trước 1.3.0 **bỏ
+  qua hẳn** texture dưới 2048px — asset decor nhỏ vì thế không có PNG để ghép.)
 - **Ảnh gốc không bị thay đổi**: add-on scale trên một bản copy tạm rồi xoá.
 - File trùng tên sẽ **bị ghi đè**, số lượng ghi đè có trong thông báo.
 - Ảnh xuất ra là PNG 8-bit. Nguồn là JPG không có alpha nên Blender ghi RGB

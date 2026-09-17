@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 3, 2),
+    "version": (1, 3, 3),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -986,26 +986,25 @@ class AUTOUVPAL_OT_export_textures(Operator):
             self.report({'ERROR'}, "Không tạo được thư mục export: %s" % err)
             return {'CANCELLED'}
 
-        # Ô của object trên canvas — mốc dưới cho ảnh nguồn nhỏ.
-        cell_px = max(1, min(props.canvas_size // props.cols,
-                             props.canvas_size // props.rows))
-
-        written, no_tex, downsized, failed, overwritten = [], [], [], [], []
+        written, no_tex, native, failed, overwritten = [], [], [], [], []
         for ob in targets:
             image, reason = _object_texture(ob)
             if image is None:
                 no_tex.append("%s (%s)" % (ob.name, reason))
                 continue
 
+            # Không bao giờ phóng to: nguồn nhỏ hơn Size thì xuất đúng cỡ gốc.
+            # Photoshop resize layer về bằng ô rồi, phóng to ở đây chỉ làm file
+            # nặng chứ không thêm chi tiết. Lấy cạnh LỚN của nguồn — ảnh ra
+            # luôn vuông, lấy cạnh nhỏ là vứt bớt chi tiết của cạnh lớn.
             src_w, src_h = image.size
-            # Nguồn nhỏ hơn Size thì xuất ở kích thước gốc — Photoshop resize
-            # layer về đúng ô rồi, phóng to ở đây chỉ làm file nặng mà không
-            # thêm chi tiết. Nhỏ hơn cả ô thì mới phóng lên bằng ô.
-            target = size
-            if 0 < min(src_w, src_h) < size:
-                target = min(size, max(cell_px, min(src_w, src_h)))
-                downsized.append("%s (%dx%d -> %dpx)"
-                                 % (ob.name, src_w, src_h, target))
+            target = min(size, max(src_w, src_h))
+            if target < 1:
+                failed.append("%s (ảnh %dx%d rỗng)" % (ob.name, src_w, src_h))
+                continue
+            if target != size:
+                native.append("%s (%dx%d -> %dpx)"
+                              % (ob.name, src_w, src_h, target))
 
             path = os.path.join(directory, _safe_filename(ob.name) + ".png")
             existed = os.path.exists(path)
@@ -1022,10 +1021,9 @@ class AUTOUVPAL_OT_export_textures(Operator):
                  % (len(written), len(targets), size, size, directory)]
         if overwritten:
             parts.append("ghi đè %d file cũ" % len(overwritten))
-        if downsized:
-            parts.append("texture gốc nhỏ hơn %dpx nên xuất đúng cỡ gốc "
-                         "(không nhỏ hơn ô %dpx): %s"
-                         % (size, cell_px, ", ".join(downsized)))
+        if native:
+            parts.append("texture gốc nhỏ hơn %dpx nên xuất đúng cỡ gốc, "
+                         "không phóng to: %s" % (size, ", ".join(native)))
         if no_tex:
             parts.append("không có texture: " + ", ".join(no_tex))
         if failed:
@@ -1035,7 +1033,7 @@ class AUTOUVPAL_OT_export_textures(Operator):
         if failed or not written:
             self.report({'ERROR'} if not written else {'WARNING'}, message)
             return {'CANCELLED'} if not written else {'FINISHED'}
-        self.report({'WARNING'} if (downsized or no_tex or overwritten)
+        self.report({'WARNING'} if (native or no_tex or overwritten)
                     else {'INFO'}, message)
         return {'FINISHED'}
 

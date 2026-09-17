@@ -350,6 +350,55 @@ check(free_order[:4] == [0, 1, 8, 9],
 check(mod._free_cells(set(), 4, 4, 4, 4) == list(range(16)),
       "grid khong chia nho -> quay ve dung thu tu doc")
 
+# --- Export Textures: khong bao gio phong to anh nguon ----------------------
+# Nguon nho hon Size thi phai ra dung co goc. Photoshop resize layer ve bang o
+# roi, phong to o day chi lam file nang chu khong them chi tiet.
+export_dir = os.path.join(bpy.app.tempdir, "export_size")
+os.makedirs(export_dir, exist_ok=True)
+props.export_dir = export_dir
+props.canvas_size = 4096
+props.cols = props.rows = 4          # o = 1024px, de bat truong hop nguon < o
+
+
+def sized_obj(name, width, height):
+    """Object co material gan texture width x height, noi thang vao Base Color."""
+    ob = make_obj(name)
+    mat = bpy.data.materials.new("M_" + name)
+    mat.use_nodes = True
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+    tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = bpy.data.images.new("T_" + name, width, height)
+    mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    ob.data.materials.append(mat)
+    return ob
+
+
+# (rong, cao nguon, Size chon, so px mong doi cua PNG)
+for _w, _h, _size, _want in ((1024, 1024, '4096', 1024),   # nho hon Size
+                             (8192, 8192, '4096', 4096),   # lon hon -> ha ve Size
+                             (4096, 4096, '4096', 4096),   # bang Size
+                             (2048, 1024, '4096', 2048),   # khong vuong
+                             (256, 256, '4096', 256),      # nho hon ca o 1024px
+                             (2048, 2048, '2048', 2048),
+                             (1024, 1024, '8192', 1024)):
+    props.tex_size = _size
+    _name = "sz_%dx%d_%s" % (_w, _h, _size)
+    _ob = sized_obj(_name, _w, _h)
+    _src = mod._object_texture(_ob)[0]
+    select([_ob])
+    bpy.ops.object.auto_uv_palette_export_textures()
+    _png = bpy.data.images.load(os.path.join(export_dir, _name + ".png"))
+    check(tuple(_png.size) == (_want, _want),
+          "nguon %dx%d, Size %s -> PNG %dpx (duoc %s)"
+          % (_w, _h, _size, _want, tuple(_png.size)))
+    check(tuple(_src.size) == (_w, _h),
+          "anh goc %dx%d khong bi sua" % (_w, _h))
+    bpy.data.images.remove(_png)
+    bpy.data.objects.remove(_ob)
+
+props.export_dir = ""
+props.cols = props.rows = 4
+
 # --- Dau o khong duoc lam hong export FBX -----------------------------------
 # Ban 1.3.0 ghi ob[_STAMP] = (cols, rows, index): custom property dung 3 phan
 # tu -> exporter day vao nhanh p_vector -> encode_bin.add_float64 co
