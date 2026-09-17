@@ -210,10 +210,22 @@ Thứ tự xếp: **lấp đầy một ô gốc rồi mới sang ô gốc khác*
 Cứ lấy ô nhỏ theo thứ tự đọc thì 2 decor đã làm hỏng 2 ô gốc — không còn ô
 nguyên nào nhận được asset to nữa, nên add-on không làm vậy.
 
-Mỗi object được **đánh dấu** ô và grid của nó (custom property
-`ezg_uv_palette_cell`), nên asset to (ô 1/8) và asset nhỏ (ô 1/16) **append
-chung một lượt vẫn ra đúng cỡ** — script Photoshop mang sẵn ô của từng layer
-thay vì dùng chung một con số cột/hàng.
+Mỗi object được **đánh dấu** ô và grid của nó — custom property
+`ezg_uv_palette_cell`, dạng chuỗi `"8x8:36"` (grid rồi tới số ô) — nên asset to
+(ô 1/8) và asset nhỏ (ô 1/16) **append chung một lượt vẫn ra đúng cỡ**: script
+Photoshop mang sẵn ô của từng layer thay vì dùng chung một con số cột/hàng.
+
+> ⚠️ **Bản 1.3.0 ghi dấu này thành tuple 3 số và làm hỏng export FBX.** Unity
+> báo *"Blender could not convert the .blend file to FBX file"*. Lý do: custom
+> property đúng 3 phần tử được exporter đẩy vào nhánh `p_vector`, rồi
+> `add_float64` có `assert isinstance(data, float)` — số nguyên làm nó ném
+> `AssertionError`. Chỉ lộ ra khi export bật `use_custom_props=True`, mà
+> `Unity-BlenderToFBX.py` thì bật.
+>
+> Bản 1.3.1 ghi bằng chuỗi (đi nhánh `p_string`, an toàn) và **tự vá dấu cũ khi
+> mở file**. File .blend đã lỡ lưu bằng 1.3.0: mở lên bằng 1.3.1 rồi **lưu lại
+> một lần** là xong — dấu cũ nằm trong file chứ không nằm trong code nên chỉ
+> nâng bản add-on thôi thì chưa hết. Console in ra danh sách object đã vá.
 
 Object xếp bằng bản add-on cũ (chưa có dấu) được coi là chiếm **nguyên một ô
 của grid palette** — đúng với mọi bản trước đây và là phía an toàn: thà chừa

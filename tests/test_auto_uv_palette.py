@@ -282,6 +282,57 @@ check(free_order[:4] == [0, 1, 8, 9],
 check(mod._free_cells(set(), 4, 4, 4, 4) == list(range(16)),
       "grid khong chia nho -> quay ve dung thu tu doc")
 
+# --- Dau o khong duoc lam hong export FBX -----------------------------------
+# Ban 1.3.0 ghi ob[_STAMP] = (cols, rows, index): custom property dung 3 phan
+# tu -> exporter day vao nhanh p_vector -> encode_bin.add_float64 co
+# assert isinstance(data, float) -> so nguyen lam no nem AssertionError.
+# Unity bao "Blender could not convert the .blend file to FBX file".
+check(isinstance(coarse[0].get(mod._STAMP), str),
+      "dau o ghi bang chuoi, khong phai tuple 3 so")
+
+
+def export_fbx(tag):
+    """Export y nhu Unity-BlenderToFBX.py: use_custom_props=True.
+
+    Bo tham so do thi exporter khong dung toi custom property nen khong tai
+    hien duoc loi — day dung la cho test dau tien cua minh chay sai.
+    """
+    path = os.path.join(bpy.app.tempdir, "stamp_%s.fbx" % tag)
+    try:
+        bpy.ops.export_scene.fbx(filepath=path, use_custom_props=True)
+        return True, ""
+    except Exception as err:            # noqa: BLE001 — chinh la thu dang bat
+        return False, repr(err)
+
+
+bpy.ops.object.select_all(action='SELECT')
+ok, err = export_fbx("string")
+check(ok, "export FBX chay duoc voi dau o dang chuoi (%s)" % err)
+
+# Dung dang cu de chung minh day dung la nguyen nhan, roi kiem tra duong va.
+# Buoc nay CO Y lam export FBX hong -> Blender in ra mot traceback day du.
+# Traceback do la ket qua mong doi, khong phai test bi vo.
+print("  --- co y lam hong export FBX, traceback duoi day la binh thuong ---")
+legacy = coarse[0]
+legacy[mod._STAMP] = (4, 4, 0)
+broke, why = export_fbx("legacy")
+print("  --- het phan co y lam hong ---")
+check(not broke, "dau o dang tuple 3 so dung la thu lam hong export FBX (%s)"
+                 % (why or "van export duoc — nguyen nhan khac"))
+
+fixed = mod._restamp_legacy(bpy.data.objects)
+check(fixed == [legacy.name], "_restamp_legacy va dung object dinh dau cu")
+check(mod._stamped_cell(legacy) == (4, 4, 0), "va xong van doc ra dung o cu")
+ok, err = export_fbx("repaired")
+check(ok, "va xong thi export FBX chay lai duoc (%s)" % err)
+
+legacy[mod._STAMP] = (1, 2)             # dau hong, khong doc ra o nao
+mod._restamp_legacy(bpy.data.objects)
+check(mod._STAMP not in legacy, "dau hong bi xoa han cho khoi ket export")
+ok, err = export_fbx("broken")
+check(ok, "xoa dau hong xong export FBX van chay (%s)" % err)
+mod._stamp_cell(legacy, 4, 4, 0)
+
 # --- Panel ve duoc: loi trong draw() la spam do ca sidebar ------------------
 # Background mode khong tao duoc UILayout that, nen dung layout gia — van chay
 # het phan dinh dang chuoi, doc property va quet scene cua draw().

@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 3, 0),
+    "version": (1, 3, 1),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -51,6 +51,7 @@ _CELL_OVERFLOW = 1.5
 # Không có nó thì không phân biệt được object chiếm nguyên ô thô 8x8 với
 # object chỉ chiếm 1 ô mịn 16x16 — UV thưa của cả hai đều có thể nhỏ hơn ô.
 _STAMP = "ezg_uv_palette_cell"
+_STAMP_FORMAT = "%dx%d:%d"          # "8x8:36" — grid rồi tới ô
 # Preview trong panel phải đọc UV, mà panel vẽ lại liên tục — mesh nặng hơn
 # ngưỡng này thì bỏ qua, không làm sidebar giật.
 _PREVIEW_MAX_LOOPS = 200000
@@ -340,22 +341,59 @@ def _uv_overflows_cell(mesh, rows, cols):
 
 
 def _stamp_cell(ob, cols, rows, index):
-    """Ghi lại object đang chiếm ô nào, ở grid nào."""
-    ob[_STAMP] = (cols, rows, index)
+    """Ghi lại object đang chiếm ô nào, ở grid nào.
+
+    Ghi bằng CHUỖI, không phải tuple 3 số. Bản 1.3.0 ghi `(cols, rows, index)`
+    và làm hỏng export FBX: custom property đúng 3 phần tử được exporter đẩy
+    vào nhánh `p_vector` (export_fbx_bin.fbx_data_element_custom_properties),
+    rồi `encode_bin.add_float64` có `assert isinstance(data, float)` — số
+    nguyên làm nó ném AssertionError. Unity báo "Blender could not convert the
+    .blend file to FBX file" chính là chỗ đó. Chuỗi đi nhánh `p_string`, an
+    toàn với mọi exporter và đọc được ngay trong bảng Custom Properties.
+    """
+    ob[_STAMP] = _STAMP_FORMAT % (cols, rows, index)
 
 
 def _stamped_cell(ob):
-    """(cols, rows, index) đã ghi lúc xếp, hoặc None nếu chưa/hỏng."""
+    """(cols, rows, index) đã ghi lúc xếp, hoặc None nếu chưa/hỏng.
+
+    Đọc cả dạng tuple 3 số của bản 1.3.0 để file cũ không mất dấu ô.
+    """
     raw = ob.get(_STAMP)
     if raw is None:
         return None
     try:
-        cols, rows, index = (int(v) for v in raw)
+        if isinstance(raw, str):
+            grid, _, cell = raw.partition(":")
+            wide, _, high = grid.partition("x")
+            cols, rows, index = int(wide), int(high), int(cell)
+        else:
+            cols, rows, index = (int(v) for v in raw)
     except (TypeError, ValueError):
         return None
     if cols < 1 or rows < 1 or not 0 <= index < cols * rows:
         return None
     return cols, rows, index
+
+
+def _restamp_legacy(objects):
+    """Ghi lại dấu ô dạng tuple cũ thành chuỗi. Trả về tên các object đã sửa.
+
+    Không sửa thì file .blend còn dấu cũ vẫn làm hỏng export FBX, kể cả khi
+    add-on đã lên bản mới — dữ liệu nằm trong file chứ không nằm trong code.
+    """
+    fixed = []
+    for ob in objects:
+        raw = ob.get(_STAMP)
+        if raw is None or isinstance(raw, str):
+            continue
+        cell = _stamped_cell(ob)
+        if cell is None:
+            del ob[_STAMP]          # dấu hỏng, xoá luôn cho khỏi kẹt export
+        else:
+            _stamp_cell(ob, *cell)
+        fixed.append(ob.name)
+    return fixed
 
 
 def _subdivides(cols, rows, pcols, prows):
@@ -1821,13 +1859,35 @@ _classes = (
 )
 
 
+@bpy.app.handlers.persistent
+def _fix_legacy_stamps(_file_path):
+    """Vá dấu ô dạng tuple của bản 1.3.0 ngay khi mở file.
+
+    Dấu cũ nằm trong .blend chứ không nằm trong code, nên nâng bản add-on
+    không tự hết — file vẫn làm hỏng export FBX (xem `_stamp_cell`). Vá lúc
+    mở file thì mở + lưu lại một lần là xong, không cần bấm nút nào.
+    """
+    fixed = _restamp_legacy(bpy.data.objects)
+    if fixed:
+        print("Auto UV Palette: da va dau o cu cho %d object (%s). Luu file "
+              "de khoi bao loi export FBX." % (len(fixed), ", ".join(fixed)))
+
+
 def register():
     for cls in _classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.auto_uv_palette = PointerProperty(type=AUTOUVPAL_Props)
+    if _fix_legacy_stamps not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_fix_legacy_stamps)
+    # Bật add-on giữa chừng thì vá luôn file đang mở. Lúc Blender khởi động,
+    # bpy.data còn bị khoá (_RestrictData) — khi đó load_post lo phần đó.
+    if hasattr(bpy.data, "objects"):
+        _restamp_legacy(bpy.data.objects)
 
 
 def unregister():
+    if _fix_legacy_stamps in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_fix_legacy_stamps)
     del bpy.types.Scene.auto_uv_palette
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)
