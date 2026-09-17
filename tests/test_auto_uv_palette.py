@@ -212,15 +212,75 @@ props.cols = 3
 props.rows = 3
 
 # --- JSX append: dung o, dung document dich ---------------------------------
-jsx = mod._build_append_jsx([("A", "D:\\x\\a.png", 2, 1)], 3, 3, True,
-                            "D:\\x\\pal.psd")
-check('col: 2, row: 1' in jsx, "jsx ghi dung col/row")
+jsx = mod._build_append_jsx(
+    [("A", "D:\\x\\a.png", 0.25, 0.5, 0.25, 0.25)], True, "D:\\x\\pal.psd")
+check("u: 0.25, v: 0.5, w: 0.25, h: 0.25" in jsx, "jsx ghi dung o cua item")
 check('var PSD = "D:/x/pal.psd";' in jsx, "jsx tro toi dung file PSD")
-check('doc.width.as("px") / COLS' in jsx,
-      "jsx lay kich thuoc o tu document that, khong tu Canvas trong panel")
-jsx_active = mod._build_append_jsx([("A", "a.png", 0, 0)], 3, 3, False, "")
+check('doc.width.as("px")' in jsx and "/ COLS" not in jsx
+      and "var COLS" not in jsx,
+      "jsx lay kich thuoc tu document that, khong con COLS/ROWS dung chung")
+jsx_active = mod._build_append_jsx(
+    [("A", "a.png", 0.0, 0.0, 0.5, 0.5)], False, "")
 check('var PSD = "";' in jsx_active and "app.activeDocument" in jsx_active,
       "bo trong duong dan PSD -> dung document dang mo")
+
+# --- Chia nho o: asset nho vao 1/4 o cua palette tho -----------------------
+# Palette rieng de khong dinh toi palette 3x3 o tren.
+for ob in list(bpy.context.scene.objects):
+    bpy.data.objects.remove(ob)
+for mat in [m for m in bpy.data.materials if m.name.startswith("UVPalette_")]:
+    bpy.data.materials.remove(mat)
+props.palette_image = ""
+
+props.cols = props.rows = 4
+coarse = [make_obj("%d. To" % i) for i in range(1, 4)]     # o 0, 1, 2 cua 4x4
+select(coarse)
+check(bpy.ops.object.auto_uv_palette_pack() == {'FINISHED'}, "Pack palette 4x4")
+pal = bpy.data.materials["UVPalette_4x4"]
+
+# Object cu chiem nguyen khoi 2x2 cua grid 8x8, khong phai 1 o.
+check(mod._object_cells(coarse[0], 4, 4, 8, 8) == {0, 1, 8, 9},
+      "object o 4x4 chiem nguyen khoi 2x2 cua grid 8x8 (duoc %s)"
+      % sorted(mod._object_cells(coarse[0], 4, 4, 8, 8)))
+
+props.cols = props.rows = 8          # chia doi: 1 o 4x4 = 4 o 8x8
+found, pc, pr, err = mod._pick_palette_material(bpy.context, 8, 8, set())
+check(found is pal and (pc, pr) == (4, 4),
+      "grid 8x8 nhan palette 4x4 lam goc (duoc %s %sx%s, err=%s)"
+      % (found and found.name, pc, pr, err))
+check(mod._pick_palette_material(bpy.context, 6, 6, set())[0] is None,
+      "grid 6x6 khong chia het cho 4x4 -> tu choi")
+
+# 4 asset nho: phai lap day o 4x4 con trong dau tien (khoi 2x2), khong rai ra.
+small = [make_obj("9. Nho %d" % i) for i in range(1, 5)]
+select(small)
+check(bpy.ops.object.auto_uv_palette_add() == {'FINISHED'},
+      "them 4 asset nho o grid 8x8")
+got = [mod._uv_cell_index(ob.data, 8, 8) for ob in small]
+check(got == [6, 7, 14, 15],
+      "4 asset nho lap day mot khoi 2x2 (o 4x4 thu 4), khong rai theo hang "
+      "(duoc %s)" % got)
+check(all(mod._stamped_cell(ob)[:2] == (8, 8) for ob in small),
+      "asset nho duoc danh dau la o 8x8")
+check(mod._stamped_cell(coarse[0])[:2] == (4, 4),
+      "asset to van mang dau o 4x4")
+
+# Khoi dang dung do phai duoc lap not truoc khi mo khoi moi.
+bpy.data.objects.remove(small[3])
+one_more = make_obj("9. Nho 5")
+select([one_more])
+check(bpy.ops.object.auto_uv_palette_add() == {'FINISHED'}, "them 1 asset nua")
+check(mod._uv_cell_index(one_more.data, 8, 8) == 15,
+      "lap not cho trong cua khoi dang do (o 15), khong mo khoi moi (duoc %s)"
+      % mod._uv_cell_index(one_more.data, 8, 8))
+
+# Append: moi object mang o cua rieng no, to va nho lan chung mot script.
+free_order = mod._free_cells(set(), 8, 8, 4, 4)
+check(free_order[:4] == [0, 1, 8, 9],
+      "_free_cells di het khoi 2x2 roi moi sang khoi khac (duoc %s)"
+      % free_order[:4])
+check(mod._free_cells(set(), 4, 4, 4, 4) == list(range(16)),
+      "grid khong chia nho -> quay ve dung thu tu doc")
 
 # --- Panel ve duoc: loi trong draw() la spam do ca sidebar ------------------
 # Background mode khong tao duoc UILayout that, nen dung layout gia — van chay

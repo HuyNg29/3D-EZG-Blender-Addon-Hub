@@ -72,8 +72,11 @@ Quy tắc:
   node nào nối Base Color thì lấy ảnh duy nhất tìm được trong material (tìm cả
   trong node group). Nếu có nhiều ảnh mà không phân biệt được, object đó bị bỏ
   qua kèm thông báo — add-on không đoán bừa.
-- **Texture gốc dưới 2048px thì bỏ qua**, không phóng to lên cho đủ size. Danh
-  sách bị bỏ qua có trong thông báo kết quả.
+- **Texture gốc nhỏ hơn Size thì xuất ở đúng cỡ gốc**, không phóng to cho đủ
+  Size — Photoshop resize layer về bằng ô rồi, phóng to ở bước này chỉ làm file
+  nặng chứ không thêm chi tiết. Nhỏ hơn cả ô (`Canvas ÷ Columns`) thì mới phóng
+  lên bằng ô. Danh sách có trong thông báo kết quả. (Bản trước 1.3.0 **bỏ qua**
+  texture dưới 2048px — asset decor nhỏ vì thế không có PNG để ghép.)
 - **Ảnh gốc không bị thay đổi**: add-on scale trên một bản copy tạm rồi xoá.
 - File trùng tên sẽ **bị ghi đè**, số lượng ghi đè có trong thông báo.
 - Ảnh xuất ra là PNG 8-bit. Nguồn là JPG không có alpha nên Blender ghi RGB
@@ -140,8 +143,8 @@ Nếu không tìm thấy Photoshop, add-on vẫn ghi file `.jsx` — chạy tay 
 Photoshop > File > Scripts > Browse. Thứ tự layer trong bảng Layers: object
 đầu tiên (ô trên–trái) nằm trên cùng.
 
-Thiếu file PNG nào (chưa export, hoặc export bị bỏ qua vì texture nhỏ hơn 2K)
-thì add-on báo lỗi và không mở Photoshop.
+Thiếu file PNG nào (chưa chạy Export Selected Textures, hoặc object không có
+texture nên bị bỏ qua) thì add-on báo lỗi và không mở Photoshop.
 
 ## Assign Palette
 
@@ -164,15 +167,17 @@ Thêm object mới vào một palette **đã ghép xong** mà không phải xế
 UV của object mới được xếp vào **ô còn trống**, và texture của nó được Place
 thêm vào file PSD palette cũ.
 
-1. Đặt **Columns / Rows** đúng bằng grid của palette cũ (panel hiện tên
-   material palette tìm được, ví dụ `UVPalette_3x3 · 6 object đã trong palette`).
+1. Đặt **Columns / Rows** bằng grid của palette cũ — hoặc **bội số nguyên** của
+   nó khi muốn chia nhỏ ô cho asset bé (xem mục kế tiếp). Panel hiện tên
+   material tìm được, ví dụ `UVPalette_8x8 · 6 object đã trong palette`.
 2. **Palette**: trỏ tới ảnh palette hiện tại (mục *Assign Palette* ở trên) —
    không bắt buộc, nhưng nên có, xem phần "Ô nào là trống" bên dưới.
 3. Chọn **các object mới** (chỉ object mới — object đã trong palette phải bỏ ra).
-4. Bấm **Add Selected to Empty Cells** — add-on xếp UV vào các ô trống theo thứ
-   tự trái → phải, trên → dưới, rồi gán material palette cho chúng. Thông báo
-   cho biết object nào vào ô nào và còn bao nhiêu ô trống. `Ctrl+Z` hoàn tác được.
-5. Chạy **Export Selected Textures** cho các object mới (vẫn selection đó).
+4. Chạy **Export Selected Textures** cho các object mới. Phải làm **trước**
+   bước 5, vì bước đó thay material — texture cũ thành mồ côi, lưu file là mất.
+5. Bấm **Add Selected to Empty Cells** — add-on xếp UV vào các ô trống rồi gán
+   material palette cho chúng. Thông báo cho biết object nào vào ô nào và còn
+   bao nhiêu ô trống. `Ctrl+Z` hoàn tác được.
 6. **PSD**: trỏ tới file PSD palette đã lưu. Bỏ trống thì script chạy trên
    document đang mở sẵn trong Photoshop.
 7. Bấm **Append Textures to PSD** — add-on ghi `auto_uv_palette_append.jsx` và
@@ -182,6 +187,37 @@ thêm vào file PSD palette cũ.
 
 Kích thước ô khi append lấy từ **document thật** (rộng ÷ số cột), không lấy từ
 ô **Canvas** trong panel — nên palette cũ dựng ở canvas nào cũng khớp.
+
+### Asset nhỏ: chia nhỏ ô của palette
+
+Decor nhỏ không đáng chiếm nguyên một ô. Gõ **Columns/Rows là bội số nguyên**
+của grid palette là add-on chia nhỏ ô cho chúng: palette `UVPalette_8x8` nhận
+grid 16x16 (1 ô gốc = 4 ô nhỏ), 24x24 (= 9 ô nhỏ), 32x32 (= 16 ô nhỏ)… Grid
+không chia hết (8x8 với 12x12) bị từ chối.
+
+Thứ tự xếp: **lấp đầy một ô gốc rồi mới sang ô gốc khác**, và ưu tiên ô gốc
+đang dùng dở trước khi mở ô nguyên vẹn.
+
+```
+Ô gốc 8x8 (khối)      Ô nhỏ 16x16 = 1/4 ô gốc
+
+┌─────┬─────┐         1 2 3 4 vào chung một khối:
+│ 1 2 │ . . │         ô gốc bên cạnh còn nguyên
+│ 3 4 │ . . │         cho asset to sau này
+└─────┴─────┘
+```
+
+Cứ lấy ô nhỏ theo thứ tự đọc thì 2 decor đã làm hỏng 2 ô gốc — không còn ô
+nguyên nào nhận được asset to nữa, nên add-on không làm vậy.
+
+Mỗi object được **đánh dấu** ô và grid của nó (custom property
+`ezg_uv_palette_cell`), nên asset to (ô 1/8) và asset nhỏ (ô 1/16) **append
+chung một lượt vẫn ra đúng cỡ** — script Photoshop mang sẵn ô của từng layer
+thay vì dùng chung một con số cột/hàng.
+
+Object xếp bằng bản add-on cũ (chưa có dấu) được coi là chiếm **nguyên một ô
+của grid palette** — đúng với mọi bản trước đây và là phía an toàn: thà chừa
+dư còn hơn đè lên.
 
 ### Ô nào được coi là "trống"
 
@@ -198,10 +234,17 @@ không đụng tới:
 qua nguồn này và chỉ dựa vào object trong scene. Giữ nền trong suốt khi export
 palette ra PNG nếu muốn lưới an toàn thứ hai này còn tác dụng.
 
-Add-on từ chối và **không đổi gì** khi: chưa có material palette đúng grid
-`Columns x Rows`; có nhiều palette cùng grid mà không phân biệt được; object
-đã chọn **đã nằm trong palette** (chạy tiếp sẽ thu nhỏ UV thêm một lần nữa);
-hoặc số ô trống ít hơn số object.
+Add-on từ chối và **không đổi gì** khi: `Columns x Rows` không khớp và cũng
+không chia hết cho grid của palette nào; có nhiều palette cùng grid mà không
+phân biệt được; object đã chọn **đã nằm trong palette** (chạy tiếp sẽ thu nhỏ
+UV thêm một lần nữa); hoặc số ô trống ít hơn số object.
+
+**Append Textures to PSD** cũng từ chối khi UV của object còn **trải rộng hơn
+một ô** — nghĩa là chưa chạy Add/Pack. Nếu không chặn, Photoshop sẽ đặt
+texture vào **giữa canvas** (tâm UV 0–1 rơi đúng ô giữa palette) chứ không vào
+ô nào. Bảng preview trong panel hiện sẵn ô đích của từng object đã chọn
+(`H1 C4`, kèm `(ô 8x8)` khi object dùng grid khác grid đang gõ) để thấy trước
+khi bấm.
 
 ## Add-on sẽ báo lỗi và không làm gì khi
 

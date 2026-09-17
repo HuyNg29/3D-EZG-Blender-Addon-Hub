@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_auto_uv_palette"
-version = "1.2.0"
+version = "1.3.0"
 name = "Auto UV Palette"
 # Blender gioi han tagline 64 ky tu — ban cu dai 69 nen khong qua validate.
 tagline = "Scale and arrange UVs of selected objects into a grid palette"

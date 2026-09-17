@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 2, 0),
+    "version": (1, 3, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -34,8 +34,6 @@ from bpy.props import (
 from bpy.types import Operator, Panel, PropertyGroup
 
 _PREVIEW_ROWS = 10
-# Texture gốc nhỏ hơn mức này thì bỏ qua, không phóng to lên cho đủ size.
-_MIN_SOURCE_PX = 2048
 _ILLEGAL_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _JSX_NAME = "auto_uv_palette_build.jsx"
 _JSX_APPEND_NAME = "auto_uv_palette_append.jsx"
@@ -47,6 +45,15 @@ _ALPHA_SCAN_PX = 1024
 # Ô có pixel đục hơn mức này coi như đã có texture. Thu nhỏ ảnh làm alpha bị
 # trung bình hoá nên ngưỡng phải cao hơn 1/255 một chút.
 _ALPHA_EMPTY = 0.02
+# UV rộng hơn ô bằng ngần này lần thì coi như chưa được xếp vào palette.
+_CELL_OVERFLOW = 1.5
+# Custom property ghi lên object: (cols, rows, index) của ô nó đang chiếm.
+# Không có nó thì không phân biệt được object chiếm nguyên ô thô 8x8 với
+# object chỉ chiếm 1 ô mịn 16x16 — UV thưa của cả hai đều có thể nhỏ hơn ô.
+_STAMP = "ezg_uv_palette_cell"
+# Preview trong panel phải đọc UV, mà panel vẽ lại liên tục — mesh nặng hơn
+# ngưỡng này thì bỏ qua, không làm sidebar giật.
+_PREVIEW_MAX_LOOPS = 200000
 
 # Script Photoshop: dựng document rồi Place từng PNG thành Smart Object.
 # Place đặt layer mới NGAY TRÊN layer đang active, nên vòng lặp chạy ngược để
@@ -123,9 +130,10 @@ _JSX_TEMPLATE = """\
 _JSX_APPEND_TEMPLATE = """\
 #target photoshop
 // Sinh tự động bởi add-on Auto UV Palette — đừng sửa tay, chạy lại add-on.
+// Mỗi item mang sẵn ô của nó dưới dạng tỉ lệ document (u, v, w, h) chứ không
+// dùng chung một COLS/ROWS — nhờ vậy asset to (ô 1/8) và asset nhỏ (ô 1/16)
+// đặt được vào cùng một tấm palette.
 (function () {
-    var COLS = %(cols)d;
-    var ROWS = %(rows)d;
     var LINKED = %(linked)s;
     var PSD = %(psd)s;
     var ITEMS = [
@@ -167,14 +175,16 @@ _JSX_APPEND_TEMPLATE = """\
         }
         app.activeDocument = doc;
 
-        var cellW = doc.width.as("px") / COLS;
-        var cellH = doc.height.as("px") / ROWS;
+        var docW = doc.width.as("px");
+        var docH = doc.height.as("px");
 
         // Place đặt layer mới ngay trên layer đang active -> đưa active lên
         // trên cùng để layer mới không chui vào giữa các layer cũ.
         doc.activeLayer = doc.layers[0];
         for (var i = ITEMS.length - 1; i >= 0; i--) {
             var it = ITEMS[i];
+            var cellW = it.w * docW;
+            var cellH = it.h * docH;
             placeSmartObject(it.file, LINKED);
             var layer = doc.activeLayer;
 
@@ -184,8 +194,8 @@ _JSX_APPEND_TEMPLATE = """\
                              AnchorPosition.MIDDLECENTER);
             }
             s = sizeOf(layer);
-            layer.translate((it.col + 0.5) * cellW - s.cx,
-                            (it.row + 0.5) * cellH - s.cy);
+            layer.translate(it.u * docW + cellW / 2 - s.cx,
+                            it.v * docH + cellH / 2 - s.cy);
             layer.name = it.name;
         }
     } finally {
@@ -269,12 +279,8 @@ def _uv_problem(targets):
     return None
 
 
-def _uv_cell_index(mesh, rows, cols):
-    """Ô mà UV của `mesh` đang nằm trong, hoặc None nếu không đọc được.
-
-    Lấy tâm bounding box của UV rồi quy ra ô — đủ để nhận ra object đã được
-    Pack/Add xếp vào ô nào, kể cả khi UV không lấp kín ô.
-    """
+def _uv_bounds(mesh):
+    """(min_u, min_v, max_u, max_v) của UV, hoặc None nếu không đọc được."""
     if not mesh.uv_layers:
         return None
     uv_data = (mesh.uv_layers.active or mesh.uv_layers[0]).data
@@ -284,12 +290,131 @@ def _uv_cell_index(mesh, rows, cols):
     co = np.empty(len(uv_data) * 2, dtype=np.float32)
     uv_data.foreach_get("uv", co)
     co.shape = (-1, 2)
+    return (float(co[:, 0].min()), float(co[:, 1].min()),
+            float(co[:, 0].max()), float(co[:, 1].max()))
 
-    center_u = float(co[:, 0].min() + co[:, 0].max()) * 0.5
-    center_v = float(co[:, 1].min() + co[:, 1].max()) * 0.5
+
+def _uv_cell_index(mesh, rows, cols):
+    """Ô mà UV của `mesh` đang nằm trong, hoặc None nếu không đọc được.
+
+    Lấy tâm bounding box của UV rồi quy ra ô — đủ để nhận ra object đã được
+    Pack/Add xếp vào ô nào, kể cả khi UV không lấp kín ô.
+    """
+    bounds = _uv_bounds(mesh)
+    if bounds is None:
+        return None
+    min_u, min_v, max_u, max_v = bounds
+    center_u = (min_u + max_u) * 0.5
+    center_v = (min_v + max_v) * 0.5
     col = min(cols - 1, max(0, int(center_u * cols)))
     row = min(rows - 1, max(0, int((1.0 - center_v) * rows)))
     return row * cols + col
+
+
+def _rects_overlap(a, b, eps=1e-6):
+    """Hai ô (u, v, w, h) có chồng lên nhau không. Chạm biên không tính.
+
+    eps nuốt sai số dấu phẩy động của grid lẻ (1/3) — không có nó thì hai ô
+    sát nhau có thể bị báo nhầm là chồng lên nhau.
+    """
+    return (a[0] + eps < b[0] + b[2] and b[0] + eps < a[0] + a[2]
+            and a[1] + eps < b[1] + b[3] and b[1] + eps < a[1] + a[3])
+
+
+def _uv_overflows_cell(mesh, rows, cols):
+    """UV rộng/cao hơn một ô quá nhiều -> object chưa được xếp vào palette.
+
+    UV còn nguyên 0..1 thì tâm của nó rơi đúng ô giữa palette, nên Append
+    Textures to PSD sẽ đặt texture vào **giữa canvas** thay vì ô kế tiếp —
+    trông như "không vào ô nào". Đây là chỗ bắt lỗi đó trước khi mở Photoshop.
+
+    Ngưỡng nới rộng 1.5 lần ô để UV tiling tràn nhẹ ra khỏi ô (giới hạn đã ghi
+    trong README) không bị báo nhầm là chưa xếp.
+    """
+    bounds = _uv_bounds(mesh)
+    if bounds is None:
+        return False
+    min_u, min_v, max_u, max_v = bounds
+    return ((max_u - min_u) * cols > _CELL_OVERFLOW
+            or (max_v - min_v) * rows > _CELL_OVERFLOW)
+
+
+def _stamp_cell(ob, cols, rows, index):
+    """Ghi lại object đang chiếm ô nào, ở grid nào."""
+    ob[_STAMP] = (cols, rows, index)
+
+
+def _stamped_cell(ob):
+    """(cols, rows, index) đã ghi lúc xếp, hoặc None nếu chưa/hỏng."""
+    raw = ob.get(_STAMP)
+    if raw is None:
+        return None
+    try:
+        cols, rows, index = (int(v) for v in raw)
+    except (TypeError, ValueError):
+        return None
+    if cols < 1 or rows < 1 or not 0 <= index < cols * rows:
+        return None
+    return cols, rows, index
+
+
+def _subdivides(cols, rows, pcols, prows):
+    """Grid `cols`x`rows` có phải bản chia nhỏ đều của `pcols`x`prows` không."""
+    return (cols >= pcols and rows >= prows
+            and cols % pcols == 0 and rows % prows == 0)
+
+
+def _cells_covered(index, cols, rows, fcols, frows):
+    """Ô `index` của grid cols x rows phủ lên những ô nào của grid mịn hơn.
+
+    Ô của grid 8x8 phủ đúng khối 2x2 ô của grid 16x16 — nhờ vậy object cũ
+    không bị đếm thiếu 3/4 ô và asset nhỏ không đè lên texture của nó.
+    """
+    if not _subdivides(fcols, frows, cols, rows):
+        return {index} if 0 <= index < cols * rows else set()
+    row, col = divmod(index, cols)
+    step_x, step_y = fcols // cols, frows // rows
+    return {(row * step_y + dy) * fcols + col * step_x + dx
+            for dy in range(step_y)
+            for dx in range(step_x)}
+
+
+def _object_cells(ob, mat_cols, mat_rows, cols, rows):
+    """Các ô (của grid `cols`x`rows`) mà `ob` đang chiếm.
+
+    Ưu tiên dấu đã ghi lúc xếp. Object xếp bằng bản add-on cũ chưa có dấu thì
+    coi như chiếm nguyên một ô của grid palette — đúng với mọi bản trước đây
+    (chưa có chia nhỏ ô) và là phía an toàn: thà chừa dư còn hơn đè lên.
+    """
+    stamp = _stamped_cell(ob)
+    if stamp is not None:
+        scols, srows, index = stamp
+        if _subdivides(cols, rows, scols, srows):
+            return _cells_covered(index, scols, srows, cols, rows)
+    index = _uv_cell_index(ob.data, mat_rows, mat_cols)
+    if index is None:
+        return set()
+    return _cells_covered(index, mat_cols, mat_rows, cols, rows)
+
+
+def _free_cells(occupied, cols, rows, pcols, prows):
+    """Ô trống theo thứ tự: lấp nốt khối đang dùng dở trước, rồi mới mở khối mới.
+
+    "Khối" là một ô của grid palette gốc (8x8) — chia nhỏ ra thì nó thành 2x2
+    ô mịn. Lấp đầy khối đang dở trước giữ được nhiều khối nguyên vẹn cho asset
+    to về sau; cứ lấy ô mịn theo thứ tự đọc thì 2 asset nhỏ đã làm hỏng 2 khối.
+
+    Grid không chia nhỏ (cols == pcols) thì mỗi khối đúng 1 ô, kết quả quay về
+    đúng thứ tự đọc trái -> phải, trên -> dưới như cũ.
+    """
+    partial, empty = [], []
+    for block in range(pcols * prows):
+        cells = sorted(_cells_covered(block, pcols, prows, cols, rows))
+        free = [cell for cell in cells if cell not in occupied]
+        if not free:
+            continue
+        (empty if len(free) == len(cells) else partial).append(free)
+    return [cell for group in partial + empty for cell in group]
 
 
 def _palette_grids():
@@ -303,50 +428,65 @@ def _palette_grids():
 
 
 def _pick_palette_material(context, cols, rows, skip):
-    """(material, lỗi) — material palette đúng grid `cols`x`rows`.
+    """(material, pcols, prows, lỗi) — palette dùng được với grid `cols`x`rows`.
 
-    Nhiều material cùng grid thì ưu tiên cái đang có object trong scene dùng
+    Khớp đúng grid, hoặc grid gõ vào là bản **chia nhỏ đều** của grid palette
+    (palette 8x8 nhận grid 16x16, 24x24…) để nhét asset nhỏ vào 1/4 ô. Ưu tiên
+    khớp đúng trước, rồi tới palette thô nhất — chia càng ít càng đỡ vụn.
+
+    Nhiều material cùng loại thì ưu tiên cái đang có object trong scene dùng
     (ngoài `skip`); vẫn còn nhiều thì trả lỗi chứ không đoán.
     """
     grids = _palette_grids()
     if not grids:
-        return None, ("Chưa có material palette nào (UVPalette_*). Chạy Pack "
-                      "UVs into Palette để tạo palette trước.")
+        return None, 0, 0, ("Chưa có material palette nào (UVPalette_*). Chạy "
+                            "Pack UVs into Palette để tạo palette trước.")
 
-    same = [mat for mat, c, r in grids if (c, r) == (cols, rows)]
-    if not same:
+    exact = [(mat, c, r) for mat, c, r in grids if (c, r) == (cols, rows)]
+    coarser = [(mat, c, r) for mat, c, r in grids
+               if (c, r) != (cols, rows) and _subdivides(cols, rows, c, r)]
+    # Chia càng ít bậc càng tốt: palette 8x8 đứng trước palette 4x4.
+    coarser.sort(key=lambda item: -item[1] * item[2])
+    pool = exact or coarser
+    if not pool:
         have = ", ".join(sorted({"%s (%dx%d)" % (mat.name, c, r)
                                  for mat, c, r in grids}))
-        return None, ("Không có palette nào là grid %dx%d. Đang có: %s. Chỉnh "
-                      "Columns/Rows cho khớp palette muốn thêm vào."
-                      % (cols, rows, have))
+        return None, 0, 0, (
+            "Grid %dx%d không dùng được với palette nào đang có: %s. Grid phải "
+            "khớp đúng, hoặc là bội số nguyên của grid palette (8x8 -> 16x16) "
+            "để chia nhỏ ô." % (cols, rows, have))
 
-    if len(same) > 1:
-        used = [mat for mat in same
+    best = [item for item in pool if (item[1], item[2]) == (pool[0][1], pool[0][2])]
+    if len(best) > 1:
+        used = [item for item in best
                 if any(ob.type == 'MESH' and ob not in skip
-                       and any(slot.material is mat
+                       and any(slot.material is item[0]
                                for slot in ob.material_slots)
                        for ob in context.scene.objects)]
-        if len(used) == 1:
-            return used[0], None
-        pool = used or same
-        return None, ("Có %d material palette %dx%d (%s) — không rõ thêm vào "
-                      "cái nào. Xóa/đổi tên bớt rồi chạy lại."
-                      % (len(pool), cols, rows,
-                         ", ".join(mat.name for mat in pool)))
-    return same[0], None
+        if len(used) != 1:
+            clash = used or best
+            return None, 0, 0, (
+                "Có %d material palette %dx%d (%s) — không rõ thêm vào cái "
+                "nào. Xóa/đổi tên bớt rồi chạy lại."
+                % (len(clash), clash[0][1], clash[0][2],
+                   ", ".join(item[0].name for item in clash)))
+        best = used
+    mat, pcols, prows = best[0]
+    return mat, pcols, prows, None
 
 
-def _scene_occupancy(context, mat, rows, cols, skip):
-    """{ô: [tên object]} — ô đã bị object trong scene dùng material palette chiếm."""
+def _scene_occupancy(context, mat, pcols, prows, cols, rows, skip):
+    """{ô của grid cols x rows: [tên object]} — ô đã bị object trong scene chiếm.
+
+    Object xếp ở grid thô chiếm nguyên khối ô mịn, xem `_object_cells`.
+    """
     occupied = {}
     for ob in context.scene.objects:
         if ob.type != 'MESH' or ob in skip:
             continue
         if not any(slot.material is mat for slot in ob.material_slots):
             continue
-        index = _uv_cell_index(ob.data, rows, cols)
-        if index is not None:
+        for index in _object_cells(ob, pcols, prows, cols, rows):
             occupied.setdefault(index, []).append(ob.name)
     return occupied
 
@@ -582,16 +722,18 @@ def _build_jsx(items, canvas, cols, rows, linked):
     }
 
 
-def _build_append_jsx(items, cols, rows, linked, psd_path):
-    """items: list (tên object, đường dẫn png, col, row). psd_path "" = doc đang mở."""
+def _build_append_jsx(items, linked, psd_path):
+    """items: list (tên object, png, u, v, w, h) — ô tính theo tỉ lệ document.
+
+    u/v là góc trên-trái của ô (v đo từ đỉnh document xuống, đúng chiều toạ độ
+    Photoshop). psd_path "" = dùng document đang mở.
+    """
     lines = [
-        "        {name: %s, file: %s, col: %d, row: %d},"
-        % (_js_string(name), _js_string(path.replace("\\", "/")), col, row)
-        for name, path, col, row in items
+        "        {name: %s, file: %s, u: %.9g, v: %.9g, w: %.9g, h: %.9g},"
+        % (_js_string(name), _js_string(path.replace("\\", "/")), u, v, w, h)
+        for name, path, u, v, w, h in items
     ]
     return _JSX_APPEND_TEMPLATE % {
-        "cols": cols,
-        "rows": rows,
         "linked": "true" if linked else "false",
         "psd": _js_string(psd_path.replace("\\", "/")),
         "items": "\n".join(lines),
@@ -731,6 +873,7 @@ class AUTOUVPAL_OT_pack(Operator):
 
         for index, ob in enumerate(targets):
             _place_uv_in_cell(ob.data, _cell_rect(index, rows, cols))
+            _stamp_cell(ob, cols, rows, index)
 
         # Material palette chung: tạo mới, gán đè lên toàn bộ object đã chọn.
         # Node Image Texture để trống — chỗ gắn tấm palette sau khi bake/ghép.
@@ -793,7 +936,11 @@ class AUTOUVPAL_OT_export_textures(Operator):
             self.report({'ERROR'}, "Không tạo được thư mục export: %s" % err)
             return {'CANCELLED'}
 
-        written, no_tex, too_small, failed, overwritten = [], [], [], [], []
+        # Ô của object trên canvas — mốc dưới cho ảnh nguồn nhỏ.
+        cell_px = max(1, min(props.canvas_size // props.cols,
+                             props.canvas_size // props.rows))
+
+        written, no_tex, downsized, failed, overwritten = [], [], [], [], []
         for ob in targets:
             image, reason = _object_texture(ob)
             if image is None:
@@ -801,14 +948,19 @@ class AUTOUVPAL_OT_export_textures(Operator):
                 continue
 
             src_w, src_h = image.size
-            if min(src_w, src_h) < _MIN_SOURCE_PX:
-                too_small.append("%s (%dx%d)" % (ob.name, src_w, src_h))
-                continue
+            # Nguồn nhỏ hơn Size thì xuất ở kích thước gốc — Photoshop resize
+            # layer về đúng ô rồi, phóng to ở đây chỉ làm file nặng mà không
+            # thêm chi tiết. Nhỏ hơn cả ô thì mới phóng lên bằng ô.
+            target = size
+            if 0 < min(src_w, src_h) < size:
+                target = min(size, max(cell_px, min(src_w, src_h)))
+                downsized.append("%s (%dx%d -> %dpx)"
+                                 % (ob.name, src_w, src_h, target))
 
             path = os.path.join(directory, _safe_filename(ob.name) + ".png")
             existed = os.path.exists(path)
             try:
-                _export_image_png(image, size, path)
+                _export_image_png(image, target, path)
             except (RuntimeError, OSError) as err:
                 failed.append("%s (%s)" % (ob.name, err))
                 continue
@@ -820,9 +972,10 @@ class AUTOUVPAL_OT_export_textures(Operator):
                  % (len(written), len(targets), size, size, directory)]
         if overwritten:
             parts.append("ghi đè %d file cũ" % len(overwritten))
-        if too_small:
-            parts.append("bỏ qua vì texture gốc dưới %dpx: %s"
-                         % (_MIN_SOURCE_PX, ", ".join(too_small)))
+        if downsized:
+            parts.append("texture gốc nhỏ hơn %dpx nên xuất đúng cỡ gốc "
+                         "(không nhỏ hơn ô %dpx): %s"
+                         % (size, cell_px, ", ".join(downsized)))
         if no_tex:
             parts.append("không có texture: " + ", ".join(no_tex))
         if failed:
@@ -832,7 +985,7 @@ class AUTOUVPAL_OT_export_textures(Operator):
         if failed or not written:
             self.report({'ERROR'} if not written else {'WARNING'}, message)
             return {'CANCELLED'} if not written else {'FINISHED'}
-        self.report({'WARNING'} if (too_small or no_tex or overwritten)
+        self.report({'WARNING'} if (downsized or no_tex or overwritten)
                     else {'INFO'}, message)
         return {'FINISHED'}
 
@@ -1221,7 +1374,6 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
     def execute(self, context):
         props = context.scene.auto_uv_palette
         rows, cols = props.rows, props.cols
-        cells = rows * cols
 
         targets = _sorted_targets(context)
         if not targets:
@@ -1233,7 +1385,8 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
             self.report({'ERROR'}, problem)
             return {'CANCELLED'}
 
-        mat, error = _pick_palette_material(context, cols, rows, set(targets))
+        mat, pcols, prows, error = _pick_palette_material(
+            context, cols, rows, set(targets))
         if mat is None:
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
@@ -1252,7 +1405,8 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
 
         # Hai nguồn "ô đã dùng", lấy hợp của cả hai cho chắc: object trong
         # scene đang dùng material palette, và pixel đục trong ảnh palette.
-        taken = _scene_occupancy(context, mat, rows, cols, set(targets))
+        taken = _scene_occupancy(context, mat, pcols, prows, cols, rows,
+                                 set(targets))
         occupied = set(taken)
         sources = ["%d ô có object" % len(taken)] if taken else []
 
@@ -1280,7 +1434,7 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
             )
             return {'CANCELLED'}
 
-        free = [index for index in range(cells) if index not in occupied]
+        free = _free_cells(occupied, cols, rows, pcols, prows)
         if len(free) < len(targets):
             self.report(
                 {'ERROR'},
@@ -1295,14 +1449,19 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
         placed = []
         for ob, index in zip(targets, free):
             _place_uv_in_cell(ob.data, _cell_rect(index, rows, cols))
+            _stamp_cell(ob, cols, rows, index)
             ob.data.materials.clear()
             ob.data.materials.append(mat)
             row, col = divmod(index, cols)
             placed.append("%s -> H%d C%d" % (ob.name, row + 1, col + 1))
 
-        message = ("Đã thêm %d object vào palette \"%s\" (%s). Còn %d ô trống. "
-                   "Nguồn ô đã dùng: %s."
-                   % (len(placed), mat.name, "; ".join(placed),
+        split = ("" if (cols, rows) == (pcols, prows) else
+                 " (ô %dx%d chia nhỏ từ ô %dx%d, mỗi ô bằng 1/%d ô gốc)"
+                 % (cols, rows, pcols, prows,
+                    (cols // pcols) * (rows // prows)))
+        message = ("Đã thêm %d object vào palette \"%s\"%s (%s). Còn %d ô "
+                   "trống. Nguồn ô đã dùng: %s."
+                   % (len(placed), mat.name, split, "; ".join(placed),
                       len(free) - len(placed), ", ".join(sources)))
         warnings = []
         if image_error:
@@ -1356,28 +1515,54 @@ class AUTOUVPAL_OT_append_psd(Operator):
                 self.report({'ERROR'}, "File PSD không tồn tại: " + psd_path)
                 return {'CANCELLED'}
 
-        # Ô lấy thẳng từ UV hiện tại — Add Selected to Empty Cells đã xếp rồi.
-        items, missing, no_cell, clashes = [], [], [], []
-        seen = {}
+        # Ô của mỗi object lấy từ dấu đã ghi lúc xếp — nhờ vậy asset to (ô
+        # 8x8) và asset nhỏ (ô 16x16) append chung một lượt vẫn đúng cỡ.
+        # Object xếp bằng bản add-on cũ chưa có dấu thì đọc từ UV theo grid
+        # đang gõ trong panel.
+        items, missing, no_cell, clashes, not_packed = [], [], [], [], []
+        seen = []
         for ob in targets:
-            index = _uv_cell_index(ob.data, rows, cols)
-            if index is None:
-                no_cell.append(ob.name)
-                continue
+            stamp = _stamped_cell(ob)
+            if stamp is not None:
+                scols, srows, index = stamp
+            else:
+                scols, srows = cols, rows
+                index = _uv_cell_index(ob.data, rows, cols)
+                if index is None:
+                    no_cell.append(ob.name)
+                    continue
+                if _uv_overflows_cell(ob.data, rows, cols):
+                    not_packed.append(ob.name)
+                    continue
             path = os.path.join(directory, _safe_filename(ob.name) + ".png")
             if not os.path.isfile(path):
                 missing.append(os.path.basename(path))
                 continue
-            if index in seen:
-                clashes.append("%s và %s cùng ô" % (seen[index], ob.name))
+
+            min_u, min_v, width, height = _cell_rect(index, srows, scols)
+            # Photoshop đo y từ đỉnh xuống, UV đo v từ đáy lên.
+            rect = (min_u, 1.0 - min_v - height, width, height)
+            overlap = next((name for name, other in seen
+                            if _rects_overlap(rect, other)), None)
+            if overlap is not None:
+                clashes.append("%s và %s" % (overlap, ob.name))
                 continue
-            seen[index] = ob.name
-            row, col = divmod(index, cols)
-            items.append((ob.name, path, col, row))
+            seen.append((ob.name, rect))
+            items.append((ob.name, path) + rect)
 
         if no_cell:
             self.report({'ERROR'}, "Không đọc được UV để biết ô: "
                                    + ", ".join(no_cell))
+            return {'CANCELLED'}
+        if not_packed:
+            self.report(
+                {'ERROR'},
+                "UV của %s còn trải rộng hơn một ô — chưa được xếp vào "
+                "palette, đặt vào PSD bây giờ sẽ rơi vào giữa canvas chứ "
+                "không vào ô nào. Chạy Add Selected to Empty Cells (hoặc "
+                "Pack UVs into Palette) trước, và kiểm tra Columns/Rows đúng "
+                "bằng grid của palette." % ", ".join(not_packed),
+            )
             return {'CANCELLED'}
         if missing:
             self.report(
@@ -1389,13 +1574,13 @@ class AUTOUVPAL_OT_append_psd(Operator):
         if clashes:
             self.report(
                 {'ERROR'},
-                "UV của các object này nằm cùng một ô (%s) — chạy Add Selected "
+                "Ô của các object này chồng lên nhau (%s) — chạy Add Selected "
                 "to Empty Cells trước." % "; ".join(clashes),
             )
             return {'CANCELLED'}
 
         jsx_path = os.path.join(directory, _JSX_APPEND_NAME)
-        script = _build_append_jsx(items, cols, rows,
+        script = _build_append_jsx(items,
                                    props.smart_object_mode == 'LINKED',
                                    psd_path)
         try:
@@ -1544,9 +1729,8 @@ class AUTOUVPAL_PT_mixin:
         info = layout.box()
         selected = set(targets)
         grids = _palette_grids()
-        match = [mat for mat, c, r in grids if (c, r) == (cols, rows)]
-        chosen = (_pick_palette_material(context, cols, rows, selected)[0]
-                  if match else None)
+        chosen, pcols, prows, _error = _pick_palette_material(
+            context, cols, rows, selected)
         if chosen is not None:
             users = sum(1 for ob in context.scene.objects
                         if ob.type == 'MESH' and ob not in selected
@@ -1554,14 +1738,52 @@ class AUTOUVPAL_PT_mixin:
                                 for slot in ob.material_slots))
             info.label(text="%s · %d object đã trong palette"
                             % (chosen.name, users), icon='MATERIAL')
-        elif match:
-            info.label(text="Có %d palette %dx%d — không rõ cái nào"
-                            % (len(match), cols, rows), icon='ERROR')
+            if (cols, rows) != (pcols, prows):
+                info.label(text="Chia nhỏ ô: 1 ô %dx%d = %d ô %dx%d"
+                                % (pcols, prows,
+                                   (cols // pcols) * (rows // prows),
+                                   cols, rows))
+        elif grids:
+            info.label(text="Grid %dx%d không dùng được với palette nào"
+                            % (cols, rows), icon='ERROR')
+            info.label(text="Đang có: " + ", ".join(
+                sorted({"%dx%d" % (c, r) for _mat, c, r in grids})))
         else:
-            info.label(text="Chưa có palette %dx%d" % (cols, rows), icon='ERROR')
-            if grids:
-                info.label(text="Đang có: " + ", ".join(
-                    sorted({"%dx%d" % (c, r) for _mat, c, r in grids})))
+            info.label(text="Chưa có palette nào — chạy Pack UVs trước",
+                       icon='ERROR')
+
+        # Ô mà Append sẽ dùng, lấy y hệt operator — để thấy trước object chưa
+        # xếp, thay vì phát hiện khi đã vào Photoshop.
+        if targets:
+            preview = info.column(align=True)
+            for ob in targets[:_PREVIEW_ROWS]:
+                stamp = _stamped_cell(ob)
+                if stamp is not None:
+                    scols, srows, index = stamp
+                elif len(ob.data.loops) > _PREVIEW_MAX_LOOPS:
+                    preview.label(text="%s — mesh nặng, bỏ qua preview"
+                                       % ob.name)
+                    continue
+                else:
+                    scols, srows = cols, rows
+                    index = _uv_cell_index(ob.data, rows, cols)
+                    if index is None:
+                        preview.label(text="%s — chưa có UV" % ob.name,
+                                      icon='ERROR')
+                        continue
+                    if _uv_overflows_cell(ob.data, rows, cols):
+                        preview.label(text="%s — chưa xếp vào ô nào" % ob.name,
+                                      icon='ERROR')
+                        continue
+                cell_row, cell_col = divmod(index, scols)
+                size_note = ("" if (scols, srows) == (cols, rows)
+                             else " (ô %dx%d)" % (scols, srows))
+                preview.label(text="H%d C%d%s   %s"
+                                   % (cell_row + 1, cell_col + 1, size_note,
+                                      ob.name))
+            if len(targets) > _PREVIEW_ROWS:
+                preview.label(text="… và %d object nữa"
+                                   % (len(targets) - _PREVIEW_ROWS))
 
         layout.operator(AUTOUVPAL_OT_add_to_palette.bl_idname, icon='ADD')
         layout.prop(props, "palette_psd")
