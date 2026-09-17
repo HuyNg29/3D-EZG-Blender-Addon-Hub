@@ -59,7 +59,7 @@ muốn méo.
 Xuất texture trong material của từng object đã chọn ra PNG.
 
 1. Chọn các object (cùng danh sách với phần xếp UV).
-2. Chọn **Size**: 2K / 4K / 8K — áp dụng cho toàn bộ, mọi ảnh ra đều vuông và
+2. Chọn **Size**: 1K / 2K / 4K / 8K — áp dụng cho toàn bộ, mọi ảnh ra đều vuông và
    cùng kích thước.
 3. Chọn **Path** — thư mục đích, tự tạo nếu chưa có.
 4. Bấm **Export Selected Textures**.

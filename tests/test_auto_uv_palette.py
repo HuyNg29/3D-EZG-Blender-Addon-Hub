@@ -380,7 +380,9 @@ for _w, _h, _size, _want in ((1024, 1024, '4096', 1024),   # nho hon Size
                              (2048, 1024, '4096', 2048),   # khong vuong
                              (256, 256, '4096', 256),      # nho hon ca o 1024px
                              (2048, 2048, '2048', 2048),
-                             (1024, 1024, '8192', 1024)):
+                             (1024, 1024, '8192', 1024),
+                             (2048, 2048, '1024', 1024),   # Size 1K la tran
+                             (512, 512, '1024', 512)):     # nho hon ca 1K
     props.tex_size = _size
     _name = "sz_%dx%d_%s" % (_w, _h, _size)
     _ob = sized_obj(_name, _w, _h)

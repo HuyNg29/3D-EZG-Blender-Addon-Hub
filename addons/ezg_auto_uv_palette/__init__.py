@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 3, 3),
+    "version": (1, 4, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -828,6 +828,7 @@ class AUTOUVPAL_Props(PropertyGroup):
         name="Size",
         description="Kích thước PNG xuất ra, dùng chung cho toàn bộ texture",
         items=[
+            ('1024', "1K", "1024 x 1024"),
             ('2048', "2K", "2048 x 2048"),
             ('4096', "4K", "4096 x 4096"),
             ('8192', "8K", "8192 x 8192"),
