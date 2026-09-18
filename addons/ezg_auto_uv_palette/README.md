@@ -239,6 +239,16 @@ Object xếp bằng bản add-on cũ (chưa có dấu) được coi là chiếm 
 của grid palette** — đúng với mọi bản trước đây và là phía an toàn: thà chừa
 dư còn hơn đè lên.
 
+Dấu **không được tin một mình**: add-on lấy **hợp** của ô ghi trong dấu và ô mà
+UV đang thật sự nằm. Hai cái này lệch nhau được — UV bị sửa tay sau khi xếp,
+object dùng chung mesh data, hay xếp lại bằng grid khác. Tin mỗi cái dấu thì ô
+mà UV đang nằm trông như còn trống và texture mới đè thẳng lên. Có object lệch
+thì thông báo nêu tên ra.
+
+UV được đọc ở **đúng grid ghi trong dấu**: object xếp ở ô 16x16 mà đọc bằng
+grid 8x8 sẽ ra nguyên khối 2x2, chiếm luôn 3 ô của hàng xóm và asset nhỏ hết
+chỗ chen.
+
 ### Ô nào được coi là "trống"
 
 Add-on lấy **hợp của hai nguồn**, ô nào một trong hai nguồn báo là đã dùng thì
@@ -250,9 +260,15 @@ không đụng tới:
   hoàn toàn thì trống. Nhờ nguồn này mà object cũ đã xoá khỏi scene (hoặc nằm
   ở file .blend khác) vẫn không bị ghi đè.
 
+Ô **Palette** trỏ tới file không tồn tại thì add-on **từ chối hẳn**, không chạy
+tiếp. Lưới an toàn thứ hai tắt mà không ai hay là chuyện nguy hiểm: ô nào có
+texture trong PSD mà object của nó đã bị xoá khỏi scene sẽ bị đè. Muốn chạy chỉ
+với object trong scene thì **xoá trống** ô Palette — đó là lựa chọn rõ ràng,
+khác với đường dẫn gõ sai.
+
 Ảnh palette **đã flatten lên nền đục** thì alpha không nói được gì — add-on bỏ
-qua nguồn này và chỉ dựa vào object trong scene. Giữ nền trong suốt khi export
-palette ra PNG nếu muốn lưới an toàn thứ hai này còn tác dụng.
+qua nguồn này (có cảnh báo) và chỉ dựa vào object trong scene. Giữ nền trong
+suốt khi export palette ra PNG nếu muốn lưới an toàn thứ hai này còn tác dụng.
 
 Ảnh lớn được quét trên bản thu nhỏ (ảnh 8K đọc thẳng là ~1 GB). Bản thu nhỏ
 luôn là **bội số nguyên của grid** để biên ô rơi trúng biên pixel, và khi quét

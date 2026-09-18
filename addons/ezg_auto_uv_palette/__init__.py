@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 4, 0),
+    "version": (1, 5, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -402,37 +402,79 @@ def _subdivides(cols, rows, pcols, prows):
             and cols % pcols == 0 and rows % prows == 0)
 
 
-def _cells_covered(index, cols, rows, fcols, frows):
-    """Ô `index` của grid cols x rows phủ lên những ô nào của grid mịn hơn.
+def _cells_covered(index, cols, rows, tcols, trows):
+    """Ô `index` của grid cols x rows nằm đè lên những ô nào của grid đích.
 
-    Ô của grid 8x8 phủ đúng khối 2x2 ô của grid 16x16 — nhờ vậy object cũ
-    không bị đếm thiếu 3/4 ô và asset nhỏ không đè lên texture của nó.
+    Đi được cả hai chiều: grid đích mịn hơn thì ra nguyên khối (ô 8x8 -> 2x2 ô
+    của 16x16), thô hơn thì ra đúng ô chứa nó (ô 16x16 -> 1 ô của 8x8). Grid
+    không phải bội số của nhau thì lấy mọi ô có phần chồng lên — thà chừa dư
+    còn hơn đè lên texture đã có.
     """
-    if not _subdivides(fcols, frows, cols, rows):
-        return {index} if 0 <= index < cols * rows else set()
+    if cols < 1 or rows < 1 or tcols < 1 or trows < 1:
+        return set()
+    if not 0 <= index < cols * rows:
+        return set()
     row, col = divmod(index, cols)
-    step_x, step_y = fcols // cols, frows // rows
-    return {(row * step_y + dy) * fcols + col * step_x + dx
-            for dy in range(step_y)
-            for dx in range(step_x)}
+    first_col = min(tcols - 1, int(col / cols * tcols))
+    last_col = min(tcols - 1, max(first_col,
+                                  math.ceil((col + 1) / cols * tcols) - 1))
+    first_row = min(trows - 1, int(row / rows * trows))
+    last_row = min(trows - 1, max(first_row,
+                                  math.ceil((row + 1) / rows * trows) - 1))
+    return {r * tcols + c
+            for r in range(first_row, last_row + 1)
+            for c in range(first_col, last_col + 1)}
 
 
 def _object_cells(ob, mat_cols, mat_rows, cols, rows):
     """Các ô (của grid `cols`x`rows`) mà `ob` đang chiếm.
 
-    Ưu tiên dấu đã ghi lúc xếp. Object xếp bằng bản add-on cũ chưa có dấu thì
-    coi như chiếm nguyên một ô của grid palette — đúng với mọi bản trước đây
-    (chưa có chia nhỏ ô) và là phía an toàn: thà chừa dư còn hơn đè lên.
+    Lấy HỢP của hai cách đọc, không tin cách nào một mình:
+      - dấu đã ghi lúc xếp (`ezg_uv_palette_cell`)
+      - ô mà UV đang thật sự nằm trong
+
+    Hai cái này lệch nhau được: UV bị sửa tay sau khi xếp, object dùng chung
+    mesh data với object khác, hay xếp lại bằng grid khác. Tin mỗi cái dấu thì
+    ô mà UV đang nằm trông như còn trống và texture mới đè thẳng lên — đã xảy
+    ra thật. Lấy hợp thì cùng lắm là chừa dư một ô, không mất art.
+
+    Object xếp bằng bản add-on cũ chưa có dấu thì chỉ còn đường đọc UV, và
+    coi như chiếm nguyên một ô của grid palette.
     """
+    cells = set()
     stamp = _stamped_cell(ob)
     if stamp is not None:
-        scols, srows, index = stamp
-        if _subdivides(cols, rows, scols, srows):
-            return _cells_covered(index, scols, srows, cols, rows)
-    index = _uv_cell_index(ob.data, mat_rows, mat_cols)
+        cells |= _cells_covered(stamp[2], stamp[0], stamp[1], cols, rows)
+    index, read_cols, read_rows = _uv_reading(ob, mat_cols, mat_rows)
+    if index is not None:
+        cells |= _cells_covered(index, read_cols, read_rows, cols, rows)
+    return cells
+
+
+def _uv_reading(ob, mat_cols, mat_rows):
+    """(ô UV đang nằm, cols, rows dùng để đọc) — đọc ở đúng grid của object.
+
+    Có dấu thì đọc ở grid ghi trong dấu: object xếp ở ô 16x16 mà đọc bằng grid
+    8x8 của palette sẽ ra nguyên khối 2x2, chiếm luôn 3 ô của hàng xóm và asset
+    nhỏ hết chỗ chen. Không có dấu thì chỉ còn grid palette để dựa vào, và
+    object đó vốn chiếm nguyên một ô thô.
+    """
+    stamp = _stamped_cell(ob)
+    cols, rows = (stamp[0], stamp[1]) if stamp else (mat_cols, mat_rows)
+    return _uv_cell_index(ob.data, rows, cols), cols, rows
+
+
+def _stamp_disagrees(ob, mat_cols, mat_rows, cols, rows):
+    """Dấu ô và UV của `ob` có chỉ về chỗ khác nhau không."""
+    stamp = _stamped_cell(ob)
+    if stamp is None:
+        return False
+    index, read_cols, read_rows = _uv_reading(ob, mat_cols, mat_rows)
     if index is None:
-        return set()
-    return _cells_covered(index, mat_cols, mat_rows, cols, rows)
+        return False
+    from_stamp = _cells_covered(stamp[2], stamp[0], stamp[1], cols, rows)
+    from_uv = _cells_covered(index, read_cols, read_rows, cols, rows)
+    return bool(from_stamp) and bool(from_uv) and not (from_stamp & from_uv)
 
 
 def _free_cells(occupied, cols, rows, pcols, prows):
@@ -514,11 +556,12 @@ def _pick_palette_material(context, cols, rows, skip):
 
 
 def _scene_occupancy(context, mat, pcols, prows, cols, rows, skip):
-    """{ô của grid cols x rows: [tên object]} — ô đã bị object trong scene chiếm.
+    """({ô: [tên object]}, [tên object có dấu lệch với UV]).
 
     Object xếp ở grid thô chiếm nguyên khối ô mịn, xem `_object_cells`.
     """
     occupied = {}
+    disagree = []
     for ob in context.scene.objects:
         if ob.type != 'MESH' or ob in skip:
             continue
@@ -526,7 +569,9 @@ def _scene_occupancy(context, mat, pcols, prows, cols, rows, skip):
             continue
         for index in _object_cells(ob, pcols, prows, cols, rows):
             occupied.setdefault(index, []).append(ob.name)
-    return occupied
+        if _stamp_disagrees(ob, pcols, prows, cols, rows):
+            disagree.append(ob.name)
+    return occupied, disagree
 
 
 def _image_occupancy(image, rows, cols):
@@ -1454,12 +1499,25 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
 
         # Hai nguồn "ô đã dùng", lấy hợp của cả hai cho chắc: object trong
         # scene đang dùng material palette, và pixel đục trong ảnh palette.
-        taken = _scene_occupancy(context, mat, pcols, prows, cols, rows,
-                                 set(targets))
+        taken, disagree = _scene_occupancy(context, mat, pcols, prows,
+                                           cols, rows, set(targets))
         occupied = set(taken)
         sources = ["%d ô có object" % len(taken)] if taken else []
 
+        # Đường dẫn palette sai thì lưới an toàn thứ hai tắt mà không ai hay,
+        # và texture mới đè lên ô mà object của nó đã bị xoá khỏi scene. Đã
+        # xảy ra thật -> từ chối hẳn thay vì chỉ cảnh báo.
         image, image_error = _palette_image_datablock(props)
+        if image_error:
+            self.report(
+                {'ERROR'},
+                "%s. Sửa lại ô Palette cho đúng file palette hiện tại, hoặc "
+                "xoá trống ô đó nếu chấp nhận chỉ dựa vào object trong scene "
+                "(ô nào có texture mà object đã bị xoá sẽ bị đè)."
+                % image_error.capitalize(),
+            )
+            return {'CANCELLED'}
+
         image_cells = _image_occupancy(image, rows, cols) if image else None
         if image_cells is not None:
             occupied |= image_cells
@@ -1468,9 +1526,7 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
 
         if not occupied:
             notes = []
-            if image_error:
-                notes.append(image_error)
-            elif image is not None and image_cells is None:
+            if image is not None and image_cells is None:
                 notes.append("ảnh palette không có vùng trong suốt nên không "
                              "đọc được ô trống từ nó")
             elif image is None:
@@ -1513,8 +1569,13 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
                    % (len(placed), mat.name, split, "; ".join(placed),
                       len(free) - len(placed), ", ".join(sources)))
         warnings = []
-        if image_error:
-            warnings.append(image_error + " — chỉ dựa vào object trong scene")
+        if image is not None and image_cells is None:
+            warnings.append("ảnh palette \"%s\" không có vùng trong suốt nên "
+                            "chỉ dựa vào object trong scene" % image.name)
+        if disagree:
+            warnings.append(
+                "dấu ô của %s lệch với UV thật — đã chừa cả hai ô cho chắc, "
+                "chạy lại Add cho mấy object đó nếu muốn dọn" % ", ".join(disagree))
         if unexported:
             warnings.append(
                 "texture của %s chưa export — material cũ giờ không còn ai "

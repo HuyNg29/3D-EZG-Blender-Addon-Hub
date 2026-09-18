@@ -243,6 +243,19 @@ after_block = make_obj("9. Them C")
 select([after_block])
 check(bpy.ops.object.auto_uv_palette_add() == {'FINISHED'},
       "Add chay duoc khi co ca anh palette")
+
+# Duong dan palette sai = luoi an toan thu hai tat ma khong ai hay -> phai
+# tu choi. Gap that: PSD da doi cho, Add van chay va de len texture cu.
+_good_path = props.palette_image
+props.palette_image = os.path.join(bpy.app.tempdir, "khong_co_that.png")
+_probe = make_obj("9. Duong dan sai")
+select([_probe])
+check(cancelled(bpy.ops.object.auto_uv_palette_add),
+      "duong dan Palette sai -> tu choi, khong xep bua")
+check(not _probe.data.materials,
+      "object bi tu choi chua bi gan material palette")
+bpy.data.objects.remove(_probe)
+props.palette_image = _good_path
 check(mod._uv_cell_index(after_block.data, 3, 3) == 7,
       "tranh o 6 da co texture trong anh, vao o 7 (duoc %s)"
       % mod._uv_cell_index(after_block.data, 3, 3))
@@ -291,6 +304,31 @@ jsx_active = mod._build_append_jsx(
     [("A", "a.png", 0.0, 0.0, 0.5, 0.5)], False, "")
 check('var PSD = "";' in jsx_active and "app.activeDocument" in jsx_active,
       "bo trong duong dan PSD -> dung document dang mo")
+
+# --- Dau o lech voi UV: KHONG duoc de o that thanh "trong" ------------------
+# Gap that: 51001_Meat3 co dau 8x8:8 nhung UV nam o o 7 -> o 7 trong nhu con
+# trong -> object moi xep de len texture cua no. Phai lay HOP cua ca hai cach
+# doc, khong tin mot minh cai dau.
+check(mod._cells_covered(9, 16, 16, 8, 8) == {4},
+      "o 9 cua grid 16x16 nam trong o 4 cua grid 8x8 (duoc %s)"
+      % mod._cells_covered(9, 16, 16, 8, 8))
+check(mod._cells_covered(4, 8, 8, 16, 16) == {8, 9, 24, 25},
+      "o 4 cua grid 8x8 phu 4 o cua grid 16x16 (duoc %s)"
+      % sorted(mod._cells_covered(4, 8, 8, 16, 16)))
+check(mod._cells_covered(0, 3, 3, 3, 3) == {0}, "grid bang nhau -> chinh no")
+
+props.cols = props.rows = 8
+lech = make_obj("lech")
+mod._place_uv_in_cell(lech.data, mod._cell_rect(7, 8, 8))   # UV that o o 7
+mod._stamp_cell(lech, 8, 8, 8)                              # dau lai khai o 8
+check(mod._object_cells(lech, 8, 8, 8, 8) == {7, 8},
+      "dau lech UV -> chiem ca hai o, khong bo sot o that (duoc %s)"
+      % sorted(mod._object_cells(lech, 8, 8, 8, 8)))
+check(mod._stamp_disagrees(lech, 8, 8, 8, 8), "phat hien duoc dau lech")
+mod._stamp_cell(lech, 8, 8, 7)
+check(not mod._stamp_disagrees(lech, 8, 8, 8, 8), "dau khop thi khong bao lech")
+bpy.data.objects.remove(lech)
+props.cols = props.rows = 3
 
 # --- Chia nho o: asset nho vao 1/4 o cua palette tho -----------------------
 # Palette rieng de khong dinh toi palette 3x3 o tren.
