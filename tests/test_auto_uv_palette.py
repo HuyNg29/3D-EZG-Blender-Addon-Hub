@@ -546,6 +546,53 @@ for grid, label in (((3, 3), "grid khop palette"),
               "panel co du nut/o nhap moi (%s)" % label)
 props.cols, props.rows = 3, 3
 
+
+# --- Xen ke co o nho / o to / o nho -----------------------------------------
+# Them 16x16, roi 8x8, roi 16x16 nua: cai 16x16 sau phai QUAY LAI lap not o
+# tho dang do, khong mo o tho moi ben canh cai 8x8. Khong the thi moi lan xen
+# ke la mat 3/4 mot o tho.
+for ob in list(bpy.context.scene.objects):
+    bpy.data.objects.remove(ob)
+for mat in [m for m in bpy.data.materials if m.name.startswith("UVPalette_")]:
+    bpy.data.materials.remove(mat)
+props.palette_image = ""
+
+props.cols = props.rows = 8
+_base = [make_obj("to%d" % i) for i in range(3)]      # o tho 0, 1, 2
+select(_base)
+bpy.ops.object.auto_uv_palette_pack()
+
+
+def add_at(name, grid):
+    """Them 1 object o grid chi dinh, tra ve o tho 8x8 ma no roi vao."""
+    props.cols = props.rows = grid
+    ob = make_obj(name)
+    select([ob])
+    bpy.ops.object.auto_uv_palette_add()
+    scols, srows, index = mod._stamped_cell(ob)
+    return sorted(mod._cells_covered(index, scols, srows, 8, 8)), index
+
+
+_a_coarse, _a_fine = add_at("A_16", 16)
+check(_a_coarse == [3], "16x16 dau tien mo o tho 3 (duoc %s)" % _a_coarse)
+
+_b_coarse, _ = add_at("B_8", 8)
+check(_b_coarse == [4],
+      "8x8 tiep theo tranh o tho 3 dang do, sang o tho 4 (duoc %s)" % _b_coarse)
+
+for _n in ("C_16", "D_16", "E_16"):
+    _coarse, _fine = add_at(_n, 16)
+    check(_coarse == [3],
+          "%s quay lai lap not o tho 3, khong mo o moi canh 8x8 (duoc %s)"
+          % (_n, _coarse))
+
+_f_coarse, _ = add_at("F_16", 16)
+check(_f_coarse == [5],
+      "o tho 3 day 4/4 roi -> 16x16 tiep theo moi mo o tho moi (duoc %s)"
+      % _f_coarse)
+
+props.cols = props.rows = 8
+
 if FAILED:
     print("\nFAILED %d:" % len(FAILED))
     for m in FAILED:
