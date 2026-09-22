@@ -26,6 +26,64 @@ class RetargetError(Exception):
     pass
 
 
+def bind_slot(ad, action):
+    """Blender 4.4+ dung slotted action: gan action xong con phai co slot.
+
+    Blender tu noi lai slot theo TEN khi doi action, nen viec nay chi can thiet
+    trong mot truong hop — va do la truong hop hay gap nhat o day: action sinh
+    ra tren rig khac (import FBX, rig nguon) co slot mang ten rig do. Ten khong
+    khop object hien tai thi `action_slot` ve None, action duoc lien ket nhung
+    KHONG dieu khien gi ca — tu the dung im, khong mot dong bao loi.
+
+    Chi noi khi dang trong (`is None`). Ep noi lai luon se de cho action nhieu
+    slot bi keo ve slot dau, sai slot dang dung dung.
+    """
+    if not hasattr(ad, "action_slot"):
+        return False
+    if ad.action_slot is not None:
+        return False
+    cands = list(getattr(ad, "action_suitable_slots", None) or ())
+    if not cands:
+        cands = list(getattr(action, "slots", None) or ())
+    if not cands:
+        return False
+    try:
+        ad.action_slot = cands[0]
+    except Exception:
+        return False
+    return True
+
+
+def action_fcurves(action):
+    """Moi F-Curve cua action, ke ca action co slot (Blender 4.4+).
+
+    `action.fcurves` la loi vao cu; voi action nhieu slot no khong nhin thay
+    het kenh, nen moi phep dem/do phai di qua day.
+    """
+    out = []
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            if getattr(strip, "type", "KEYFRAME") != 'KEYFRAME':
+                continue
+            for slot in action.slots:
+                try:
+                    bag = strip.channelbag(slot)
+                except Exception:
+                    bag = None
+                if bag is not None:
+                    out.extend(bag.fcurves)
+    return out or list(action.fcurves)
+
+
+def action_is_static(action, tol=1e-6):
+    """Moi kenh cua action deu la hang so."""
+    for fc in action_fcurves(action):
+        vals = [k.co[1] for k in fc.keyframe_points]
+        if vals and (max(vals) - min(vals)) > tol:
+            return False
+    return True
+
+
 def hierarchy_order(arm):
     """Tên xương theo thứ tự cha trước, con sau."""
     order = []
@@ -45,6 +103,16 @@ def rest_head_world(ob, bone_name):
     return ob.matrix_world @ ob.data.bones[bone_name].matrix_local.translation
 
 
+def is_descendant(arm, ancestor, name):
+    """`name` co nam duoi `ancestor` trong cay xuong khong."""
+    b = arm.bones.get(name)
+    while b is not None:
+        b = b.parent
+        if b is not None and b.name == ancestor:
+            return True
+    return False
+
+
 def build_alignment(src_ob, tgt_ob, pairs):
     """Phép bù lệch rest pose cho từng xương đích -> {tên_xương: Matrix 3x3}.
 
@@ -54,6 +122,15 @@ def build_alignment(src_ob, tgt_ob, pairs):
     align = {}
     for p in pairs:
         sc, tc = p.get("src_child"), p.get("tgt_child")
+        # `resolve_children` lay xuong theo VAI TRO ke tiep, khong kiem tra quan
+        # he cha-con. Rig kieu IK co the tra ve xuong o NHANH KHAC (co chan IK
+        # treo thang vao root, khong nam duoi dau goi): vector do huong chi khi
+        # do la rac, ma tran can lech hang chuc do ma khong bao gi. Khong phai
+        # hau due thi bo, de roi ve fallback ke thua phep can cua xuong cha.
+        if sc and not is_descendant(src_ob.data, p["src"], sc):
+            sc = None
+        if tc and not is_descendant(tgt_ob.data, p["tgt"], tc):
+            tc = None
         if not sc or not tc:
             align[p["tgt"]] = None
             continue
@@ -76,6 +153,37 @@ def build_alignment(src_ob, tgt_ob, pairs):
             b = b.parent
         align[name] = align[b.name].copy() if b is not None else Matrix.Identity(3)
     return align
+
+
+def source_moves(context, src_ob, bone_names, frame_start, frame_end, tol=1e-6):
+    """Tu the cua `src_ob` co thay doi qua khoang frame khong.
+
+    `view_layer.update()` sau moi `frame_set` la bat buoc: thieu no thi
+    `pose_bone.matrix` co the con la tu the cua frame truoc, va phep do nay se
+    bao "dung im" cho moi rig.
+    """
+    names = [n for n in bone_names if n in src_ob.pose.bones]
+    if not names:
+        return False
+    f0, f1 = int(frame_start), int(frame_end)
+    frames = sorted({f0, (f0 + f1) // 2, f1})
+    scene = context.scene
+    saved = scene.frame_current
+    try:
+        samples = []
+        for f in frames:
+            scene.frame_set(f)
+            context.view_layer.update()
+            samples.append([src_ob.pose.bones[n].matrix.copy() for n in names])
+        first = samples[0]
+        for row in samples[1:]:
+            for a, b in zip(row, first):
+                if max(abs(a[i][j] - b[i][j])
+                       for i in range(4) for j in range(4)) > tol:
+                    return True
+        return False
+    finally:
+        scene.frame_set(saved)
 
 
 def auto_hips_scale(src_ob, tgt_ob, src_hips, tgt_hips):
@@ -114,6 +222,18 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
             ob.data.pose_position = 'POSE'
             report.append("Armature %s dang o Rest Position, da chuyen sang Pose." % nhan)
 
+    # Slot cua action nguon. Xem bind_slot(): action sinh ra tren rig khac mang
+    # slot ten rig do, khong khop thi action nam do ma khong dieu khien gi.
+    if bind_slot(ad, ad.action):
+        report.append("Action nguon '%s' chua noi Action Slot, da noi lai."
+                      % ad.action.name)
+    if hasattr(ad, "action_slot") and ad.action_slot is None:
+        raise RetargetError(
+            "Action '%s' khong noi duoc Action Slot nao tren '%s' nen no khong "
+            "dieu khien xuong gi — bake se ra mot loat khung hinh dung im. "
+            "Gan lai action trong Action Editor roi thu lai."
+            % (ad.action.name, src_ob.name))
+
     src_bones = src_ob.data.bones
     tgt_bones = tgt_ob.data.bones
     pairs = [p for p in pairs
@@ -148,6 +268,63 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
                      else auto_hips_scale(src_ob, tgt_ob, hips_src, hips_tgt))
             hips_rest_src_w = rest_head_world(src_ob, hips_src)
             hips_rest_tgt_w = rest_head_world(tgt_ob, hips_tgt)
+
+    # Chot cuoi truoc khi bake: action nguon co chuyen dong ma rig lai dung im
+    # thi co thu gi do dang chan viec danh gia (driver, NLA solo, constraint...).
+    # Ca bo loi nay deu hong AM THAM — du fcurve, du keyframe, khong exception —
+    # nen phai bat bang gia tri, khong the trong vao co che bao loi cua Blender.
+    if not action_is_static(ad.action) and not source_moves(
+            context, src_ob, [p["src"] for p in pairs], frame_start, frame_end):
+        raise RetargetError(
+            "Action '%s' co chuyen dong nhung tu the cua '%s' khong doi qua cac "
+            "frame. Kiem tra driver, NLA (track dang solo?) hoac constraint dang "
+            "khoa xuong. Bake luc nay chi ra khung hinh dung im."
+            % (ad.action.name, src_ob.name))
+
+    # --- Truyen vi tri per-bone (rig kieu IK) ------------------------------
+    # Rig IK treo co chan/co tay thanh nhanh rieng vao root: VI TRI cua chung
+    # moi la diem dat ban chan, khong phai goc xoay. Chi truyen goc thi co chan
+    # dung nguyen o rest trong khi than di chuyen -> chan keo gian.
+    #
+    # Dat theo huong cua rig nguon nhung DAI theo ti le chi cua rig dich, do tu
+    # mot xuong neo do nguoi dung chon. Khong tu doan xuong neo: neo co chan vao
+    # dau goi cho ket qua tot hon han neo vao hong, ma chi nguoi dung biet rig
+    # cua minh dung kieu nao.
+    src_of_tgt = {p["tgt"]: p["src"] for p in pairs}
+    pos_rules = []
+    for p in pairs:
+        if not p.get("pos"):
+            continue
+        name, a_tgt = p["tgt"], p.get("anchor")
+        if not a_tgt:
+            report.append("'%s' bat truyen vi tri nhung chua chon xuong neo, bo qua."
+                          % name)
+            continue
+        a_src = src_of_tgt.get(a_tgt)
+        if a_src is None:
+            report.append("Xuong neo '%s' cua '%s' khong co trong bang anh xa, bo qua."
+                          % (a_tgt, name))
+            continue
+        if tgt_bones[name].use_connect:
+            # Blender bo qua location cua xuong Connected: co key cung vo ich.
+            report.append("'%s' dang Connected nen khong nhan vi tri duoc, bo qua."
+                          % name)
+            continue
+        d_src = (rest_head_world(src_ob, p["src"])
+                 - rest_head_world(src_ob, a_src)).length
+        d_tgt = (rest_head_world(tgt_ob, name)
+                 - rest_head_world(tgt_ob, a_tgt)).length
+        if d_src < 1e-9:
+            report.append("'%s' trung vi tri voi xuong neo o rest, bo qua truyen vi tri."
+                          % name)
+            continue
+        pos_rules.append((name, p["src"], a_tgt, a_src, d_tgt / d_src))
+
+    # Theo thu tu cay: xuong neo phai duoc chot vi tri truoc khi xuong khac do
+    # theo no. `hierarchy_order` da la cha-truoc-con.
+    rank = {n: i for i, n in enumerate(order)}
+    pos_rules.sort(key=lambda r: rank.get(r[0], 0))
+    pos_names = {r[0] for r in pos_rules}
 
     for pb in tgt_ob.pose.bones:
         pb.rotation_mode = 'QUATERNION'
@@ -202,10 +379,38 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
             pose[name] = desired
             tgt_ob.pose.bones[name].matrix_basis = base.inverted() @ desired
 
+        # Pass 2: dat lai VI TRI cho cac xuong IK. Phai lam sau vong tren vi
+        # xuong neo co the dung SAU trong thu tu duyet (co chan IK treo vao root
+        # thuong di truoc ca chuoi dui-goi), luc do chua co vi tri de ma do.
+        for name, s_name, a_tgt, a_src, k in pos_rules:
+            v = ((Ms @ src_ob.pose.bones[s_name].matrix).translation
+                 - (Ms @ src_ob.pose.bones[a_src].matrix).translation)
+            want_w = (Mt @ pose[a_tgt].translation) + v * k
+            loc = Mt_inv @ want_w
+
+            old = pose[name]
+            desired = (Matrix.Translation(loc)
+                       @ old.to_quaternion().to_matrix().to_4x4())
+            delta = desired.translation - old.translation
+            pose[name] = desired
+
+            bone = tgt_bones[name]
+            parent = bone.parent
+            base = rest[name].copy() if parent is None else \
+                pose[parent.name] @ (rest[parent.name].inverted() @ rest[name])
+            tgt_ob.pose.bones[name].matrix_basis = base.inverted() @ desired
+
+            # Con chau chi tinh tien theo, huong khong doi — cap nhat de xuong
+            # neo cua luat sau doc duoc vi tri dung.
+            for child in bone.children_recursive:
+                if child.name in pose:
+                    pose[child.name] = (Matrix.Translation(delta)
+                                        @ pose[child.name])
+
         for name in smap:
             pb = tgt_ob.pose.bones[name]
             pb.keyframe_insert("rotation_quaternion", frame=f)
-            if name == hips_tgt:
+            if name == hips_tgt or name in pos_names:
                 pb.keyframe_insert("location", frame=f)
 
     for fc in act.fcurves:

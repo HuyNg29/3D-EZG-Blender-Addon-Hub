@@ -1,15 +1,25 @@
 """Lật gương trái/phải một action.
 
-Cách làm: **soi gương ma trận tư thế trong không gian armature**, không lật dấu
-thành phần quaternion. Với mỗi xương, tư thế mới lấy từ xương ĐỐI BÊN:
+Cách làm: **soi gương ma trận BIẾN DẠNG trong không gian armature**, không lật
+dấu thành phần quaternion. Thứ điều khiển skin là ma trận biến dạng
+`D = P @ rest⁻¹`, nên điều kiện để mesh biến dạng đúng ảnh gương là:
 
-    P_moi(b) = Mx @ P_cu(doi_ben(b)) @ Mx        (Mx: lật qua mặt phẳng YZ)
+    D_b = Mx @ D_m @ Mx        (Mx: lật qua mặt phẳng YZ)
 
-Mx là phép phản chiếu (det = -1) nên `Mx @ P @ Mx` vẫn là phép quay thuận. Cách
+suy ra tư thế phải ghi cho xương b, lấy từ xương ĐỐI BÊN m:
+
+    P_b = Mx @ P_m @ rest_m⁻¹ @ Mx @ rest_b
+
+Mx là phép phản chiếu (det = -1) nên `Mx @ D @ Mx` vẫn là phép quay thuận. Cách
 này khỏi phải đoán quy ước dấu quaternion của từng rig, và đúng kể cả khi hai bên
 đặt trục xương khác nhau.
 
-Hai bài học đắt giá đã gói vào đây:
+Lật thẳng ma trận tư thế (`Mx @ P @ Mx`) chỉ đúng khi rest pose đối xứng. Rig mua
+ngoài rất hay có hai bên **vị trí đối xứng hoàn hảo nhưng roll ngược nhau 180°**;
+khi đó xương về đúng chỗ mà **mesh rách nát** — đo bằng chỉ số méo cạnh thì bản
+lật cho 257–268 cạnh méo trong khi clip bình thường chỉ 15–66.
+
+Ba bài học đắt giá đã gói vào đây:
 
 1. **Sao đủ kênh.** Action gốc thường có cả 9 fcurve cấp OBJECT (location /
    rotation_euler / scale). Nếu bản lật gương chỉ có kênh của xương, trong
@@ -20,12 +30,18 @@ Hai bài học đắt giá đã gói vào đây:
 2. **Tự tính FK.** `pose_bone.matrix` có thể còn cũ sau `frame_set` ở một số ngữ
    cảnh chạy script, làm mọi phép đo ra 0 và tưởng animation đứng yên. Ở đây
    dựng ma trận từ `matrix_basis` + rest nên luôn đúng.
+
+3. **Lấy vị trí gương cho mọi xương, không chỉ xương gốc.** Rig kiểu IK mang vị
+   trí thật trên cổ chân/cổ tay; dựng lại vị trí từ rest là vứt sạch chỗ đặt bàn
+   chân, nhân vật tụt hẳn xuống dưới mặt đất.
 """
 
 import math
 
 import bpy
 from mathutils import Matrix, Quaternion
+
+from . import core
 
 
 class MirrorError(Exception):
@@ -107,18 +123,8 @@ def _object_level(action):
 
 
 def _bind_slot(ad, action):
-    """Blender 4.4+ dung slotted action: gan action xong con phai co slot.
-
-    Khong co slot thi action duoc lien ket nhung KHONG dieu khien gi ca — tu the
-    dung im ma khong bao loi.
-    """
-    if not hasattr(ad, "action_slot"):
-        return
-    if ad.action_slot is None and getattr(action, "slots", None):
-        try:
-            ad.action_slot = action.slots[0]
-        except Exception:
-            pass
+    """Xem core.bind_slot(). Giu ten cu o day cho khoi doi het cho goi."""
+    return core.bind_slot(ad, action)
 
 
 def mirror_action(context, ob, src_action, new_name, clone=True):
@@ -169,8 +175,11 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
 
     dt, da, worst = rest_symmetry_error(ob)
     if dt > 0.002 or da > 2.0:
-        report.append("Rest pose khong doi xung (lech %.1f mm / %.1f do o '%s'): "
-                      "vi tri khop hai ban se lech chut it."
+        # Tu khi lat theo ma tran bien dang, rest lech khong con lam hong ket
+        # qua nua — day chi la thong tin ve chinh cai rig.
+        report.append("Rest pose khong doi xung (lech %.1f mm / %.1f do o '%s'). "
+                      "Phep lat da bu duoc chuyen nay; ghi lai de biet dac diem "
+                      "cua rig."
                       % (dt * 1000.0, da, worst.replace("mixamorig:", "")))
 
     Mx = Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0))
@@ -240,13 +249,22 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
                 src = mirror_name(n)
                 if src not in src_pose[f]:
                     src = n
-                Pm = Mx @ src_pose[f][src] @ Mx
+                # Lat MA TRAN BIEN DANG (D = P @ rest^-1), khong phai ma tran
+                # tu the. Skin duoc dinh nghia theo rest, nen dieu kien de mesh
+                # bien dang dung anh guong la D_b = Mx @ D_m @ Mx, suy ra
+                # P_b = Mx @ P_m @ rest_m^-1 @ Mx @ rest_b. Dung ke ca khi rest
+                # hai ben khong doi xung (roll trai/phai nguoc nhau) — truong
+                # hop ma cong thuc cu (Mx @ P @ Mx) lam skin xoan rach.
+                D = src_pose[f][src] @ rest[src].inverted()
+                Pm = (Mx @ D @ Mx) @ rest[n]
                 rot = Pm.to_quaternion().to_matrix().to_4x4()
 
                 base = rest[n].copy() if parent is None else \
                     P[parent.name] @ (rest[parent.name].inverted() @ rest[n])
-                loc = Pm.translation if parent is None else base.translation
-                P[n] = Matrix.Translation(loc) @ rot
+                # Moi xuong lay vi tri guong cua chinh no, khong dung lai tu
+                # rest: rig kieu IK mang vi tri that tren xuong co chan/co tay,
+                # dung base.translation la vut sach vi tri do va chan roi tu do.
+                P[n] = Matrix.Translation(Pm.translation) @ rot
                 ob.pose.bones[n].matrix_basis = base.inverted() @ P[n]
 
             # Ghi DU kenh: thieu kenh cap object la nhan vat sai scale khi export.
@@ -324,7 +342,10 @@ def mirror_error(context, ob, src_action, dst_action):
                 src = mirror_name(n)
                 if src not in A[f]:
                     src = n
-                want = (Mx @ A[f][src] @ Mx).to_quaternion()
+                # Cung cong thuc bien dang nhu mirror_action, neu khong ham nay
+                # se bao sai lech gia tren dung rig ma no can kiem chung nhat.
+                D = A[f][src] @ rest[src].inverted()
+                want = ((Mx @ D @ Mx) @ rest[n]).to_quaternion()
                 got = B[f][n].to_quaternion()
                 d = want.rotation_difference(got).angle
                 d = math.degrees(min(d, 2 * math.pi - d))

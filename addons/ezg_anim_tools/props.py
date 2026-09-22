@@ -25,6 +25,19 @@ class EZG_AT_MapItem(PropertyGroup):
     src: StringProperty(name="Source bone", default="")
     tgt: StringProperty(name="Target bone", default="")
     use: BoolProperty(name="Use", default=True)
+    pos: BoolProperty(
+        name="Transfer position", default=False,
+        description=("Truyen ca VI TRI cua xuong nay, khong chi goc xoay. Bat cho "
+                     "xuong IK mang vi tri that (co chan, co tay treo rieng vao "
+                     "root). Xuong FK binh thuong thi de tat"),
+    )
+    anchor: StringProperty(
+        name="Anchor bone", default="",
+        description=("Xuong DICH dung lam moc do vi tri (phai la mot cap khac dang "
+                     "co trong bang). Vi tri dat theo huong cua rig nguon nhung dai "
+                     "theo ti le chi cua rig dich, tinh tu moc nay. Neo co chan vao "
+                     "DAU GOI cho ket qua tot hon nhieu so voi neo vao hong"),
+    )
 
     @property
     def label(self):

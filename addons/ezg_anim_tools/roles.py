@@ -234,5 +234,8 @@ def resolve_children(rows):
             "tgt": r.tgt,
             "src_child": child.src if child else None,
             "tgt_child": child.tgt if child else None,
+            # Truyen vi tri per-bone (rig IK). Mac dinh tat -> hanh vi cu.
+            "pos": bool(getattr(r, "pos", False)),
+            "anchor": getattr(r, "anchor", "") or None,
         })
     return out

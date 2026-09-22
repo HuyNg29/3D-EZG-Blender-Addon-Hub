@@ -29,6 +29,16 @@ class EZG_AT_UL_map(UIList):
         else:
             sub.prop(item, "tgt", text="")
 
+        # Truyen vi tri: chi rig IK moi can, nen de gon o cuoi dong. O chon
+        # xuong neo chi hien khi da bat, khong thi hang danh sach roi ram.
+        sub.prop(item, "pos", text="", icon='CON_LOCLIKE')
+        if item.pos:
+            if st.target and st.target.type == 'ARMATURE':
+                sub.prop_search(item, "anchor", st.target.data, "bones",
+                                text="", icon='SNAP_ON')
+            else:
+                sub.prop(item, "anchor", text="")
+
 
 class EZG_AT_PT_retarget(Panel):
     bl_label = "Retarget"
@@ -69,7 +79,14 @@ class EZG_AT_PT_retarget(Panel):
         col.operator("ezg_at.clear_map", text="", icon='TRASH')
 
         n = sum(1 for r in st.mapping if r.use and r.src and r.tgt)
-        box.label(text="%d cap dang bat" % n)
+        n_pos = sum(1 for r in st.mapping if r.use and r.pos and r.src and r.tgt)
+        box.label(text="%d cap dang bat%s"
+                  % (n, (", %d truyen vi tri" % n_pos) if n_pos else ""))
+        col = box.column()
+        col.scale_y = 0.7
+        col.label(text="Nut vi tri (mui ten): bat cho xuong IK mang", icon='CON_LOCLIKE')
+        col.label(text="vi tri that (co chan/co tay treo rieng vao root),")
+        col.label(text="roi chon xuong neo — neo vao dau goi tot hon hong.")
 
         box = layout.box()
         box.label(text="Options", icon='OPTIONS')

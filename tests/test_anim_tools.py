@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ezg_testkit as kit  # noqa: E402
 
 import bpy  # noqa: E402
-from mathutils import Euler, Quaternion, Vector  # noqa: E402
+from mathutils import Euler, Matrix, Quaternion, Vector  # noqa: E402
 
 FAILED = []
 
@@ -341,6 +341,316 @@ check(n_obj_cl == 9, "clone giu du 9 fcurve cap object (%d)" % n_obj_cl)
 err_cl, _ = mirror.mirror_error(ctx, tgt, src_act, cl)
 print("    ban clone lech: %.5f do" % err_cl)
 check(err_cl < 0.01, "ban clone lat guong cung chinh xac (< 0.01 do)")
+
+
+# ---------------------------------------------------------------------------
+# Rig co rest KHONG doi xung ve huong (vi tri khop hoan hao, roll hai ben nguoc
+# nhau 180 do). Rat pho bien o rig game mua ngoai.
+#
+# Lat thang ma tran tu the (Mx @ P @ Mx) dua xuong ve dung cho nhung XOAN SKIN:
+# thu dieu khien mesh la ma tran bien dang D = P @ rest^-1, va dieu kien dung la
+# D_lat = Mx @ D_goc @ Mx. Test do thang vao D nen bat duoc loi nay chinh xac,
+# khong phu thuoc vao viec nhin mesh.
+# ---------------------------------------------------------------------------
+print("\n-- Rest lech roll 180 do --")
+
+asym = build("AsymRig", [
+    ("root",  (0, 0, 0.0), (0, 0, 0.2), None),
+    ("L_up",  (0.1, 0, 0.0), (0.1, 0, 0.5), "root"),
+    ("L_lo",  (0.1, 0, 0.5), (0.1, 0, 1.0), "L_up"),
+    ("R_up",  (-0.1, 0, 0.0), (-0.1, 0, 0.5), "root"),
+    ("R_lo",  (-0.1, 0, 0.5), (-0.1, 0, 1.0), "R_up"),
+    # Xuong mang vi tri that, treo thang vao root nhu co chan IK.
+    ("L_ik",  (0.1, 0, 1.0), (0.1, 0, 1.1), "root"),
+    ("R_ik",  (-0.1, 0, 1.0), (-0.1, 0, 1.1), "root"),
+])
+bpy.context.view_layer.objects.active = asym
+bpy.ops.object.mode_set(mode='EDIT')
+for name in ("R_up", "R_lo", "R_ik"):
+    asym.data.edit_bones[name].roll = math.pi      # lech 180 do so voi ben trai
+bpy.ops.object.mode_set(mode='OBJECT')
+bpy.context.view_layer.update()
+
+dt_a, da_a, _ = mirror.rest_symmetry_error(asym)
+print("    rest lech: %.4f mm / %.1f do" % (dt_a * 1000.0, da_a))
+check(dt_a < 1e-4, "rig thu nghiem: vi tri rest doi xung hoan hao")
+check(da_a > 170.0, "rig thu nghiem: huong rest lech ~180 do (%.1f)" % da_a)
+
+# Action tren ben TRAI: xoay + day xuong IK di mot doan that.
+asym_act = bpy.data.actions.new("AsymMotion")
+asym_act.use_fake_user = True
+ad_a = asym.animation_data_create()
+ad_a.action = asym_act
+for pb in asym.pose.bones:
+    pb.rotation_mode = 'QUATERNION'
+for f, ang, dx in ((1, 0.0, 0.0), (10, 0.6, 0.25)):
+    ctx.scene.frame_set(f)
+    asym.pose.bones["L_up"].rotation_quaternion = Quaternion((0, 1, 0), ang)
+    asym.pose.bones["L_lo"].rotation_quaternion = Quaternion((1, 0, 0), ang * 0.5)
+    asym.pose.bones["L_ik"].location = Vector((dx, 0.0, -0.1))
+    for n in ("L_up", "L_lo", "L_ik"):
+        asym.pose.bones[n].keyframe_insert("rotation_quaternion", frame=f)
+        asym.pose.bones[n].keyframe_insert("location", frame=f)
+
+A_REST = {b.name: b.matrix_local.copy() for b in asym.data.bones}
+A_ORDER = mirror.hierarchy_order(asym.data)
+
+
+def fk_from_action(act, f):
+    """Tu the trong khong gian armature, tinh THANG tu fcurve.
+
+    Khong dung pose_bone.matrix: sau khi doi action/frame trong script no co the
+    con la tu the cua clip truoc, va moi phep do se ra "moi clip deu giong nhau".
+    """
+    fcs = core.action_fcurves(act)
+    P = {}
+    for n in A_ORDER:
+        q = [1.0, 0.0, 0.0, 0.0]
+        loc = [0.0, 0.0, 0.0]
+        for fc in fcs:
+            if fc.data_path == 'pose.bones["%s"].rotation_quaternion' % n:
+                q[fc.array_index] = fc.evaluate(f)
+            elif fc.data_path == 'pose.bones["%s"].location' % n:
+                loc[fc.array_index] = fc.evaluate(f)
+        qq = Quaternion(q)
+        qq.normalize()
+        basis = Matrix.Translation(Vector(loc)) @ qq.to_matrix().to_4x4()
+        parent = asym.data.bones[n].parent
+        base = A_REST[n].copy() if parent is None else \
+            P[parent.name] @ (A_REST[parent.name].inverted() @ A_REST[n])
+        P[n] = base @ basis
+    return P
+
+
+def deform_gap(act_src, act_dst, frames):
+    """max ||D_lat - Mx @ D_goc @ Mx||. Bang 0 nghia la skin bien dang dung guong."""
+    Mx = Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0))
+    worst = 0.0
+    for f in frames:
+        Ps, Pd = fk_from_action(act_src, f), fk_from_action(act_dst, f)
+        for n in A_ORDER:
+            s = mirror.mirror_name(n)
+            if s not in Ps:
+                s = n
+            want = Mx @ (Ps[s] @ A_REST[s].inverted()) @ Mx
+            got = Pd[n] @ A_REST[n].inverted()
+            worst = max(worst, max(abs(want[i][j] - got[i][j])
+                                   for i in range(4) for j in range(4)))
+    return worst
+
+
+asym_mir, _ = mirror.mirror_action(ctx, asym, asym_act, "AsymMotion_Mirror")
+gap = deform_gap(asym_act, asym_mir, (1, 5, 10))
+print("    sai lech ma tran bien dang: %.9f" % gap)
+check(gap < 1e-5, "skin bien dang dung anh guong tren rig rest lech (%.2e)" % gap)
+
+# Chung minh phep lat CU that su hong tren rig nay — neu khong, test tren se
+# van dat ke ca khi ai do quay ve cong thuc cu.
+Mx_t = Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0))
+old_gap = 0.0
+for f in (1, 5, 10):
+    Ps = fk_from_action(asym_act, f)
+    for n in A_ORDER:
+        s = mirror.mirror_name(n)
+        if s not in Ps:
+            s = n
+        want = Mx_t @ (Ps[s] @ A_REST[s].inverted()) @ Mx_t
+        old = (Mx_t @ Ps[s] @ Mx_t) @ A_REST[n].inverted()   # cong thuc cu
+        old_gap = max(old_gap, max(abs(want[i][j] - old[i][j])
+                                   for i in range(4) for j in range(4)))
+print("    cong thuc cu lech: %.4f" % old_gap)
+check(old_gap > 0.5,
+      "cong thuc cu (Mx@P@Mx) that su sai tren rig nay -> test co y nghia")
+
+# Loi 2: xuong IK mang vi tri that phai duoc lat, khong bi dung lai tu rest.
+P_src = fk_from_action(asym_act, 10)
+P_mir = fk_from_action(asym_mir, 10)
+want_x = -P_src["L_ik"].translation.x
+got_x = P_mir["R_ik"].translation.x
+print("    vi tri xuong IK: goc L_ik x=%.4f -> lat R_ik x=%.4f (ky vong %.4f)"
+      % (P_src["L_ik"].translation.x, got_x, want_x))
+check(abs(got_x - want_x) < 1e-5, "vi tri xuong IK duoc lat dung, khong bi vut")
+check(abs(P_mir["R_ik"].translation.z - P_src["L_ik"].translation.z) < 1e-5,
+      "vi tri xuong IK giu nguyen do cao khi lat")
+
+
+# ---------------------------------------------------------------------------
+# build_alignment phai bo qua "xuong con" nam o nhanh khac (rig kieu IK)
+# ---------------------------------------------------------------------------
+print("\n-- Xuong con khac nhanh --")
+check(core.is_descendant(asym.data, "L_up", "L_lo"),
+      "is_descendant: L_lo nam duoi L_up")
+check(not core.is_descendant(asym.data, "L_lo", "L_ik"),
+      "is_descendant: L_ik KHONG nam duoi L_lo (nhanh rieng)")
+
+cross = [{"role": "shin", "side": "L", "src": "L_lo", "tgt": "L_lo",
+          "src_child": "L_ik", "tgt_child": "L_ik"}]
+al = core.build_alignment(asym, asym, cross)
+check(al["L_lo"] == Matrix.Identity(3),
+      "build_alignment: xuong con khac nhanh -> roi ve fallback, khong lay rac")
+
+
+# ---------------------------------------------------------------------------
+# Action slot: action cua rig khac khong dieu khien gi, bake ra se dung im
+# ---------------------------------------------------------------------------
+print("\n-- Action Slot --")
+if hasattr(ad_a, "action_slot"):
+    foreign = asym_act.copy()
+    foreign.name = "ForeignSlot"
+    foreign.use_fake_user = True
+    try:
+        foreign.slots[0].name_display = "MotRigKhac"
+    except Exception:
+        pass
+    ad_a.action = None
+    ad_a.action = foreign
+    check(ad_a.action_slot is None,
+          "slot ten khac object -> Blender de trong (goc cua bug 'bake ra tinh')")
+    check(core.bind_slot(ad_a, foreign), "bind_slot noi lai duoc slot dang trong")
+    check(ad_a.action_slot is not None, "sau bind_slot da co slot")
+    # Da co slot roi thi khong duoc doi nua: action nhieu slot se bi keo sai.
+    check(not core.bind_slot(ad_a, foreign), "bind_slot khong doi slot dang dung")
+    ad_a.action = asym_act
+    core.bind_slot(ad_a, asym_act)
+
+check(core.action_is_static(bpy.data.actions.new("Rong")),
+      "action_is_static: action rong la tinh")
+check(not core.action_is_static(asym_act),
+      "action_is_static: action co chuyen dong khong bi bao tinh")
+
+
+# ---------------------------------------------------------------------------
+# Rig kieu IK: co chan treo thang vao root thanh nhanh rieng, VI TRI cua no moi
+# la diem dat ban chan. Chi truyen goc xoay thi co chan dung yen o rest trong
+# khi than di chuyen -> chi bi keo gian.
+#
+# Do bang **do gian cua doan goi->co chan** so voi rest. Day la phep do dung
+# cho viec nay: hai rig khac ti le co the thi khong the khop vi tri tuyet doi,
+# nhung mot cai chan khong duoc dai ra ngan lai.
+# ---------------------------------------------------------------------------
+print("\n-- Rig IK: truyen vi tri per-bone --")
+
+
+def ik_bones(hip_z, knee_z):
+    """root -> hip -> knee (chuoi FK), va ankle treo THANG vao root."""
+    return [
+        ("root",  (0, 0, 0.0), (0, 0, 0.1), None),
+        ("hip",   (0, 0, hip_z), (0, 0, hip_z - 0.1), "root"),
+        ("knee",  (0, 0, knee_z), (0, 0, knee_z - 0.1), "hip"),
+        ("ankle", (0, 0, 0.05), (0, 0.1, 0.05), "root"),
+    ]
+
+
+# Hai nhan vat khac TI LE CHI, khong phai ban thu nho deu: dui/ong cua dich
+# ngan hon han so voi chieu cao hong. Day moi la ca ma he so k co viec de lam.
+ik_src = build("IK_SRC", ik_bones(1.00, 0.55))
+ik_tgt = build("IK_TGT", ik_bones(0.70, 0.45))
+
+ik_act = bpy.data.actions.new("IKMotion")
+ik_src.animation_data_create().action = ik_act
+for pb in ik_src.pose.bones:
+    pb.rotation_mode = 'QUATERNION'
+for f, ang, dy in ((1, 0.0, 0.0), (6, 0.7, 0.30)):
+    ctx.scene.frame_set(f)
+    ik_src.pose.bones["hip"].rotation_quaternion = Quaternion((1, 0, 0), ang)
+    ik_src.pose.bones["knee"].rotation_quaternion = Quaternion((1, 0, 0), -ang)
+    # Ban chan buoc han ra truoc — dung thu ma rig IK dung xuong nay de ta.
+    ik_src.pose.bones["ankle"].location = Vector((0.0, dy, 0.0))
+    for n in ("hip", "knee", "ankle"):
+        ik_src.pose.bones[n].keyframe_insert("rotation_quaternion", frame=f)
+        ik_src.pose.bones[n].keyframe_insert("location", frame=f)
+
+ik_pairs_base = [
+    {"role": "hips", "side": "", "src": "hip", "tgt": "hip",
+     "src_child": "knee", "tgt_child": "knee"},
+    {"role": "shin", "side": "", "src": "knee", "tgt": "knee",
+     "src_child": None, "tgt_child": None},
+    {"role": "foot", "side": "", "src": "ankle", "tgt": "ankle",
+     "src_child": None, "tgt_child": None},
+]
+
+
+FRAMES = list(range(1, 7))
+
+
+def ankle_offsets(ob):
+    """Vi tri co chan so voi xuong neo (goi), tung frame, trong khong gian the gioi.
+
+    Do tu XUONG NEO chu khong tu goc toa do: hai nhan vat cao thap khac nhau
+    thi vi tri tuyet doi khong so duoc, con doan goi->co chan thi so duoc.
+    """
+    out = []
+    for f in FRAMES:
+        ctx.scene.frame_set(f)
+        ctx.view_layer.update()
+        a = (ob.matrix_world @ ob.pose.bones["ankle"].matrix).translation
+        k = (ob.matrix_world @ ob.pose.bones["knee"].matrix).translation
+        out.append((a - k).copy())
+    return out
+
+
+src_off = ankle_offsets(ik_src)
+src_move = max((v - src_off[0]).length for v in src_off)
+check(src_move > 0.05,
+      "clip goc that su co dich chuyen co chan (%.3f m) — test co y nghia" % src_move)
+
+# He so k: chi cua rig dich ngan hon nen doan goi->co chan phai ngan theo.
+k_expect = ((core.rest_head_world(ik_tgt, "ankle")
+             - core.rest_head_world(ik_tgt, "knee")).length
+            / (core.rest_head_world(ik_src, "ankle")
+               - core.rest_head_world(ik_src, "knee")).length)
+
+
+def ik_run(pairs, name):
+    act, rep = core.retarget(ctx, ik_src, ik_tgt, pairs, 1, 6, name,
+                             use_hips_loc=False)
+    ik_tgt.animation_data.action = act
+    core.bind_slot(ik_tgt.animation_data, act)
+    off = ankle_offsets(ik_tgt)
+    move = max((v - off[0]).length for v in off)
+    gap = max((got - want * k_expect).length
+              for got, want in zip(off, src_off))
+    return move, gap, rep
+
+
+mv_rot, gap_rot, _ = ik_run([dict(p) for p in ik_pairs_base], "IK_RotOnly")
+
+with_pos = [dict(p) for p in ik_pairs_base]
+with_pos[2]["pos"] = True
+with_pos[2]["anchor"] = "knee"
+mv_pos, gap_pos, rep_pos = ik_run(with_pos, "IK_WithPos")
+
+print("    he so chi k = %.3f" % k_expect)
+print("    chi truyen goc xoay:  co chan dich chuyen %.4f m, lech so voi guong "
+      "mong doi %.4f m" % (mv_rot, gap_rot))
+print("    co truyen vi tri:     co chan dich chuyen %.4f m, lech %.4f m"
+      % (mv_pos, gap_pos))
+
+check(gap_rot > 0.1,
+      "chi truyen goc: co chan khong theo nguon, lech %.3f m — test co y nghia"
+      % gap_rot)
+check(gap_pos < 1e-5,
+      "truyen vi tri dat co chan dung ti le chi cua rig dich (lech %.2e m)" % gap_pos)
+check(gap_pos < gap_rot / 100.0,
+      "truyen vi tri tot hon han chi truyen goc (%.2e vs %.4f m)" % (gap_pos, gap_rot))
+check(not rep_pos, "truyen vi tri chay sach, khong canh bao (%s)" % rep_pos)
+
+# Xuong neo khong co trong bang -> bao ro va bo qua, khong im lang lam sai.
+bad = [dict(p) for p in ik_pairs_base]
+bad[2]["pos"] = True
+bad[2]["anchor"] = "khong_ton_tai"
+_, rep_bad = core.retarget(ctx, ik_src, ik_tgt, bad, 1, 6, "IK_BadAnchor",
+                           use_hips_loc=False)
+check(any("khong co trong bang" in r for r in rep_bad),
+      "xuong neo khong hop le -> co canh bao (%s)" % rep_bad)
+
+# Bat 'pos' ma quen chon neo cung phai bao.
+noanchor = [dict(p) for p in ik_pairs_base]
+noanchor[2]["pos"] = True
+_, rep_na = core.retarget(ctx, ik_src, ik_tgt, noanchor, 1, 6, "IK_NoAnchor",
+                          use_hips_loc=False)
+check(any("chua chon xuong neo" in r for r in rep_na),
+      "bat truyen vi tri ma khong co neo -> co canh bao (%s)" % rep_na)
 
 # Tay phai cua ban moi phai o dung cho tay trai cua ban goc, va nguoc lai
 def hand_y(action, bone):
