@@ -52,8 +52,22 @@ try {
         Write-Host ("=== {0} ===" -f $t.Name) -ForegroundColor Cyan
         # --factory-startup: khong keo addon cua may vao ket qua test.
         # --online-mode:     test co tai index.json that tu Pages.
-        & $Blender --background --factory-startup --online-mode `
-            --python-exit-code 1 --python $t.FullName
+        #
+        # Ha ErrorActionPreference dung quanh lenh goi: PowerShell 5.1 boc moi
+        # dong stderr cua .exe ngoai thanh NativeCommandError, va voi "Stop" no
+        # thanh loi ket thuc — ca vong lap dut giua chung, cac test sau khong
+        # duoc chay ma bao cao lai khong he noi la thieu. Chuyen nay xay ra that:
+        # test_auto_uv_palette CO CHU Y in traceback (hoi quy cho bug custom
+        # property pha export FBX sang Unity) nen suite dung ngay o do.
+        # Ket qua van doc bang $LASTEXITCODE nhu cu, khong nuot loi that nao.
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $Blender --background --factory-startup --online-mode `
+                --python-exit-code 1 --python $t.FullName
+        } finally {
+            $ErrorActionPreference = $prev
+        }
         if ($LASTEXITCODE -ne 0) { $failed += $t.Name }
     }
 }
