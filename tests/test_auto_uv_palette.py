@@ -321,12 +321,38 @@ props.cols = props.rows = 8
 lech = make_obj("lech")
 mod._place_uv_in_cell(lech.data, mod._cell_rect(7, 8, 8))   # UV that o o 7
 mod._stamp_cell(lech, 8, 8, 8)                              # dau lai khai o 8
-check(mod._object_cells(lech, 8, 8, 8, 8) == {7, 8},
-      "dau lech UV -> chiem ca hai o, khong bo sot o that (duoc %s)"
+check(mod._object_cells(lech, 8, 8, 8, 8) == {7},
+      "dau lech UV -> theo UV, KHONG giu cho oan o cua dau (duoc %s)"
       % sorted(mod._object_cells(lech, 8, 8, 8, 8)))
-check(mod._stamp_disagrees(lech, 8, 8, 8, 8), "phat hien duoc dau lech")
-mod._stamp_cell(lech, 8, 8, 7)
-check(not mod._stamp_disagrees(lech, 8, 8, 8, 8), "dau khop thi khong bao lech")
+
+# Dau chi de biet GRID. Object xep o 16x16 phai chiem dung 1 o nho, khong
+# phai ca khoi 2x2 cua grid tho.
+mod._place_uv_in_cell(lech.data, mod._cell_rect(60, 16, 16))
+mod._stamp_cell(lech, 16, 16, 66)          # dau lech, nhung grid 16x16 dung
+check(mod._object_cells(lech, 8, 8, 16, 16) == {60},
+      "dau 16x16 -> doc UV o grid 16x16, ra dung 1 o nho (duoc %s)"
+      % sorted(mod._object_cells(lech, 8, 8, 16, 16)))
+check(mod._object_cells(lech, 8, 8, 8, 8) == {14},
+      "o nho 60 nam trong o tho 14 (duoc %s)"
+      % sorted(mod._object_cells(lech, 8, 8, 8, 8)))
+
+# Khong co dau thi doc o grid palette -> chiem nguyen o tho (phia an toan).
+del lech[mod._STAMP]
+mod._place_uv_in_cell(lech.data, mod._cell_rect(60, 16, 16))
+check(mod._object_cells(lech, 8, 8, 16, 16) == {44, 45, 60, 61},
+      "khong co dau -> coi nhu chiem nguyen o tho 14, phu 4 o nho (duoc %s)"
+      % sorted(mod._object_cells(lech, 8, 8, 16, 16)))
+
+# UV rong hon o = UV goc nam ngoai 0..1 -> phai bao ten ra.
+mod._stamp_cell(lech, 8, 8, 0)
+_uv = lech.data.uv_layers[0]
+for _i, _co in enumerate([(0.0, 0.5), (0.25, 0.5), (0.25, 0.75), (0.0, 0.75)]):
+    _uv.data[_i].uv = _co                  # rong 0.25 = 2 o cua grid 8x8
+check(abs(mod._uv_spread(lech, 8, 8) - 2.0) < 1e-5,
+      "_uv_spread do dung 2.0 lan o (duoc %.3f)" % mod._uv_spread(lech, 8, 8))
+check(mod._object_cells(lech, 8, 8, 8, 8) == {25},
+      "UV tran 2 o -> lay o chua tam bbox (duoc %s)"
+      % sorted(mod._object_cells(lech, 8, 8, 8, 8)))
 bpy.data.objects.remove(lech)
 props.cols = props.rows = 3
 

@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 5, 0),
+    "version": (1, 6, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -429,26 +429,27 @@ def _cells_covered(index, cols, rows, tcols, trows):
 def _object_cells(ob, mat_cols, mat_rows, cols, rows):
     """Các ô (của grid `cols`x`rows`) mà `ob` đang chiếm.
 
-    Lấy HỢP của hai cách đọc, không tin cách nào một mình:
-      - dấu đã ghi lúc xếp (`ezg_uv_palette_cell`)
-      - ô mà UV đang thật sự nằm trong
+    **UV quyết định vị trí, dấu chỉ nói grid.** Model sample texture theo UV
+    chứ không theo dấu, nên UV mới là sự thật. Dấu (`ezg_uv_palette_cell`) chỉ
+    dùng để biết object được xếp ở ô thô 8x8 hay ô nhỏ 16x16 — UV thưa không
+    tự nói ra điều đó, xem `_uv_reading`.
 
-    Hai cái này lệch nhau được: UV bị sửa tay sau khi xếp, object dùng chung
-    mesh data với object khác, hay xếp lại bằng grid khác. Tin mỗi cái dấu thì
-    ô mà UV đang nằm trông như còn trống và texture mới đè thẳng lên — đã xảy
-    ra thật. Lấy hợp thì cùng lắm là chừa dư một ô, không mất art.
+    Số ô trong dấu **không** được dùng: nó lệch khỏi UV được (UV sửa tay, xếp
+    lại bằng grid khác) và tin nó thì chừa oan một ô trống vĩnh viễn — gặp
+    thật, palette mất 4 ô kiểu đó. Dấu chỉ còn là đường lui khi không đọc
+    được UV.
 
-    Object xếp bằng bản add-on cũ chưa có dấu thì chỉ còn đường đọc UV, và
-    coi như chiếm nguyên một ô của grid palette.
+    Object xếp bằng bản add-on cũ chưa có dấu thì đọc UV ở grid palette, tức
+    coi như chiếm nguyên một ô thô.
     """
-    cells = set()
-    stamp = _stamped_cell(ob)
-    if stamp is not None:
-        cells |= _cells_covered(stamp[2], stamp[0], stamp[1], cols, rows)
     index, read_cols, read_rows = _uv_reading(ob, mat_cols, mat_rows)
-    if index is not None:
-        cells |= _cells_covered(index, read_cols, read_rows, cols, rows)
-    return cells
+    if index is None:
+        # Không đọc được UV thì chỉ còn tin cái dấu.
+        stamp = _stamped_cell(ob)
+        if stamp is None:
+            return set()
+        return _cells_covered(stamp[2], stamp[0], stamp[1], cols, rows)
+    return _cells_covered(index, read_cols, read_rows, cols, rows)
 
 
 def _uv_reading(ob, mat_cols, mat_rows):
@@ -464,17 +465,19 @@ def _uv_reading(ob, mat_cols, mat_rows):
     return _uv_cell_index(ob.data, rows, cols), cols, rows
 
 
-def _stamp_disagrees(ob, mat_cols, mat_rows, cols, rows):
-    """Dấu ô và UV của `ob` có chỉ về chỗ khác nhau không."""
+def _uv_spread(ob, mat_cols, mat_rows):
+    """UV của `ob` rộng gấp mấy lần ô của nó. 1.0 = vừa khít, 0 = không đọc được.
+
+    Lớn hơn 1 nghĩa là UV gốc nằm ngoài 0..1: `_place_uv_in_cell` map thẳng
+    0..1 lên ô nên phần ngoài tràn sang ô bên cạnh, model sample nhầm texture
+    của hàng xóm. README ghi đây là giới hạn đã biết — chỗ này để báo tên ra.
+    """
     stamp = _stamped_cell(ob)
-    if stamp is None:
-        return False
-    index, read_cols, read_rows = _uv_reading(ob, mat_cols, mat_rows)
-    if index is None:
-        return False
-    from_stamp = _cells_covered(stamp[2], stamp[0], stamp[1], cols, rows)
-    from_uv = _cells_covered(index, read_cols, read_rows, cols, rows)
-    return bool(from_stamp) and bool(from_uv) and not (from_stamp & from_uv)
+    cols, rows = (stamp[0], stamp[1]) if stamp else (mat_cols, mat_rows)
+    bounds = _uv_bounds(ob.data)
+    if bounds is None:
+        return 0.0
+    return max((bounds[2] - bounds[0]) * cols, (bounds[3] - bounds[1]) * rows)
 
 
 def _free_cells(occupied, cols, rows, pcols, prows):
@@ -556,12 +559,12 @@ def _pick_palette_material(context, cols, rows, skip):
 
 
 def _scene_occupancy(context, mat, pcols, prows, cols, rows, skip):
-    """({ô: [tên object]}, [tên object có dấu lệch với UV]).
+    """({ô: [tên object]}, [tên object có UV tràn khỏi ô của nó]).
 
     Object xếp ở grid thô chiếm nguyên khối ô mịn, xem `_object_cells`.
     """
     occupied = {}
-    disagree = []
+    spilling = []
     for ob in context.scene.objects:
         if ob.type != 'MESH' or ob in skip:
             continue
@@ -569,9 +572,10 @@ def _scene_occupancy(context, mat, pcols, prows, cols, rows, skip):
             continue
         for index in _object_cells(ob, pcols, prows, cols, rows):
             occupied.setdefault(index, []).append(ob.name)
-        if _stamp_disagrees(ob, pcols, prows, cols, rows):
-            disagree.append(ob.name)
-    return occupied, disagree
+        spread = _uv_spread(ob, pcols, prows)
+        if spread > _CELL_OVERFLOW:
+            spilling.append("%s (%.1f lần ô)" % (ob.name, spread))
+    return occupied, spilling
 
 
 def _image_occupancy(image, rows, cols):
@@ -1499,7 +1503,7 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
 
         # Hai nguồn "ô đã dùng", lấy hợp của cả hai cho chắc: object trong
         # scene đang dùng material palette, và pixel đục trong ảnh palette.
-        taken, disagree = _scene_occupancy(context, mat, pcols, prows,
+        taken, spilling = _scene_occupancy(context, mat, pcols, prows,
                                            cols, rows, set(targets))
         occupied = set(taken)
         sources = ["%d ô có object" % len(taken)] if taken else []
@@ -1572,10 +1576,11 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
         if image is not None and image_cells is None:
             warnings.append("ảnh palette \"%s\" không có vùng trong suốt nên "
                             "chỉ dựa vào object trong scene" % image.name)
-        if disagree:
+        if spilling:
             warnings.append(
-                "dấu ô của %s lệch với UV thật — đã chừa cả hai ô cho chắc, "
-                "chạy lại Add cho mấy object đó nếu muốn dọn" % ", ".join(disagree))
+                "UV của %s rộng hơn ô của nó (UV gốc nằm ngoài 0..1) nên tràn "
+                "sang ô bên cạnh — mấy ô đó đã bị giữ chỗ, và model sẽ sample "
+                "nhầm texture hàng xóm" % ", ".join(spilling))
         if unexported:
             warnings.append(
                 "texture của %s chưa export — material cũ giờ không còn ai "
@@ -1632,18 +1637,15 @@ class AUTOUVPAL_OT_append_psd(Operator):
         items, missing, no_cell, clashes, not_packed = [], [], [], [], []
         seen = []
         for ob in targets:
-            stamp = _stamped_cell(ob)
-            if stamp is not None:
-                scols, srows, index = stamp
-            else:
-                scols, srows = cols, rows
-                index = _uv_cell_index(ob.data, rows, cols)
-                if index is None:
-                    no_cell.append(ob.name)
-                    continue
-                if _uv_overflows_cell(ob.data, rows, cols):
-                    not_packed.append(ob.name)
-                    continue
+            # Ô lấy theo UV, grid lấy theo dấu — y hệt cách tính ô đã dùng,
+            # để layer trong PSD nằm đúng chỗ model đang sample.
+            index, scols, srows = _uv_reading(ob, cols, rows)
+            if index is None:
+                no_cell.append(ob.name)
+                continue
+            if _uv_spread(ob, cols, rows) > _CELL_OVERFLOW:
+                not_packed.append(ob.name)
+                continue
             path = os.path.join(directory, _safe_filename(ob.name) + ".png")
             if not os.path.isfile(path):
                 missing.append(os.path.basename(path))
@@ -1667,11 +1669,12 @@ class AUTOUVPAL_OT_append_psd(Operator):
         if not_packed:
             self.report(
                 {'ERROR'},
-                "UV của %s còn trải rộng hơn một ô — chưa được xếp vào "
-                "palette, đặt vào PSD bây giờ sẽ rơi vào giữa canvas chứ "
-                "không vào ô nào. Chạy Add Selected to Empty Cells (hoặc "
-                "Pack UVs into Palette) trước, và kiểm tra Columns/Rows đúng "
-                "bằng grid của palette." % ", ".join(not_packed),
+                "UV của %s rộng hơn một ô. Hoặc là chưa chạy Add Selected to "
+                "Empty Cells / Pack UVs (UV còn nguyên 0..1, tâm rơi đúng ô "
+                "giữa palette nên texture sẽ vào giữa canvas), hoặc là UV gốc "
+                "nằm ngoài 0..1 nên tràn sang ô bên cạnh — sửa UV về trong "
+                "0..1 rồi xếp lại. Cũng kiểm tra Columns/Rows đúng bằng grid "
+                "của palette." % ", ".join(not_packed),
             )
             return {'CANCELLED'}
         if missing:

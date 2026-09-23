@@ -239,15 +239,23 @@ Object xếp bằng bản add-on cũ (chưa có dấu) được coi là chiếm 
 của grid palette** — đúng với mọi bản trước đây và là phía an toàn: thà chừa
 dư còn hơn đè lên.
 
-Dấu **không được tin một mình**: add-on lấy **hợp** của ô ghi trong dấu và ô mà
-UV đang thật sự nằm. Hai cái này lệch nhau được — UV bị sửa tay sau khi xếp,
-object dùng chung mesh data, hay xếp lại bằng grid khác. Tin mỗi cái dấu thì ô
-mà UV đang nằm trông như còn trống và texture mới đè thẳng lên. Có object lệch
-thì thông báo nêu tên ra.
+**UV quyết định vị trí, dấu chỉ nói grid.** Model sample texture theo UV chứ
+không theo dấu, nên UV mới là sự thật. Dấu chỉ dùng để biết object được xếp ở ô
+thô hay ô nhỏ — UV thưa (object chỉ dùng 30% không gian 0–1) không tự nói ra
+điều đó. **Số ô trong dấu không được dùng**, nó chỉ còn là đường lui khi không
+đọc được UV.
+
+Lý do: dấu lệch khỏi UV được (UV sửa tay sau khi xếp, xếp lại bằng grid khác),
+và tin nó thì **chừa oan một ô trống vĩnh viễn**. Gặp thật: một palette mất 4 ô
+kiểu đó, `Add` nhảy qua ô còn trống để xếp xuống dưới.
 
 UV được đọc ở **đúng grid ghi trong dấu**: object xếp ở ô 16x16 mà đọc bằng
 grid 8x8 sẽ ra nguyên khối 2x2, chiếm luôn 3 ô của hàng xóm và asset nhỏ hết
 chỗ chen.
+
+Object nào có **UV rộng hơn ô của nó** (UV gốc nằm ngoài 0–1 nên tràn sang ô
+bên cạnh) được nêu tên trong thông báo — model đó sẽ sample nhầm texture hàng
+xóm, cần sửa UV về trong 0–1 rồi xếp lại.
 
 ### Ô nào được coi là "trống"
 
