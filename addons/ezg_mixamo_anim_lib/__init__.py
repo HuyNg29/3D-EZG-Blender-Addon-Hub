@@ -100,6 +100,71 @@ def _assign_action(target, action):
                 pass
 
 
+# --- Action channel access across Blender versions -------------------------
+# Blender 4.4 moved an action's F-Curves into per-slot channelbags and left
+# `action.fcurves` as a legacy view. Blender 5.x REMOVED that attribute, so any
+# `action.fcurves` raises AttributeError: 'Action' object has no attribute
+# 'fcurves' — the add-on installs fine and dies on the first click.
+#
+# Everything below goes through the channelbags and only falls back to the old
+# attribute when it still exists (4.x with an action that has no slot yet).
+
+def _channelbags(action):
+    """Every F-Curve container of `action` (one per slot on Blender 4.4+)."""
+    out = []
+    for layer in getattr(action, "layers", ()):
+        for strip in layer.strips:
+            if getattr(strip, "type", "KEYFRAME") != 'KEYFRAME':
+                continue
+            for slot in action.slots:
+                try:
+                    bag = strip.channelbag(slot)
+                except Exception:
+                    bag = None
+                if bag is not None:
+                    out.append(bag)
+    return out
+
+
+def _fcurves(action):
+    """Every F-Curve of `action`, on any Blender version."""
+    out = []
+    for bag in _channelbags(action):
+        out.extend(bag.fcurves)
+    if out:
+        return out
+    return list(getattr(action, "fcurves", ()) or ())
+
+
+def _remove_fcurve(action, fcurve):
+    """Remove `fcurve` from whichever container owns it. True when removed."""
+    for bag in _channelbags(action):
+        try:
+            bag.fcurves.remove(fcurve)
+            return True
+        except (RuntimeError, ReferenceError, TypeError):
+            continue
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        try:
+            legacy.remove(fcurve)
+            return True
+        except (RuntimeError, ReferenceError, TypeError):
+            pass
+    return False
+
+
+def _find_fcurve(action, data_path, index=0):
+    for bag in _channelbags(action):
+        fc = bag.fcurves.find(data_path, index=index)
+        if fc is not None:
+            return fc
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        return legacy.find(data_path, index=index)
+    return None
+
+
 def _stamp_source(action, filepath, target=None):
     """Record which FBX (and its mtime) this action was imported from, and the
     rig scale it was made for."""
@@ -171,7 +236,7 @@ def _replace_action(old, new):
 
 def _action_bone_names(action):
     names = set()
-    for fc in action.fcurves:
+    for fc in _fcurves(action):
         m = re.match(r'pose\.bones\["(.+?)"\]', fc.data_path)
         if m:
             names.add(m.group(1))
@@ -187,7 +252,7 @@ def _strip_root_motion(action):
     """
     removed = 0
     f_start, f_end = action.frame_range
-    for fc in list(action.fcurves):
+    for fc in _fcurves(action):
         if not fc.data_path.endswith(".location"):
             continue
         if "hips" not in fc.data_path.lower():
@@ -196,7 +261,7 @@ def _strip_root_motion(action):
         rng = max(samples) - min(samples)
         drift = abs(samples[-1] - samples[0])
         if rng > 1e-6 and drift > 0.6 * rng:
-            action.fcurves.remove(fc)
+            _remove_fcurve(action, fc)
             removed += 1
     return removed
 
@@ -369,9 +434,9 @@ def _clear_object_z_keys(arm):
     ad = arm.animation_data
     if ad is None or ad.action is None:
         return
-    for fc in list(ad.action.fcurves):
+    for fc in _fcurves(ad.action):
         if fc.data_path == "location" and fc.array_index == 2:
-            ad.action.fcurves.remove(fc)
+            _remove_fcurve(ad.action, fc)
 
 
 def _isolate_active_action(arm):
@@ -690,7 +755,7 @@ def _bone_rot_curves(action, prop_name):
     """{bone_name: {array_index: fcurve}} for pose.bones[...].<prop_name>."""
     out = {}
     pat = re.compile(r'^pose\.bones\["(.+?)"\]\.' + prop_name + r'$')
-    for fc in action.fcurves:
+    for fc in _fcurves(action):
         m = pat.match(fc.data_path)
         if m:
             out.setdefault(m.group(1), {})[fc.array_index] = fc
@@ -751,12 +816,12 @@ def convert_action_rotation(arm, action, to_mode='XYZ'):
 
             prop = "rotation_quaternion" if to_quat else "rotation_euler"
             for fc in list(src[name].values()):
-                action.fcurves.remove(fc)
+                _remove_fcurve(action, fc)
             # Stale keys on the destination channels — left behind by an earlier
             # half-switch through the N-panel dropdown — would survive at frames
             # we don't rewrite and fight the resampled motion.
             for fc in list(_bone_rot_curves(action, prop).get(name, {}).values()):
-                action.fcurves.remove(fc)
+                _remove_fcurve(action, fc)
             _set_pb_rotation_mode(pb, to_mode)
             prev = None
             for f, comps in vals:
@@ -775,7 +840,7 @@ def convert_action_rotation(arm, action, to_mode='XYZ'):
                 pb.keyframe_insert(prop, frame=f, group=grp)
 
             for i in range(4 if to_quat else 3):
-                fc = action.fcurves.find(pb.path_from_id(prop), index=i)
+                fc = _find_fcurve(action, pb.path_from_id(prop), index=i)
                 if fc is None:
                     continue
                 for kp in fc.keyframe_points:

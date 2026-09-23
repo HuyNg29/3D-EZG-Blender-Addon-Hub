@@ -24,7 +24,7 @@ import math
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
-from . import roles
+from . import core, roles
 
 
 class BounceError(Exception):
@@ -278,7 +278,7 @@ def add_bounce(context, ob, action, depth, cycles):
                 if n == hips:
                     pb.keyframe_insert("location", frame=f)
 
-        for fc in action.fcurves:
+        for fc in core.action_fcurves(action):
             for kp in fc.keyframe_points:
                 kp.interpolation = 'BEZIER'
                 kp.handle_left_type = kp.handle_right_type = 'AUTO_CLAMPED'
@@ -398,7 +398,7 @@ def amplify_motion(context, ob, action, factor):
                     Matrix.Translation(loc) @ newq.to_matrix().to_4x4()
                 ob.pose.bones[n].keyframe_insert("rotation_quaternion", frame=f)
 
-        for fc in action.fcurves:
+        for fc in core.action_fcurves(action):
             for kp in fc.keyframe_points:
                 kp.interpolation = 'BEZIER'
                 kp.handle_left_type = kp.handle_right_type = 'AUTO_CLAMPED'

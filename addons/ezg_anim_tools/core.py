@@ -72,7 +72,9 @@ def action_fcurves(action):
                     bag = None
                 if bag is not None:
                     out.extend(bag.fcurves)
-    return out or list(action.fcurves)
+    # Blender 5.x da BO han thuoc tinh nay; 4.x thi van con cho action chua
+    # co slot. getattr de ban 5.x khong chet voi AttributeError.
+    return out or list(getattr(action, "fcurves", ()) or ())
 
 
 def action_is_static(action, tol=1e-6):
@@ -413,7 +415,7 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
             if name == hips_tgt or name in pos_names:
                 pb.keyframe_insert("location", frame=f)
 
-    for fc in act.fcurves:
+    for fc in action_fcurves(act):
         for kp in fc.keyframe_points:
             kp.interpolation = 'BEZIER'
             kp.handle_left_type = kp.handle_right_type = 'AUTO_CLAMPED'

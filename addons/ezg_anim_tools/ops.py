@@ -229,7 +229,7 @@ class EZG_AT_OT_mirror(Operator):
 
         err, worst = mirror.mirror_error(context, ob, act, new)
         msg = "Da tao '%s' (%d fcurve). Lech so voi anh guong ly thuyet: %.3f do." \
-              % (new.name, len(new.fcurves), err)
+              % (new.name, len(core.action_fcurves(new)), err)
         for line in report:
             print("[EZG Anim Tools]", line)
         if worst and err > 0.5:

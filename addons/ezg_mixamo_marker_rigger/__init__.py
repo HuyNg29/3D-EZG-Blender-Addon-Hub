@@ -2718,7 +2718,15 @@ def bone_of_path(data_path):
 
 
 def action_channel_containers(action):
-    """Every F-Curve container of an action (one per slot on Blender 4.4+)."""
+    """Every F-Curve container of an action (one per slot on Blender 4.4+).
+
+    Falling back to the action itself only works while `action.fcurves` exists:
+    Blender 4.4 demoted it to a legacy view and Blender 5.x REMOVED it, where
+    touching it raises `AttributeError: 'Action' object has no attribute
+    'fcurves'`. Hand back nothing rather than a container that explodes when
+    read - callers iterate the result, so an empty list is the quiet, correct
+    answer for an action that holds no channels.
+    """
     containers = []
     for layer in getattr(action, "layers", []):
         for strip in layer.strips:
@@ -2731,7 +2739,9 @@ def action_channel_containers(action):
                     bag = None
                 if bag is not None:
                     containers.append(bag)
-    return containers or [action]
+    if containers:
+        return containers
+    return [action] if hasattr(action, "fcurves") else []
 
 
 def rest_relative_rotation(arm_obj, bone):

@@ -112,7 +112,7 @@ def rest_symmetry_error(ob):
 def _object_level(action):
     """{(data_path, index): gia_tri_tai_frame_dau} cho cac fcurve cap object."""
     out = {}
-    for fc in action.fcurves:
+    for fc in core.action_fcurves(action):
         if fc.data_path.startswith("pose.bones"):
             continue
         if fc.data_path not in ("location", "rotation_euler",
@@ -155,7 +155,7 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
     # Action cua rig KHAC se khong dieu khien xuong nao o day: lat guong van
     # "chay" nhung chi bake ra tu the dung im — nguoi dung tuong mirror hong.
     n_pose = n_match = 0
-    for fc in src_action.fcurves:
+    for fc in core.action_fcurves(src_action):
         if not fc.data_path.startswith("pose.bones["):
             continue
         n_pose += 1
@@ -284,7 +284,7 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
                 pb.keyframe_insert("location", frame=f)
                 pb.keyframe_insert("scale", frame=f)
 
-        for fc in new.fcurves:
+        for fc in core.action_fcurves(new):
             for kp in fc.keyframe_points:
                 kp.interpolation = 'BEZIER'
                 kp.handle_left_type = kp.handle_right_type = 'AUTO_CLAMPED'
