@@ -257,6 +257,28 @@ Object nào có **UV rộng hơn ô của nó** (UV gốc nằm ngoài 0–1 nê
 bên cạnh) được nêu tên trong thông báo — model đó sẽ sample nhầm texture hàng
 xóm, cần sửa UV về trong 0–1 rồi xếp lại.
 
+### Reset UV out of Palette
+
+Nghịch đảo của Pack / Add — đưa UV của object đã chọn từ ô của nó **trở về
+không gian 0–1** như trước khi xếp, gỡ material palette và xoá dấu ô. `Ctrl+Z`
+hoàn tác được.
+
+Dùng khi cần sửa lại một object đã xếp: bấm nút này → sửa UV → **Add Selected
+to Empty Cells** để xếp lại. Phải gỡ material palette thì Add mới nhận, vì Add
+từ chối object đã nằm trong palette.
+
+Nút **không đụng tới tấm palette đã ghép** — texture cũ vẫn nằm nguyên trong
+PSD. Ô đó chỉ thật sự trống khi bạn xoá layer tương ứng trong Photoshop; chưa
+xoá thì alpha của ảnh palette vẫn giữ chỗ (đúng như thiết kế, tránh đè art).
+
+Phép đảo dùng **đúng ô ghi trong dấu**, không phải ô chứa tâm UV — đây là phép
+nghịch đảo nên phải khớp với ô mà phép thuận đã dùng. UV tràn khỏi ô thì tâm nó
+rơi sang ô khác, lấy theo tâm là đảo lệch nguyên một ô.
+
+Add-on **không nắn UV về 0–1**: object nào UV gốc vốn nằm ngoài 0–1 thì sau khi
+đảo vẫn nằm ngoài, và thông báo nêu tên kèm khoảng thật. Đó chính là cái cần
+sửa trước khi xếp lại.
+
 ### Ô nào được coi là "trống"
 
 Add-on lấy **hợp của hai nguồn**, ô nào một trong hai nguồn báo là đã dùng thì

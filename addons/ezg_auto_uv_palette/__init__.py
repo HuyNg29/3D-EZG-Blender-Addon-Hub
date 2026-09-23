@@ -9,7 +9,7 @@
 bl_info = {
     "name": "Auto UV Palette",
     "author": "EasyGoing Visual",
-    "version": (1, 6, 0),
+    "version": (1, 7, 0),
     "blender": (4, 0, 0),
     "location": "3D Viewport / UV Editor > Sidebar (N) > UV Palette",
     "description": "Scale and arrange the UVs of the selected objects into a grid palette",
@@ -47,6 +47,8 @@ _ALPHA_SCAN_PX = 1024
 _ALPHA_EMPTY = 0.02
 # UV rộng hơn ô bằng ngần này lần thì coi như chưa được xếp vào palette.
 _CELL_OVERFLOW = 1.5
+# Sai số cho phép khi kiểm UV đã về gọn trong 0..1 chưa.
+_UV_SLACK = 1e-4
 # Custom property ghi lên object: (cols, rows, index) của ô nó đang chiếm.
 # Không có nó thì không phân biệt được object chiếm nguyên ô thô 8x8 với
 # object chỉ chiếm 1 ô mịn 16x16 — UV thưa của cả hai đều có thể nhỏ hơn ô.
@@ -652,6 +654,38 @@ def _palette_image_datablock(props):
     except RuntimeError as err:
         return None, "không đọc được ảnh palette (%s)" % err
     return image, None
+
+
+def _unplace_uv_from_cell(mesh, rect):
+    """Nghịch đảo `_place_uv_in_cell`: đưa UV từ ô trở về không gian 0..1.
+
+    UV gốc nằm ngoài 0..1 thì sau khi đảo nó vẫn ra ngoài 0..1 — đúng như lúc
+    đầu, không nắn lại. Nhờ vậy thấy được object nào vốn có UV hỏng.
+    """
+    min_u, min_v, cell_w, cell_h = rect
+    uv_data = (mesh.uv_layers.active or mesh.uv_layers[0]).data
+
+    co = np.empty(len(uv_data) * 2, dtype=np.float32)
+    uv_data.foreach_get("uv", co)
+    co.shape = (-1, 2)
+
+    co -= np.array([min_u, min_v], dtype=np.float32)
+    co /= np.array([cell_w, cell_h], dtype=np.float32)
+
+    uv_data.foreach_set("uv", co.ravel())
+    mesh.update()
+
+
+def _object_palette(ob):
+    """(material palette đang gắn, cols, rows) — (None, 0, 0) nếu không có."""
+    for slot in ob.material_slots:
+        mat = slot.material
+        if mat is None:
+            continue
+        match = _PALETTE_NAME.match(mat.name)
+        if match:
+            return mat, int(match.group(1)), int(match.group(2))
+    return None, 0, 0
 
 
 def _iter_tex_image_nodes(node_tree, seen=None, depth=0):
@@ -1594,6 +1628,105 @@ class AUTOUVPAL_OT_add_to_palette(Operator):
         return {'FINISHED'}
 
 
+class AUTOUVPAL_OT_unpack(Operator):
+    bl_idname = "object.auto_uv_palette_unpack"
+    bl_label = "Reset UV out of Palette"
+    bl_description = ("Đưa UV của object đã chọn từ ô của nó trở về không gian "
+                      "0..1 như trước khi xếp, gỡ material palette và xoá dấu "
+                      "ô. Sửa UV xong bấm Add Selected to Empty Cells để xếp "
+                      "lại. Không đụng tới tấm palette đã ghép")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        props = context.scene.auto_uv_palette
+
+        targets = _sorted_targets(context)
+        if not targets:
+            self.report({'ERROR'}, "Chưa chọn mesh object nào.")
+            return {'CANCELLED'}
+
+        done, skipped, spilled, kept_mat, stale = [], [], [], [], []
+        for ob in targets:
+            mat, pcols, prows = _object_palette(ob)
+            stamp = _stamped_cell(ob)
+            if mat is None and stamp is None:
+                skipped.append("%s (không gắn material palette, cũng không có "
+                               "dấu ô — chưa từng được xếp)" % ob.name)
+                continue
+            if pcols < 1:
+                pcols, prows = stamp[0], stamp[1]
+
+            # Đây là phép NGHỊCH ĐẢO nên phải dùng đúng ô mà phép thuận đã
+            # dùng — tức cái dấu, chứ không phải ô chứa tâm UV như chỗ tính ô
+            # đã dùng. UV tràn khỏi ô thì tâm nó rơi sang ô khác, lấy theo tâm
+            # là đảo lệch nguyên một ô.
+            if stamp is not None:
+                cell_cols, cell_rows, index = stamp
+                spot = _uv_cell_index(ob.data, cell_rows, cell_cols)
+                if spot is not None and spot != index:
+                    stale.append("%s (dấu ô %d, UV đang ở ô %d)"
+                                 % (ob.name, index, spot))
+            else:
+                index, cell_cols, cell_rows = _uv_reading(ob, pcols, prows)
+            if index is None:
+                skipped.append("%s (không đọc được UV)" % ob.name)
+                continue
+
+            _unplace_uv_from_cell(ob.data,
+                                  _cell_rect(index, cell_rows, cell_cols))
+            if _STAMP in ob:
+                del ob[_STAMP]
+
+            # Gỡ material palette. Chỉ dọn khi TOÀN BỘ slot là palette — xoá lẻ
+            # một slot sẽ xáo trộn material_index theo mặt của các slot còn lại.
+            slots = [slot.material for slot in ob.material_slots]
+            if slots and all(m is not None and _PALETTE_NAME.match(m.name)
+                             for m in slots):
+                ob.data.materials.clear()
+            elif mat is not None:
+                kept_mat.append(ob.name)
+
+            bounds = _uv_bounds(ob.data)
+            if bounds is not None and not (-_UV_SLACK <= bounds[0]
+                                           and bounds[2] <= 1.0 + _UV_SLACK
+                                           and -_UV_SLACK <= bounds[1]
+                                           and bounds[3] <= 1.0 + _UV_SLACK):
+                spilled.append("%s (%.2f..%.2f, %.2f..%.2f)"
+                               % (ob.name, bounds[0], bounds[2],
+                                  bounds[1], bounds[3]))
+            done.append("%s (ô %d của grid %dx%d)"
+                        % (ob.name, index, cell_cols, cell_rows))
+
+        if not done:
+            self.report({'ERROR'}, "Không đưa được object nào ra khỏi palette: "
+                                   + "; ".join(skipped))
+            return {'CANCELLED'}
+
+        parts = ["Đã đưa %d object ra khỏi palette: %s"
+                 % (len(done), ", ".join(done))]
+        if spilled:
+            parts.append("UV gốc của %s vốn đã nằm ngoài 0..1 (add-on không "
+                         "nắn lại) — sửa UV rồi mới xếp lại" % ", ".join(spilled))
+        if stale:
+            parts.append("dấu ô của %s lệch với chỗ UV đang nằm, đã đảo theo "
+                         "dấu — kiểm lại UV trước khi xếp tiếp"
+                         % ", ".join(stale))
+        if kept_mat:
+            parts.append("còn material khác ngoài palette nên giữ nguyên slot: "
+                         + ", ".join(kept_mat))
+        if skipped:
+            parts.append("bỏ qua: " + ", ".join(skipped))
+
+        message = ". ".join(parts) + "."
+        self.report({'WARNING'} if (spilled or kept_mat or skipped or stale)
+                    else {'INFO'}, message)
+        return {'FINISHED'}
+
+
 class AUTOUVPAL_OT_append_psd(Operator):
     bl_idname = "object.auto_uv_palette_append_psd"
     bl_label = "Append Textures to PSD"
@@ -1899,6 +2032,7 @@ class AUTOUVPAL_PT_mixin:
                                    % (len(targets) - _PREVIEW_ROWS))
 
         layout.operator(AUTOUVPAL_OT_add_to_palette.bl_idname, icon='ADD')
+        layout.operator(AUTOUVPAL_OT_unpack.bl_idname, icon='LOOP_BACK')
         layout.prop(props, "palette_psd")
         row = layout.row()
         row.enabled = bool(props.export_dir)
@@ -1928,6 +2062,7 @@ _classes = (
     AUTOUVPAL_OT_build_psd,
     AUTOUVPAL_OT_assign_palette,
     AUTOUVPAL_OT_add_to_palette,
+    AUTOUVPAL_OT_unpack,
     AUTOUVPAL_OT_append_psd,
     AUTOUVPAL_PT_view3d,
     AUTOUVPAL_PT_image,

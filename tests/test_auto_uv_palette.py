@@ -573,6 +573,95 @@ for grid, label in (((3, 3), "grid khop palette"),
 props.cols, props.rows = 3, 3
 
 
+# --- Reset UV out of Palette: nghich dao dung cua Pack/Add ------------------
+for ob in list(bpy.context.scene.objects):
+    bpy.data.objects.remove(ob)
+for mat in [m for m in bpy.data.materials if m.name.startswith("UVPalette_")]:
+    bpy.data.materials.remove(mat)
+props.palette_image = ""
+
+
+def uv_list(ob):
+    lay = ob.data.uv_layers[0]
+    co = np.empty(len(lay.data) * 2, dtype=np.float32)
+    lay.data.foreach_get("uv", co)
+    return co.reshape(-1, 2).copy()
+
+
+props.cols = props.rows = 8
+_pack = [make_obj("p%d" % i) for i in range(3)]
+_goc = uv_list(_pack[2])
+select(_pack)
+bpy.ops.object.auto_uv_palette_pack()
+check(not np.allclose(uv_list(_pack[2]), _goc), "Pack co thu nho UV that")
+
+select([_pack[2]])
+check(bpy.ops.object.auto_uv_palette_unpack() == {'FINISHED'}, "Unpack chay duoc")
+check(np.allclose(uv_list(_pack[2]), _goc, atol=1e-5),
+      "UV ve dung nhu truoc khi Pack (max lech %.2e)"
+      % float(np.abs(uv_list(_pack[2]) - _goc).max()))
+check(mod._STAMP not in _pack[2], "dau o da bi xoa")
+check(not _pack[2].data.materials, "material palette da duoc go")
+
+# Go ra roi xep lai: phai nhan lai binh thuong, vao o trong dau tien.
+select([_pack[2]])
+check(bpy.ops.object.auto_uv_palette_add() == {'FINISHED'},
+      "xep lai duoc sau khi unpack")
+check(mod._stamped_cell(_pack[2])[2] == 2,
+      "vao lai dung o 2 vua tra ra (duoc %s)" % (mod._stamped_cell(_pack[2]),))
+
+# O nho 16x16: nghich dao phai dung grid cua dau, khong phai grid palette.
+_nho = make_obj("nho")
+_goc_nho = uv_list(_nho)
+props.cols = props.rows = 16
+select([_nho])
+bpy.ops.object.auto_uv_palette_add()
+select([_nho])
+bpy.ops.object.auto_uv_palette_unpack()
+check(np.allclose(uv_list(_nho), _goc_nho, atol=1e-5),
+      "o nho 16x16 cung ve dung UV goc (max lech %.2e)"
+      % float(np.abs(uv_list(_nho) - _goc_nho).max()))
+
+# UV goc nam ngoai 0..1 (truong hop 51002_Truck): dao xong VAN ngoai 0..1,
+# add-on khong duoc tu nan lai — de thay object nao von co UV hong.
+props.cols = props.rows = 8
+_tran = make_obj("tran")
+_uvt = _tran.data.uv_layers[0]
+for _i, _co in enumerate([(-2.0, -1.0), (0.0, -1.0), (0.0, 1.0), (-2.0, 1.0)]):
+    _uvt.data[_i].uv = _co
+_goc_tran = uv_list(_tran)
+select([_tran])
+bpy.ops.object.auto_uv_palette_add()
+select([_tran])
+bpy.ops.object.auto_uv_palette_unpack()
+check(np.allclose(uv_list(_tran), _goc_tran, atol=1e-5),
+      "UV ngoai 0..1 dao ve dung nguyen ban, khong bi nan (max lech %.2e)"
+      % float(np.abs(uv_list(_tran) - _goc_tran).max()))
+
+# Dau lech cho UV dang nam: nghich dao VAN theo dau (do la o ma phep thuan
+# da dung), va phai bao ra. Lay theo tam UV la dao lech nguyen mot o.
+_lechdau = make_obj("lech_dau")
+select([_lechdau])
+bpy.ops.object.auto_uv_palette_add()
+_o_that = mod._stamped_cell(_lechdau)[2]
+mod._stamp_cell(_lechdau, 8, 8, (_o_that + 5) % 64)     # dau khai bua
+select([_lechdau])
+bpy.ops.object.auto_uv_palette_unpack()
+_b = mod._uv_bounds(_lechdau.data)
+check(not (-1e-4 <= _b[0] and _b[2] <= 1.0001),
+      "dau bua -> dao theo dau nen UV ra ngoai 0..1, thay duoc ngay (%s)"
+      % (tuple(round(v, 3) for v in _b),))
+
+# Object chua tung xep -> tu choi, khong pha UV.
+_chua = make_obj("chua_xep")
+_goc_chua = uv_list(_chua)
+select([_chua])
+check(cancelled(bpy.ops.object.auto_uv_palette_unpack),
+      "object chua tung xep -> tu choi")
+check(np.allclose(uv_list(_chua), _goc_chua), "object bi tu choi giu nguyen UV")
+
+props.cols = props.rows = 8
+
 # --- Xen ke co o nho / o to / o nho -----------------------------------------
 # Them 16x16, roi 8x8, roi 16x16 nua: cai 16x16 sau phai QUAY LAI lap not o
 # tho dang do, khong mo o tho moi ben canh cai 8x8. Khong the thi moi lan xen
