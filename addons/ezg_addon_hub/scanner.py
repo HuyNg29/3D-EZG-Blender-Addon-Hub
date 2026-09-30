@@ -22,13 +22,6 @@ try:
 except ImportError:  # Blender 4.5 luon co, day chi la luoi an toan
     tomllib = None
 
-GROUP_LABEL = {
-    "A": "kho ngoài",
-    "B": "EZG",
-    "C": "thủ công",
-}
-
-
 def _repos_by_module():
     return {r.module: r for r in bpy.context.preferences.extensions.repos}
 
@@ -153,7 +146,7 @@ def scan(ezg_repo_url=""):
             "version": _version_str(info.get("version")),
             "enabled": module in enabled_modules,
             "group": "C",
-            "source_label": "thủ công",
+            "source_label": "",  # UI tu ghi "thu cong" theo ngon ngu
             "homepage": info.get("doc_url") or info.get("wiki_url") or "",
             "repo_module": "",
             "path": filepath if single_file else pkg_dir,

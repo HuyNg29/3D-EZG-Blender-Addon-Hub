@@ -15,6 +15,8 @@ import urllib.request
 
 import bpy
 
+from .ezg_i18n import tr
+
 TIMEOUT = 20
 
 # {url: {"index": {...}, "catalog": {...}}} — chi song trong phien Blender hien tai.
@@ -31,7 +33,7 @@ def online():
 
 def _fetch_json(url, token=""):
     if not online():
-        raise RemoteError("Blender đang ở chế độ offline. Bật Preferences > System > Allow Online Access.")
+        raise RemoteError(tr("Blender đang ở chế độ offline. Bật Preferences > System > Allow Online Access.", "Blender is in offline mode. Enable Preferences > System > Allow Online Access."))
 
     req = urllib.request.Request(url, headers={"User-Agent": "ezg-addon-hub"})
     if token:
@@ -42,19 +44,19 @@ def _fetch_json(url, token=""):
             raw = resp.read()
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
-            raise RemoteError("Bị từ chối (%d). Kho đặt private? Kiểm tra access token." % exc.code)
+            raise RemoteError(tr("Bị từ chối (%d). Kho đặt private? Kiểm tra access token.", "Access denied (%d). Is the repository private? Check the access token.") % exc.code)
         if exc.code == 404:
-            raise RemoteError("Không tìm thấy (404): %s" % url)
-        raise RemoteError("Lỗi HTTP %d khi tải %s" % (exc.code, url))
+            raise RemoteError(tr("Không tìm thấy (404): %s", "Not found (404): %s") % url)
+        raise RemoteError(tr("Lỗi HTTP %d khi tải %s", "HTTP error %d while downloading %s") % (exc.code, url))
     except urllib.error.URLError as exc:
-        raise RemoteError("Không kết nối được: %s" % exc.reason)
+        raise RemoteError(tr("Không kết nối được: %s", "Could not connect: %s") % exc.reason)
     except Exception as exc:
-        raise RemoteError("Lỗi khi tải: %s" % exc)
+        raise RemoteError(tr("Lỗi khi tải: %s", "Download error: %s") % exc)
 
     try:
         return json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise RemoteError("Nội dung trả về không phải JSON hợp lệ: %s" % exc)
+        raise RemoteError(tr("Nội dung trả về không phải JSON hợp lệ: %s", "The response is not valid JSON: %s") % exc)
 
 
 def _catalog_url(index_url):
@@ -66,7 +68,7 @@ def fetch(index_url, token="", force=False):
     """Tra ve (index_dict, catalog_dict). catalog co the la {} neu kho khong co."""
     url = (index_url or "").strip()
     if not url:
-        raise RemoteError("Chưa đặt URL kho EZG trong Preferences của hub.")
+        raise RemoteError(tr("Chưa đặt URL kho EZG trong Preferences của hub.", "The EZG repository URL is not set in the hub preferences."))
 
     if not force and url in _cache:
         return _cache[url]["index"], _cache[url]["catalog"]

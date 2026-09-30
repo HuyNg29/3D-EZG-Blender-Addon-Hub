@@ -9,6 +9,7 @@ import bpy
 
 from . import prefs as prefs_mod
 from . import scanner
+from .ezg_i18n import tr
 
 
 class BridgeError(Exception):
@@ -50,36 +51,36 @@ def sync_all():
     try:
         bpy.ops.extensions.repo_sync_all()
     except Exception as exc:
-        raise BridgeError("Sync thất bại: %s" % exc)
+        raise BridgeError(tr("Sync thất bại: %s", "Sync failed: %s") % exc)
 
 
 def sync_repo(repo):
     """Tai lai index cua rieng mot repo — nhanh hon sync_all khi chi can 1 addon."""
     idx = scanner.repo_index(repo)
     if idx < 0:
-        raise BridgeError("Không xác định được vị trí repo trong danh sách.")
+        raise BridgeError(tr("Không xác định được vị trí repo trong danh sách.", "Could not find the repository in the list."))
     try:
         bpy.ops.extensions.repo_sync(repo_index=idx)
     except Exception as exc:
-        raise BridgeError("Sync kho '%s' thất bại: %s" % (repo.name, exc))
+        raise BridgeError(tr("Sync kho '%s' thất bại: %s", "Syncing repository '%s' failed: %s") % (repo.name, exc))
 
 
 def upgrade_all():
     try:
         bpy.ops.extensions.package_upgrade_all()
     except Exception as exc:
-        raise BridgeError("Cập nhật thất bại: %s" % exc)
+        raise BridgeError(tr("Cập nhật thất bại: %s", "Update failed: %s") % exc)
 
 
 def install(repo, pkg_id, enable=True):
     idx = scanner.repo_index(repo)
     if idx < 0:
-        raise BridgeError("Không xác định được vị trí repo trong danh sách.")
+        raise BridgeError(tr("Không xác định được vị trí repo trong danh sách.", "Could not find the repository in the list."))
     try:
         bpy.ops.extensions.package_install(
             repo_index=idx, pkg_id=pkg_id, enable_on_install=enable)
     except Exception as exc:
-        raise BridgeError("Cài '%s' thất bại: %s" % (pkg_id, exc))
+        raise BridgeError(tr("Cài '%s' thất bại: %s", "Installing '%s' failed: %s") % (pkg_id, exc))
 
 
 def install_file(filepath, enable=True):
@@ -88,7 +89,7 @@ def install_file(filepath, enable=True):
         bpy.ops.extensions.package_install_files(
             filepath=filepath, enable_on_install=enable)
     except Exception as exc:
-        raise BridgeError("Cài từ file '%s' thất bại: %s" % (filepath, exc))
+        raise BridgeError(tr("Cài từ file '%s' thất bại: %s", "Installing from file '%s' failed: %s") % (filepath, exc))
 
 
 def set_enabled(module, enabled):
@@ -98,7 +99,7 @@ def set_enabled(module, enabled):
         else:
             bpy.ops.preferences.addon_disable(module=module)
     except Exception as exc:
-        raise BridgeError("Đổi trạng thái '%s' thất bại: %s" % (module, exc))
+        raise BridgeError(tr("Đổi trạng thái '%s' thất bại: %s", "Changing the state of '%s' failed: %s") % (module, exc))
 
 
 def save_prefs():

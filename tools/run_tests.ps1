@@ -12,9 +12,12 @@
 #
 #   .\tools\run_tests.ps1
 #   .\tools\run_tests.ps1 -Keep          # giu sandbox lai de xem xet
+#   .\tools\run_tests.ps1 -Only test_i18n,test_hub   # chi chay vai test
 
 param(
     [string]$Blender = "D:\AppInstall\Steam\steamapps\common\Blender\blender.exe",
+    # Ten test (co hoac khong co duoi .py). Bo trong = chay het.
+    [string[]]$Only = @(),
     # Thu muc chua FBX mau cua Mixamo. Bo asset nay ~33 MB nen khong nam trong
     # git. Khong tro toi thi cac test can no se tu bo qua, khong tinh la hong.
     [string]$Assets = $(if ($env:EZG_TEST_ASSETS) { $env:EZG_TEST_ASSETS } else { "D:\EZG Addon Assets\MixamoLibResource" }),
@@ -31,8 +34,19 @@ if (-not (Test-Path $Blender)) {
 $sandbox = Join-Path ([System.IO.Path]::GetTempPath()) ("ezghub_test_" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $sandbox | Out-Null
 
-$tests = Get-ChildItem (Join-Path $repo "tests") -Filter "test_*.py" | Sort-Object Name
+$tests = @(Get-ChildItem (Join-Path $repo "tests") -Filter "test_*.py" | Sort-Object Name)
+if ($Only.Count -gt 0) {
+    $want = $Only | ForEach-Object { ($_ -split ",") } | ForEach-Object { $_.Trim() -replace "\.py$", "" } |
+            Where-Object { $_ }
+    $tests = @($tests | Where-Object { $want -contains $_.BaseName })
+    $missing = @($want | Where-Object { $tests.BaseName -notcontains $_ })
+    if ($missing.Count -gt 0) { throw "Khong co test: $($missing -join ', ')" }
+}
 if ($tests.Count -eq 0) { throw "Khong co test nao trong tests\" }
+
+# Ngon ngu VI/EN dung chung cho moi addon EZG, luu trong config cua sandbox.
+# Xoa truoc moi test de test nao cung bat dau tu mac dinh (tieng Viet).
+$langFile = Join-Path $sandbox "config\ezg_language.txt"
 
 $failed = @()
 try {
@@ -48,6 +62,7 @@ try {
     }
 
     foreach ($t in $tests) {
+        Remove-Item -LiteralPath $langFile -ErrorAction SilentlyContinue
         Write-Host ""
         Write-Host ("=== {0} ===" -f $t.Name) -ForegroundColor Cyan
         # --factory-startup: khong keo addon cua may vao ket qua test.

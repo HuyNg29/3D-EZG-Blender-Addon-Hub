@@ -23,6 +23,7 @@ import zipfile
 import bpy
 
 from . import bridge, scanner
+from .ezg_i18n import tr
 
 SCHEMA = 1
 MANIFEST_NAME = "manifest.json"
@@ -60,7 +61,7 @@ def _zip_addon(item, out_path):
             return
 
         if not os.path.isdir(src):
-            raise BackupError("Không tìm thấy '%s' trên đĩa." % src)
+            raise BackupError(tr("Không tìm thấy '%s' trên đĩa.", "'%s' not found on disk.") % src)
 
         for root, dirs, files in os.walk(src):
             dirs[:] = [d for d in dirs if d != "__pycache__"]
@@ -81,7 +82,7 @@ def create(context, items, snapshot_root, profile, all_blobs=False):
     try:
         os.makedirs(snap_dir, exist_ok=True)
     except Exception as exc:
-        raise BackupError("Không tạo được thư mục '%s': %s" % (snap_dir, exc))
+        raise BackupError(tr("Không tạo được thư mục '%s': %s", "Could not create folder '%s': %s") % (snap_dir, exc))
 
     warnings = []
     records = []
@@ -98,7 +99,7 @@ def create(context, items, snapshot_root, profile, all_blobs=False):
                 _zip_addon(item, zip_path)
                 blob_rel = "%s/%s" % (BLOBS_DIRNAME, zip_name)
             except Exception as exc:
-                warnings.append("%s: không zip được (%s)" % (item["name"], exc))
+                warnings.append(tr("%s: không zip được (%s)", "%s: could not zip (%s)") % (item["name"], exc))
 
         records.append({
             "pkg_id": item["pkg_id"],
@@ -132,7 +133,7 @@ def create(context, items, snapshot_root, profile, all_blobs=False):
         with open(path, "w", encoding="utf-8") as f:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
     except Exception as exc:
-        raise BackupError("Không ghi được manifest: %s" % exc)
+        raise BackupError(tr("Không ghi được manifest: %s", "Could not write the manifest: %s") % exc)
 
     return snap_dir, len(records), warnings
 
@@ -192,7 +193,7 @@ def read_manifest(snap_dir):
         with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as exc:
-        raise BackupError("Không đọc được manifest: %s" % exc)
+        raise BackupError(tr("Không đọc được manifest: %s", "Could not read the manifest: %s") % exc)
 
 
 def restore(context, snap_dir, mode, repo_url, token=""):
@@ -215,7 +216,7 @@ def restore(context, snap_dir, mode, repo_url, token=""):
         try:
             ezg_repo = bridge.ensure_ezg_repo(repo_url, token)
         except Exception as exc:
-            report.append("Không chuẩn bị được repo EZG: %s" % exc)
+            report.append(tr("Không chuẩn bị được repo EZG: %s", "Could not prepare the EZG repository: %s") % exc)
 
     # Kho phai duoc sync thi package_install moi tim thay goi. May vua cai Blender
     # xong co the chua mo Get Extensions lan nao — luc do index cua kho
@@ -225,8 +226,10 @@ def restore(context, snap_dir, mode, repo_url, token=""):
         try:
             bridge.sync_all()
         except Exception as exc:
-            report.append("Không tải được danh sách gói từ kho (%s). "
-                          "Addon tải từ kho có thể thất bại." % exc)
+            report.append(tr("Không tải được danh sách gói từ kho (%s). "
+                             "Addon tải từ kho có thể thất bại.",
+                             "Could not download the package lists (%s). "
+                             "Add-ons from repositories may fail.") % exc)
 
     for rec in records:
         name = rec.get("name") or rec.get("pkg_id")
@@ -237,7 +240,7 @@ def restore(context, snap_dir, mode, repo_url, token=""):
         has_blob = bool(blob_path and os.path.isfile(blob_path))
 
         if module in installed_now:
-            report.append("%s: đã có sẵn, bỏ qua" % name)
+            report.append(tr("%s: đã có sẵn, bỏ qua", "%s: already installed, skipped") % name)
             continue
 
         # EXACT: bat buoc dung blob vi kho chi phuc vu ban moi nhat.
@@ -249,7 +252,7 @@ def restore(context, snap_dir, mode, repo_url, token=""):
                 except Exception as exc:
                     report.append("%s: %s" % (name, exc))
             else:
-                report.append("%s: không có zip nên không cài đúng bản %s được"
+                report.append(tr("%s: không có zip nên không cài đúng bản %s được", "%s: no zip, so version %s cannot be installed")
                               % (name, rec.get("version", "?")))
             continue
 
@@ -262,7 +265,7 @@ def restore(context, snap_dir, mode, repo_url, token=""):
                 done.append(name)
                 continue
             except Exception as exc:
-                report.append("%s: tải từ kho thất bại (%s)" % (name, exc))
+                report.append(tr("%s: tải từ kho thất bại (%s)", "%s: download from repository failed (%s)") % (name, exc))
 
         if has_blob:
             try:
@@ -271,8 +274,8 @@ def restore(context, snap_dir, mode, repo_url, token=""):
             except Exception as exc:
                 report.append("%s: %s" % (name, exc))
         else:
-            where = rec.get("origin", {}).get("homepage") or "không rõ nguồn"
-            report.append("%s: không có zip và không tải lại được -> %s" % (name, where))
+            where = rec.get("origin", {}).get("homepage") or tr("không rõ nguồn", "unknown source")
+            report.append(tr("%s: không có zip và không tải lại được -> %s", "%s: no zip and cannot be downloaded again -> %s") % (name, where))
 
     bridge.save_prefs()
     return done, report

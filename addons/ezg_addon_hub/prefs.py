@@ -6,6 +6,9 @@ import bpy
 from bpy.props import BoolProperty, StringProperty
 from bpy.types import AddonPreferences
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 # URL mac dinh cua kho EZG. Doi o day neu chuyen sang tu host.
 DEFAULT_REPO_URL = "https://huyng29.github.io/3D-EZG-Blender-Addon-Hub/index.json"
 
@@ -27,45 +30,52 @@ class EZGHubPreferences(AddonPreferences):
     bl_idname = __package__
 
     repo_url: StringProperty(
-        name="URL kho EZG",
-        description="Địa chỉ index.json của kho addon EZG",
+        name=tr("URL kho EZG", "EZG repository URL"),
+        description=tr("Địa chỉ index.json của kho addon EZG", "Address of the EZG add-on repository index.json"),
         default=DEFAULT_REPO_URL,
     )
     access_token: StringProperty(
-        name="Access token",
-        description="Chỉ cần nếu kho EZG đặt ở chế độ private",
+        name="Access token",  # i18n-skip
+        description=tr("Chỉ cần nếu kho EZG đặt ở chế độ private", "Only needed if the EZG repository is private"),
         default="",
         subtype='PASSWORD',
     )
     backup_dir: StringProperty(
-        name="Thư mục backup",
-        description="Nơi lưu snapshot profile addon",
+        name=tr("Thư mục backup", "Backup folder"),
+        description=tr("Nơi lưu snapshot profile addon", "Where add-on profile snapshots are stored"),
         default="",
         subtype='DIR_PATH',
     )
     sync_dir: StringProperty(
-        name="Thư mục đồng bộ",
-        description=("Tuỳ chọn. Trỏ tới NAS hoặc thư mục Google Drive đã sync. "
-                     "Hub chỉ ghi thêm bản manifest vào đây, việc đồng bộ để OS lo"),
+        name=tr("Thư mục đồng bộ", "Sync folder"),
+        description=tr("Tuỳ chọn. Trỏ tới NAS hoặc thư mục Google Drive đã sync. "
+                        "Hub chỉ ghi thêm bản manifest vào đây, việc đồng bộ để OS lo",
+                        "Optional. Point to a NAS or a synced Google Drive folder. "
+                        "The hub only adds the manifest here; the OS does the syncing"),
         default="",
         subtype='DIR_PATH',
     )
     profile_name: StringProperty(
-        name="Tên profile",
-        description="Snapshot được lưu theo tên này",
+        name=tr("Tên profile", "Profile name"),
+        description=tr("Snapshot được lưu theo tên này", "Snapshots are stored under this name"),
         default="",
     )
     backup_all_blobs: BoolProperty(
-        name="Lưu zip cho mọi addon",
-        description=("Mặc định hub chỉ zip addon nguồn thủ công (nhóm C) vì addon từ kho "
-                     "tải lại được. Bật cái này nếu muốn Restore đúng y hệt phiên bản cũ, "
-                     "đổi lại snapshot nặng hơn nhiều"),
+        name=tr("Lưu zip cho mọi addon", "Zip every add-on"),
+        description=tr("Mặc định hub chỉ zip addon nguồn thủ công (nhóm C) vì addon từ kho "
+                        "tải lại được. Bật cái này nếu muốn Restore đúng y hệt phiên bản cũ, "
+                        "đổi lại snapshot nặng hơn nhiều",
+                        "By default the hub only zips manual-source add-ons (group C), since "
+                        "repository add-ons can be downloaded again. Enable this to restore the "
+                        "exact old versions, at the cost of much larger snapshots"),
         default=False,
     )
     mirror_blobs: BoolProperty(
-        name="Chép cả zip sang thư mục đồng bộ",
-        description=("CÂN NHẮC KỸ: zip có thể chứa addon trả phí. Để tắt thì chỉ manifest "
-                     "được chép sang thư mục dùng chung"),
+        name=tr("Chép cả zip sang thư mục đồng bộ", "Copy zips to the sync folder too"),
+        description=tr("CÂN NHẮC KỸ: zip có thể chứa addon trả phí. Để tắt thì chỉ manifest "
+                        "được chép sang thư mục dùng chung",
+                        "THINK TWICE: zips may contain paid add-ons. When off, only the "
+                        "manifest is copied to the shared folder"),
         default=False,
     )
 
@@ -78,32 +88,38 @@ class EZGHubPreferences(AddonPreferences):
     def draw(self, context):
         layout = self.layout
 
-        layout.label(text="Hub nằm ở View3D > phím N > tab 'EZG Hub'.", icon='INFO')
+        layout.label(text=tr("Hub nằm ở View3D > phím N > tab 'EZG Hub'.",
+                             "The hub lives in View3D > N key > 'EZG Hub' tab."), icon='INFO')
+        row = layout.row()
+        row.label(text=tr("Ngôn ngữ mọi addon EZG", "Language of all EZG add-ons"))
+        ezg_i18n.draw_toggle(row, "ezg")
         layout.separator()
 
         box = layout.box()
-        box.label(text="Kho addon EZG", icon='URL')
+        box.label(text=tr("Kho addon EZG", "EZG add-on repository"), icon='URL')
         box.prop(self, "repo_url", text="URL")
-        box.prop(self, "access_token", text="Token")
+        box.prop(self, "access_token", text="Token")  # i18n-skip
 
         box = layout.box()
-        box.label(text="Backup profile", icon='FILE_BACKUP')
+        box.label(text="Backup profile", icon='FILE_BACKUP')  # i18n-skip
         box.prop(self, "profile_name",
-                 text="Tên profile" if self.profile_name else "Tên profile (%s)" % default_profile_name())
+                 text=tr("Tên profile", "Profile name") if self.profile_name
+                 else tr("Tên profile (%s)", "Profile name (%s)") % default_profile_name())
         box.prop(self, "backup_dir",
-                 text="Thư mục" if self.backup_dir else "Thư mục (mặc định)")
+                 text=tr("Thư mục", "Folder") if self.backup_dir
+                 else tr("Thư mục (mặc định)", "Folder (default)"))
         if not self.backup_dir:
             box.label(text=default_backup_dir(), icon='DOT')
         box.prop(self, "backup_all_blobs")
 
         box = layout.box()
-        box.label(text="Đồng bộ (tuỳ chọn)", icon='UV_SYNC_SELECT')
-        box.prop(self, "sync_dir", text="Thư mục")
+        box.label(text=tr("Đồng bộ (tuỳ chọn)", "Sync (optional)"), icon='UV_SYNC_SELECT')
+        box.prop(self, "sync_dir", text=tr("Thư mục", "Folder"))
         row = box.row()
         row.enabled = bool(self.sync_dir)
         row.prop(self, "mirror_blobs")
         if self.sync_dir and self.mirror_blobs:
-            box.label(text="Zip addon trả phí sẽ nằm trên thư mục dùng chung.", icon='ERROR')
+            box.label(text=tr("Zip addon trả phí sẽ nằm trên thư mục dùng chung.", "Paid add-on zips will end up in the shared folder."), icon='ERROR')
 
 
 def get(context=None):

@@ -10,6 +10,9 @@ from bpy.props import (
 )
 from bpy.types import PropertyGroup
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 
 class EZG_InventoryItem(PropertyGroup):
     """Mot addon dang cai tren may — tab 'May cua toi'."""
@@ -30,6 +33,7 @@ class EZG_CatalogItem(PropertyGroup):
     pkg_id: StringProperty()
     title: StringProperty()
     summary: StringProperty()
+    summary_en: StringProperty()
     version: StringProperty()
     group_label: StringProperty()
     installed: BoolProperty()
@@ -57,17 +61,21 @@ classes = (
 
 
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
 
     wm = bpy.types.WindowManager
 
     wm.ezg_tab = EnumProperty(
-        name="Tab",
+        name="Tab",  # i18n-skip
         items=[
-            ('STORE', "Kho EZG", "Addon của EZG: cài và cập nhật", 'URL', 0),
-            ('MACHINE', "Máy của tôi", "Mọi addon đang cài trên máy này", 'DESKTOP', 1),
-            ('BACKUP', "Backup", "Lưu và phục hồi profile addon", 'FILE_BACKUP', 2),
+            ('STORE', tr("Kho EZG", "EZG Store"),
+             tr("Addon của EZG: cài và cập nhật", "EZG add-ons: install and update"), 'URL', 0),
+            ('MACHINE', tr("Máy của tôi", "My machine"),
+             tr("Mọi addon đang cài trên máy này", "Every add-on installed on this machine"),
+             'DESKTOP', 1),
+            ('BACKUP', "Backup",  # i18n-skip
+             tr("Lưu và phục hồi profile addon", "Save and restore add-on profiles"),
+             'FILE_BACKUP', 2),
         ],
         default='STORE',
     )
@@ -85,12 +93,12 @@ def register():
     wm.ezg_error = StringProperty(default="")
 
     wm.ezg_restore_mode = EnumProperty(
-        name="Chế độ",
+        name=tr("Chế độ", "Mode"),
         items=[
-            ('LATEST', "Bản mới nhất",
-             "Tải lại từ kho, chỉ dùng zip đã lưu khi nguồn không còn. Khuyên dùng"),
-            ('EXACT', "Đúng bản đã lưu",
-             "Cài đúng version trong snapshot. Bắt buộc phải có zip đi kèm"),
+            ('LATEST', tr("Bản mới nhất", "Latest version"),
+             tr("Tải lại từ kho, chỉ dùng zip đã lưu khi nguồn không còn. Khuyên dùng", "Download again from the repository; use saved zips only when the source is gone. Recommended")),
+            ('EXACT', tr("Đúng bản đã lưu", "Exact saved version"),
+             tr("Cài đúng version trong snapshot. Bắt buộc phải có zip đi kèm", "Install the exact versions in the snapshot. Requires the zips")),
         ],
         default='LATEST',
     )
@@ -107,8 +115,4 @@ def unregister():
         except Exception:
             pass
 
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    ezg_i18n.unregister_classes(classes)

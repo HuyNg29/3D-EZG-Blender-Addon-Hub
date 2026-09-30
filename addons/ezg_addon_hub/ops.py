@@ -6,13 +6,14 @@ import bpy
 from bpy.props import BoolProperty, EnumProperty, StringProperty
 from bpy.types import Operator
 
-from . import backup, bridge, prefs as prefs_mod, remote, scanner
+from . import backup, bridge, ezg_i18n, prefs as prefs_mod, remote, scanner
+from .ezg_i18n import tr
 
 
 def _prefs():
     p = prefs_mod.get()
     if p is None:
-        raise RuntimeError("Không đọc được preferences của hub.")
+        raise RuntimeError(tr("Không đọc được preferences của hub.", "Could not read the hub preferences."))
     return p
 
 
@@ -44,8 +45,8 @@ def _fill_inventory(wm, items, updates=None):
 
 class EZG_OT_refresh_inventory(Operator):
     bl_idname = "ezg.refresh_inventory"
-    bl_label = "Quét lại"
-    bl_description = "Quét lại addon đang cài trên máy này"
+    bl_label = tr("Quét lại", "Rescan")
+    bl_description = tr("Quét lại addon đang cài trên máy này", "Rescan the add-ons installed on this machine")
 
     check_updates: BoolProperty(default=False, options={'SKIP_SAVE'})
 
@@ -57,7 +58,7 @@ class EZG_OT_refresh_inventory(Operator):
         updates = None
         if self.check_updates:
             if not remote.online():
-                _set_status("", "Blender đang offline. Bật Preferences > System > Allow Online Access.")
+                _set_status("", tr("Blender đang offline. Bật Preferences > System > Allow Online Access.", "Blender is offline. Enable Preferences > System > Allow Online Access."))
                 _fill_inventory(wm, items)
                 return {'CANCELLED'}
             repos = list(context.preferences.extensions.repos)
@@ -67,16 +68,16 @@ class EZG_OT_refresh_inventory(Operator):
 
         n_update = sum(1 for r in wm.ezg_inventory if r.update_version)
         if self.check_updates:
-            _set_status("%d addon, %d có bản mới." % (len(items), n_update))
+            _set_status(tr("%d addon, %d có bản mới.", "%d add-ons, %d with updates.") % (len(items), n_update))
         else:
-            _set_status("%d addon." % len(items))
+            _set_status(tr("%d addon.", "%d add-ons.") % len(items))
         return {'FINISHED'}
 
 
 class EZG_OT_refresh_store(Operator):
     bl_idname = "ezg.refresh_store"
-    bl_label = "Tải lại kho"
-    bl_description = "Tải danh sách addon EZG từ kho về"
+    bl_label = tr("Tải lại kho", "Reload repository")
+    bl_description = tr("Tải danh sách addon EZG từ kho về", "Download the EZG add-on list from the repository")
 
     def execute(self, context):
         p = _prefs()
@@ -104,7 +105,7 @@ class EZG_OT_refresh_store(Operator):
                     seen.add(pkg_id)
         for pkg_id in entries:
             if pkg_id not in seen:
-                grouped.append(("Khác", pkg_id))
+                grouped.append(("", pkg_id))  # UI tu ghi "Khac"
 
         wm.ezg_catalog.clear()
         for label, pkg_id in grouped:
@@ -114,6 +115,7 @@ class EZG_OT_refresh_store(Operator):
             row.pkg_id = pkg_id
             row.title = info.get("title_vi") or entry.get("name") or pkg_id
             row.summary = (info.get("summary_vi") or entry.get("tagline") or "").strip()
+            row.summary_en = (info.get("summary_en") or "").strip()
             row.version = entry.get("version", "")
             row.group_label = label
             row.recommended = bool(info.get("recommended"))
@@ -129,7 +131,8 @@ class EZG_OT_refresh_store(Operator):
             row.pkg_id = ext.get("id", "")
             row.title = ext.get("title_vi") or ext.get("id", "")
             row.summary = (ext.get("summary_vi") or "").strip()
-            row.group_label = "Bên thứ ba"
+            row.summary_en = (ext.get("summary_en") or "").strip()
+            row.group_label = ""  # UI tu ghi "Ben thu ba" theo ngon ngu
             row.is_external = True
             row.homepage = ext.get("homepage", "")
             inst = installed.get(row.pkg_id)
@@ -137,15 +140,17 @@ class EZG_OT_refresh_store(Operator):
             row.installed_version = inst["version"] if inst else ""
 
         n = sum(1 for r in wm.ezg_catalog if not r.is_external)
-        _set_status("Kho EZG: %d addon." % n)
+        _set_status(tr("Kho EZG: %d addon.", "EZG repository: %d add-ons.") % n)
         return {'FINISHED'}
 
 
 class EZG_OT_setup_repo(Operator):
     bl_idname = "ezg.setup_repo"
-    bl_label = "Thêm kho EZG vào Blender"
-    bl_description = ("Đăng kí kho EZG trong Preferences của Blender. "
-                      "Cần bước này thì Blender mới cài và tự kiểm tra cập nhật được")
+    bl_label = tr("Thêm kho EZG vào Blender", "Add EZG repository to Blender")
+    bl_description = tr("Đăng kí kho EZG trong Preferences của Blender. "
+                        "Cần bước này thì Blender mới cài và tự kiểm tra cập nhật được",
+                        "Register the EZG repository in Blender's Preferences. Blender "
+                        "needs this to install and check for updates on its own")
 
     def execute(self, context):
         p = _prefs()
@@ -156,14 +161,14 @@ class EZG_OT_setup_repo(Operator):
             _set_status("", str(exc))
             return {'CANCELLED'}
         bridge.save_prefs()
-        _set_status("Đã thêm kho '%s' vào Blender." % repo.name)
+        _set_status(tr("Đã thêm kho '%s' vào Blender.", "Added repository '%s' to Blender.") % repo.name)
         return {'FINISHED'}
 
 
 class EZG_OT_install(Operator):
     bl_idname = "ezg.install"
-    bl_label = "Cài"
-    bl_description = "Cài addon này từ kho EZG"
+    bl_label = tr("Cài", "Install")
+    bl_description = tr("Cài addon này từ kho EZG", "Install this add-on from the EZG repository")
     bl_options = {'REGISTER'}
 
     pkg_id: StringProperty()
@@ -183,30 +188,30 @@ class EZG_OT_install(Operator):
 
         bridge.save_prefs()
         bpy.ops.ezg.refresh_store()
-        _set_status("Đã cài '%s'." % self.pkg_id)
-        self.report({'INFO'}, "Đã cài %s." % self.pkg_id)
+        _set_status(tr("Đã cài '%s'.", "Installed '%s'.") % self.pkg_id)
+        self.report({'INFO'}, tr("Đã cài %s.", "Installed %s.") % self.pkg_id)
         return {'FINISHED'}
 
 
 class EZG_OT_update_selected(Operator):
     bl_idname = "ezg.update_selected"
-    bl_label = "Cập nhật mục đang chọn"
-    bl_description = "Chỉ cập nhật addon đang chọn trong danh sách"
+    bl_label = tr("Cập nhật mục đang chọn", "Update selected")
+    bl_description = tr("Chỉ cập nhật addon đang chọn trong danh sách", "Update only the add-on selected in the list")
 
     @classmethod
     def poll(cls, context):
         wm = context.window_manager
         if not (0 <= wm.ezg_inventory_index < len(wm.ezg_inventory)):
-            cls.poll_message_set("Chưa chọn addon nào trong danh sách.")
+            cls.poll_message_set(tr("Chưa chọn addon nào trong danh sách.", "No add-on selected in the list."))
             return False
 
         item = wm.ezg_inventory[wm.ezg_inventory_index]
         if item.group == "C":
             cls.poll_message_set(
-                "'%s' là nguồn thủ công — hub không tự cập nhật được." % item.name)
+                tr("'%s' là nguồn thủ công — hub không tự cập nhật được.", "'%s' is a manual source — the hub cannot update it.") % item.name)
             return False
         if not item.update_version:
-            cls.poll_message_set("'%s' đang là bản mới nhất." % item.name)
+            cls.poll_message_set(tr("'%s' đang là bản mới nhất.", "'%s' is already the latest version.") % item.name)
             return False
         return True
 
@@ -218,7 +223,7 @@ class EZG_OT_update_selected(Operator):
         repo = next((r for r in context.preferences.extensions.repos
                      if r.module == item.repo_module), None)
         if repo is None:
-            msg = "Không tìm thấy kho '%s' của addon này." % item.repo_module
+            msg = tr("Không tìm thấy kho '%s' của addon này.", "Repository '%s' of this add-on was not found.") % item.repo_module
             _set_status("", msg)
             self.report({'ERROR'}, msg)
             return {'CANCELLED'}
@@ -235,7 +240,7 @@ class EZG_OT_update_selected(Operator):
         remote.clear_cache()
         bpy.ops.ezg.refresh_inventory(check_updates=True)
 
-        msg = "Đã cập nhật %s lên v%s. Khởi động lại Blender để áp dụng." % (name, target)
+        msg = tr("Đã cập nhật %s lên v%s. Khởi động lại Blender để áp dụng.", "Updated %s to v%s. Restart Blender to apply.") % (name, target)
         _set_status(msg)
         self.report({'INFO'}, msg)
         return {'FINISHED'}
@@ -243,9 +248,11 @@ class EZG_OT_update_selected(Operator):
 
 class EZG_OT_update_all(Operator):
     bl_idname = "ezg.update_all"
-    bl_label = "Cập nhật tất cả"
-    bl_description = ("Đẩy sang cơ chế cập nhật của chính Blender. "
-                      "Addon nguồn thủ công không nằm trong phạm vi này")
+    bl_label = tr("Cập nhật tất cả", "Update all")
+    bl_description = tr("Đẩy sang cơ chế cập nhật của chính Blender. "
+                        "Addon nguồn thủ công không nằm trong phạm vi này",
+                        "Hands off to Blender's own update mechanism. "
+                        "Manual-source add-ons are not covered")
 
     def execute(self, context):
         try:
@@ -259,20 +266,20 @@ class EZG_OT_update_all(Operator):
         bridge.save_prefs()
         remote.clear_cache()
         bpy.ops.ezg.refresh_inventory(check_updates=True)
-        self.report({'INFO'}, "Đã chạy cập nhật. Khởi động lại Blender để áp dụng.")
+        self.report({'INFO'}, tr("Đã chạy cập nhật. Khởi động lại Blender để áp dụng.", "Update finished. Restart Blender to apply."))
         return {'FINISHED'}
 
 
 class EZG_OT_open_url(Operator):
     bl_idname = "ezg.open_url"
-    bl_label = "Mở trang nguồn"
-    bl_description = "Mở trang gốc của addon trong trình duyệt"
+    bl_label = tr("Mở trang nguồn", "Open source page")
+    bl_description = tr("Mở trang gốc của addon trong trình duyệt", "Open the add-on's homepage in the browser")
 
     url: StringProperty()
 
     def execute(self, context):
         if not self.url:
-            self.report({'WARNING'}, "Addon này không khai báo trang nguồn.")
+            self.report({'WARNING'}, tr("Addon này không khai báo trang nguồn.", "This add-on declares no source page."))
             return {'CANCELLED'}
         bpy.ops.wm.url_open(url=self.url)
         return {'FINISHED'}
@@ -280,7 +287,7 @@ class EZG_OT_open_url(Operator):
 
 class EZG_OT_refresh_snapshots(Operator):
     bl_idname = "ezg.refresh_snapshots"
-    bl_label = "Tải lại danh sách backup"
+    bl_label = tr("Tải lại danh sách backup", "Reload backup list")
 
     def execute(self, context):
         p = _prefs()
@@ -297,20 +304,20 @@ class EZG_OT_refresh_snapshots(Operator):
             row.blobs = s["blobs"]
             row.blender = s["blender"]
 
-        _set_status("%d bản backup." % len(snaps))
+        _set_status(tr("%d bản backup.", "%d backups.") % len(snaps))
         return {'FINISHED'}
 
 
 class EZG_OT_backup_create(Operator):
     bl_idname = "ezg.backup_create"
-    bl_label = "Tạo backup"
-    bl_description = "Lưu danh sách addon đang cài thành một snapshot"
+    bl_label = tr("Tạo backup", "Create backup")
+    bl_description = tr("Lưu danh sách addon đang cài thành một snapshot", "Save the installed add-on list as a snapshot")
 
     def execute(self, context):
         p = _prefs()
         items = scanner.scan(p.repo_url)
         if not items:
-            self.report({'WARNING'}, "Không có addon nào để backup.")
+            self.report({'WARNING'}, tr("Không có addon nào để backup.", "No add-ons to back up."))
             return {'CANCELLED'}
 
         try:
@@ -329,13 +336,13 @@ class EZG_OT_backup_create(Operator):
                     snap_dir, bpy.path.abspath(p.sync_dir),
                     p.resolved_profile_name(), p.mirror_blobs)
             except Exception as exc:
-                warnings.append("Không chép sang thư mục đồng bộ: %s" % exc)
+                warnings.append(tr("Không chép sang thư mục đồng bộ: %s", "Could not copy to the sync folder: %s") % exc)
 
         bpy.ops.ezg.refresh_snapshots()
 
-        msg = "Đã backup %d addon vào %s" % (count, os.path.basename(snap_dir))
+        msg = tr("Đã backup %d addon vào %s", "Backed up %d add-ons to %s") % (count, os.path.basename(snap_dir))
         if mirrored:
-            msg += " (đã chép sang thư mục đồng bộ)"
+            msg += tr(" (đã chép sang thư mục đồng bộ)", " (copied to the sync folder)")
         _set_status(msg, " | ".join(warnings))
         self.report({'WARNING'} if warnings else {'INFO'}, msg)
         for w in warnings:
@@ -345,13 +352,14 @@ class EZG_OT_backup_create(Operator):
 
 class EZG_OT_restore(Operator):
     bl_idname = "ezg.restore"
-    bl_label = "Phục hồi"
-    bl_description = "Cài lại các addon trong bản backup này"
+    bl_label = tr("Phục hồi", "Restore")
+    bl_description = tr("Cài lại các addon trong bản backup này", "Reinstall the add-ons in this backup")
     bl_options = {'REGISTER'}
 
     path: StringProperty()
     mode: EnumProperty(
-        items=[('LATEST', "Bản mới nhất", ""), ('EXACT', "Đúng bản đã lưu", "")],
+        items=[('LATEST', tr("Bản mới nhất", "Latest version"), ""),
+               ('EXACT', tr("Đúng bản đã lưu", "Exact saved version"), "")],
         default='LATEST',
     )
 
@@ -361,7 +369,7 @@ class EZG_OT_restore(Operator):
     def execute(self, context):
         p = _prefs()
         if not self.path or not os.path.isdir(self.path):
-            self.report({'ERROR'}, "Không tìm thấy bản backup.")
+            self.report({'ERROR'}, tr("Không tìm thấy bản backup.", "Backup not found."))
             return {'CANCELLED'}
 
         try:
@@ -374,10 +382,10 @@ class EZG_OT_restore(Operator):
 
         bpy.ops.ezg.refresh_inventory()
 
-        msg = "Đã cài lại %d addon." % len(done)
+        msg = tr("Đã cài lại %d addon.", "Reinstalled %d add-ons.") % len(done)
         if report:
-            msg += " %d mục cần xem lại (System Console)." % len(report)
-        _set_status(msg + " Khởi động lại Blender để áp dụng.", " | ".join(report[:3]))
+            msg += tr(" %d mục cần xem lại (System Console).", " %d items need attention (System Console).") % len(report)
+        _set_status(msg + tr(" Khởi động lại Blender để áp dụng.", " Restart Blender to apply."), " | ".join(report[:3]))
         for line in report:
             print("[EZG Hub restore]", line)
         self.report({'WARNING'} if report else {'INFO'}, msg)
@@ -395,17 +403,13 @@ classes = (
     EZG_OT_refresh_snapshots,
     EZG_OT_backup_create,
     EZG_OT_restore,
+    ezg_i18n.make_language_operator("ezg"),
 )
 
 
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
 
 
 def unregister():
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    ezg_i18n.unregister_classes(classes)

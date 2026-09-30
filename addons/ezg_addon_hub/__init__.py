@@ -6,12 +6,12 @@ Import trong goi phai la relative, va tham chieu module phai dung __package__.
 
 import bpy
 
-from . import ops, prefs, props, ui
+from . import ezg_i18n, ops, prefs, props, ui
 
 
 def register():
     # Preferences dang ki truoc: cac phan con lai deu doc tuy chon tu day.
-    bpy.utils.register_class(prefs.EZGHubPreferences)
+    ezg_i18n.register_classes((prefs.EZGHubPreferences,))
     props.register()
     ops.register()
     ui.register()
@@ -21,7 +21,4 @@ def unregister():
     ui.unregister()
     ops.unregister()
     props.unregister()
-    try:
-        bpy.utils.unregister_class(prefs.EZGHubPreferences)
-    except Exception:
-        pass
+    ezg_i18n.unregister_classes((prefs.EZGHubPreferences,))
