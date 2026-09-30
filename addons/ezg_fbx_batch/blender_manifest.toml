@@ -2,9 +2,9 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_fbx_batch"
-version = "1.5.4"
+version = "1.6.0"
 name = "FBX Batch to Blender"
-tagline = "Convert hang loat FBX trong 1 folder sang .blend, giu texture"
+tagline = "Chuyển hàng loạt FBX trong thư mục sang .blend, giữ texture"
 maintainer = "Vit (EZG) <visual-01@easygoing.vn>"
 type = "add-on"
 
@@ -22,4 +22,4 @@ copyright = [
 ]
 
 [permissions]
-files = "Doc file FBX tu o dia va ghi ra file .blend"
+files = "Đọc file FBX từ ổ đĩa và ghi ra file .blend"

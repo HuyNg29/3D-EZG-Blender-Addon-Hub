@@ -3,108 +3,10 @@ import os
 import json
 import tempfile
 import subprocess
+import traceback
 
-# ---------------------------------------------------------------------------
-# NGON NGU / LANGUAGE
-# ---------------------------------------------------------------------------
-LANG = {
-    'VI': {
-        'language': "Ngon ngu",
-        'input_folder': "Folder FBX",
-        'output_folder': "Folder Output",
-        'mode': "Che do",
-        'mode_separate': "Moi FBX -> 1 file .blend",
-        'mode_separate_desc': "Moi file FBX thanh 1 file .blend rieng",
-        'mode_single': "Gom tat ca vao 1 file .blend",
-        'mode_single_desc': "Import tat ca vao 1 file, moi FBX 1 collection",
-        'single_filename': "Ten file",
-        'output_file': "File .blend dich",
-        'single_hint': "Chon file .blend co san = them vao do; ten moi/folder = tao moi",
-        'group_mode': "Gop collection",
-        'gm_none': "Khong dung collection (de phang)",
-        'gm_last': "Bo duoi cuoi (vd _blue, _red)",
-        'gm_variant': "Bo duoi so/bien the (_Color1)",
-        'gm_perfile': "Moi file 1 collection",
-        'gm_all': "Tat ca vao 1 collection",
-        'spread': "Dan trai cho de nhin",
-        'spread_gap': "Gian cach",
-        'options': "Tuy chon",
-        'recursive': "Quet ca subfolder",
-        'preserve_structure': "Giu cau truc folder",
-        'skip_existing': "Bo qua file da co",
-        'keep_textures': "Giu texture (nhung vao .blend)",
-        'image_search': "Tim texture trong folder con",
-        'use_anim': "Import animation",
-        'auto_bone': "Auto bone orientation",
-        'scale': "Scale",
-        'bake_transform': "Apply transform (thu nghiem)",
-        'convert': "CONVERT",
-        'running': "Dang chay...",
-        'processing': "Dang xu ly:",
-        'last_ok': "Lan truoc: OK",
-        'last_errors': "Lan truoc: %d loi",
-        'err_input': "Folder FBX khong hop le.",
-        'err_output': "Chua chon folder output.",
-        'err_nofbx': "Khong tim thay file .fbx nao.",
-        'warn_running': "Dang chay, doi xong da.",
-        'warn_allskip': "Tat ca file da co san (bo qua het).",
-        'err_blender': "Khong chay duoc Blender nen: %s",
-        'done_ok': "Xong %d/%d file.",
-        'done_err': "Xong nhung co %d loi (xem System Console).",
-    },
-    'EN': {
-        'language': "Language",
-        'input_folder': "FBX Folder",
-        'output_folder': "Output Folder",
-        'mode': "Mode",
-        'mode_separate': "Each FBX -> one .blend",
-        'mode_separate_desc': "Convert each FBX file into its own .blend file",
-        'mode_single': "All into one .blend",
-        'mode_single_desc': "Import everything into one file, one collection per FBX",
-        'single_filename': "File name",
-        'output_file': "Target .blend file",
-        'single_hint': "Existing .blend = add into it; new name/folder = create new",
-        'group_mode': "Group collections",
-        'gm_none': "No collections (flat)",
-        'gm_last': "Strip last suffix (e.g. _blue, _red)",
-        'gm_variant': "Strip number/variant (_Color1)",
-        'gm_perfile': "One collection per file",
-        'gm_all': "Everything in one collection",
-        'spread': "Spread out for visibility",
-        'spread_gap': "Gap",
-        'options': "Options",
-        'recursive': "Scan subfolders",
-        'preserve_structure': "Keep folder structure",
-        'skip_existing': "Skip existing files",
-        'keep_textures': "Keep textures (pack into .blend)",
-        'image_search': "Search textures in subfolders",
-        'use_anim': "Import animation",
-        'auto_bone': "Auto bone orientation",
-        'scale': "Scale",
-        'bake_transform': "Apply transform (experimental)",
-        'convert': "CONVERT",
-        'running': "Running...",
-        'processing': "Processing:",
-        'last_ok': "Last run: OK",
-        'last_errors': "Last run: %d errors",
-        'err_input': "Invalid FBX folder.",
-        'err_output': "No output folder selected.",
-        'err_nofbx': "No .fbx files found.",
-        'warn_running': "Already running, please wait.",
-        'warn_allskip': "All files already exist (all skipped).",
-        'err_blender': "Cannot launch background Blender: %s",
-        'done_ok': "Done %d/%d files.",
-        'done_err': "Done with %d errors (see System Console).",
-    },
-}
-
-
-def L(context):
-    try:
-        return LANG.get(context.scene.fbx_converter.language, LANG['VI'])
-    except Exception:
-        return LANG['VI']
-
+from . import ezg_i18n
+from .ezg_i18n import tr
 
 # ---------------------------------------------------------------------------
 # WORKER SCRIPT (chay boi tien trinh Blender rieng --background)
@@ -141,7 +43,7 @@ def reset_scene():
 
 
 def import_into_new_collection(name, path):
-    # import vao scene roi don object moi sang collection rieng
+    # import into the scene, then move the new objects to their own collection
     before = set(bpy.data.objects)
     import_fbx(path)
     new_objs = [o for o in bpy.data.objects if o not in before]
@@ -242,7 +144,7 @@ try:
         total = len(srcs)
         write_progress(0, total)
         if open_existing:
-            bpy.ops.wm.open_mainfile(filepath=dst)   # import vao file co san
+            bpy.ops.wm.open_mainfile(filepath=dst)   # import into the existing file
         else:
             reset_scene()
 
@@ -276,46 +178,87 @@ except Exception as e:
 # ---------------------------------------------------------------------------
 # TRANG THAI (module-level) cho Panel
 # ---------------------------------------------------------------------------
-_running = False
+_running = False     # True khi modal convert dang chay (xem ezg_i18n_busy)
 _progress = {"done": 0, "total": 0, "current": "", "errors": [], "finished": False, "ok": True}
 _enum_cache = {}
+_modal_timer = None  # timer cua modal convert, giu o cap module de unregister go duoc
+
+
+def _stop_modal(wm):
+    """Ha co _running va go timer. Goi o MOI loi ra cua modal: xong, loi, cancel,
+    unregister. Sot mot cho la ezg_i18n_busy() ket o True, doi ngon ngu cho mai."""
+    global _running, _modal_timer
+    _running = False
+    timer, _modal_timer = _modal_timer, None
+    if timer is not None and wm is not None:
+        try:
+            wm.event_timer_remove(timer)
+        except Exception:
+            pass
+
+
+def ezg_i18n_busy():
+    """ezg_i18n goi truoc khi doi ngon ngu: dang convert thi hoan, vi go class
+    cua modal dang chay la Blender co the crash."""
+    return _running
 
 
 def mode_items(self, context):
-    lang = getattr(self, "language", "VI")
-    d = LANG.get(lang, LANG['VI'])
-    items = [
-        ('SEPARATE', d['mode_separate'], d['mode_separate_desc']),
-        ('SINGLE', d['mode_single'], d['mode_single_desc']),
-    ]
-    _enum_cache[lang] = items  # giu reference tranh crash GC
-    return _enum_cache[lang]
+    # Moi ngon ngu tao list MOT lan roi giu mai trong cache: Blender khong tu giu
+    # tham chieu toi chuoi tra ve tu callback -> chu rac hoac crash.
+    lang = ezg_i18n.lang()
+    items = _enum_cache.get(lang)
+    if items is None:
+        items = _enum_cache[lang] = [
+            ('SEPARATE', tr("Mỗi FBX -> 1 file .blend", "Each FBX -> One .blend"),
+             tr("Mỗi file FBX thành 1 file .blend riêng",
+                "Convert each FBX file into its own .blend file")),
+            ('SINGLE', tr("Gom tất cả vào 1 file .blend", "All Into One .blend"),
+             tr("Import tất cả vào 1 file, mỗi FBX 1 collection",
+                "Import everything into one file, one collection per FBX")),
+        ]
+    return items
 
 
 # ---------------------------------------------------------------------------
 # PROPERTIES
 # ---------------------------------------------------------------------------
 class FBXCONV_Props(bpy.types.PropertyGroup):
-    language: bpy.props.EnumProperty(
-        name="",
-        items=[('VI', "Tieng Viet", ""), ('EN', "English", "")],
-        default='VI')
-    input_folder: bpy.props.StringProperty(subtype='DIR_PATH')
-    output_folder: bpy.props.StringProperty(subtype='DIR_PATH')
-    mode: bpy.props.EnumProperty(items=mode_items)  # dong / dynamic theo ngon ngu
-    single_filename: bpy.props.StringProperty(default="library.blend")
-    output_file: bpy.props.StringProperty(subtype='FILE_PATH')
-    spread: bpy.props.BoolProperty(default=True)
-    spread_gap: bpy.props.FloatProperty(default=1.5, min=1.0, max=10.0)
-    recursive: bpy.props.BoolProperty(default=False)
-    preserve_structure: bpy.props.BoolProperty(default=True)
-    skip_existing: bpy.props.BoolProperty(default=True)
-    pack: bpy.props.BoolProperty(default=True)          # giu texture: nhung vao .blend
-    use_image_search: bpy.props.BoolProperty(default=True)
-    use_anim: bpy.props.BoolProperty(default=True)
-    automatic_bone_orientation: bpy.props.BoolProperty(default=True)
-    bake_space_transform: bpy.props.BoolProperty(default=False)
-    global_scale: bpy.props.FloatProperty(default=1.0, min=0.0001, max=1000.0)
+    input_folder: bpy.props.StringProperty(name=tr("Thư mục FBX", "FBX Folder"),
+                                           subtype='DIR_PATH')
+    output_folder: bpy.props.StringProperty(name=tr("Thư mục xuất", "Output Folder"),
+                                            subtype='DIR_PATH')
+    mode: bpy.props.EnumProperty(name=tr("Chế độ", "Mode"), items=mode_items)
+    single_filename: bpy.props.StringProperty(name=tr("Tên file", "File Name"),
+                                              default="library.blend")
+    output_file: bpy.props.StringProperty(name=tr("File .blend đích", "Target .blend File"),
+                                          subtype='FILE_PATH')
+    spread: bpy.props.BoolProperty(name=tr("Dàn trải cho dễ nhìn", "Spread Out for Visibility"),
+                                   default=True)
+    spread_gap: bpy.props.FloatProperty(name=tr("Giãn cách", "Gap"),
+                                        default=1.5, min=1.0, max=10.0)
+    recursive: bpy.props.BoolProperty(name=tr("Quét cả thư mục con", "Scan Subfolders"),
+                                      default=False)
+    preserve_structure: bpy.props.BoolProperty(name=tr("Giữ cấu trúc thư mục",
+                                                       "Keep Folder Structure"),
+                                               default=True)
+    skip_existing: bpy.props.BoolProperty(name=tr("Bỏ qua file đã có", "Skip Existing Files"),
+                                          default=True)
+    pack: bpy.props.BoolProperty(name=tr("Giữ texture (nhúng vào .blend)",
+                                         "Keep Textures (Pack into .blend)"),
+                                 default=True)
+    use_image_search: bpy.props.BoolProperty(name=tr("Tìm texture trong thư mục con",
+                                                     "Search Textures in Subfolders"),
+                                             default=True)
+    use_anim: bpy.props.BoolProperty(name="Import Animation",  # i18n-skip
+                                     default=True)
+    automatic_bone_orientation: bpy.props.BoolProperty(name="Auto Bone Orientation",  # i18n-skip
+                                                       default=True)
+    bake_space_transform: bpy.props.BoolProperty(name=tr("Apply transform (thử nghiệm)",
+                                                         "Apply Transform (Experimental)"),
+                                                 default=False)
+    global_scale: bpy.props.FloatProperty(name="Scale",  # i18n-skip
+                                          default=1.0, min=0.0001, max=1000.0)
 
 
 # ---------------------------------------------------------------------------
@@ -341,17 +284,19 @@ def enumerate_fbx(root, recursive):
 # ---------------------------------------------------------------------------
 class FBXCONV_OT_convert(bpy.types.Operator):
     bl_idname = "fbxconv.convert"
-    bl_label = "Convert"
+    bl_label = tr("Chuyển đổi", "Convert")
+    bl_description = tr("Chuyển hàng loạt file FBX trong thư mục sang .blend "
+                        "(chạy bằng một Blender nền)",
+                        "Batch-convert the FBX files in the folder to .blend "
+                        "(runs in a background Blender)")
 
-    _timer = None
     _proc = None
     _progress_path = None
 
     def invoke(self, context, event):
-        global _running, _progress
-        d = L(context)
+        global _running, _progress, _modal_timer
         if _running:
-            self.report({'WARNING'}, d['warn_running'])
+            self.report({'WARNING'}, tr("Đang chạy, đợi xong đã.", "Already running, please wait."))
             return {'CANCELLED'}
 
         props = context.scene.fbx_converter
@@ -359,21 +304,22 @@ class FBXCONV_OT_convert(bpy.types.Operator):
         out_dir = bpy.path.abspath(props.output_folder)
 
         if not in_dir or not os.path.isdir(in_dir):
-            self.report({'ERROR'}, d['err_input'])
+            self.report({'ERROR'}, tr("Thư mục FBX không hợp lệ.", "Invalid FBX folder."))
             return {'CANCELLED'}
 
         if props.mode == 'SEPARATE':
             if not props.output_folder.strip():
-                self.report({'ERROR'}, d['err_output'])
+                self.report({'ERROR'}, tr("Chưa chọn thư mục xuất.", "No output folder selected."))
                 return {'CANCELLED'}
         else:
             if not props.output_file.strip():
-                self.report({'ERROR'}, d['err_output'])
+                self.report({'ERROR'}, tr("Chưa chọn file .blend đích.",
+                                          "No target .blend file selected."))
                 return {'CANCELLED'}
 
         files = enumerate_fbx(in_dir, props.recursive)
         if not files:
-            self.report({'ERROR'}, d['err_nofbx'])
+            self.report({'ERROR'}, tr("Không tìm thấy file .fbx nào.", "No .fbx files found."))
             return {'CANCELLED'}
 
         options = {
@@ -399,7 +345,8 @@ class FBXCONV_OT_convert(bpy.types.Operator):
                     continue
                 jobs.append({"src": src, "dst": dst})
             if not jobs:
-                self.report({'WARNING'}, d['warn_allskip'])
+                self.report({'WARNING'}, tr("Tất cả file đã có sẵn (bỏ qua hết).",
+                                            "All files already exist (all skipped)."))
                 return {'CANCELLED'}
             cfg["jobs"] = jobs
         else:
@@ -431,134 +378,146 @@ class FBXCONV_OT_convert(bpy.types.Operator):
             self._proc = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
-            self.report({'ERROR'}, d['err_blender'] % e)
+            self.report({'ERROR'}, tr("Không chạy được Blender nền: %s",
+                                      "Could not launch background Blender: %s") % e)
             return {'CANCELLED'}
 
         total = len(cfg.get("jobs", cfg.get("srcs", [])))
         _progress = {"done": 0, "total": total, "current": "",
                      "errors": [], "finished": False, "ok": True}
-        _running = True
 
         wm = context.window_manager
-        self._timer = wm.event_timer_add(0.5, window=context.window)
+        _modal_timer = wm.event_timer_add(0.5, window=context.window)
         wm.modal_handler_add(self)
+        _running = True   # chi bat SAU khi modal da vao hang doi
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-        global _running, _progress
-        d = L(context)
+        global _progress
         if event.type == 'TIMER':
             try:
-                with open(self._progress_path, "r", encoding="utf-8") as f:
-                    _progress = json.load(f)
-            except Exception:
-                pass
-            for area in context.screen.areas:
-                if area.type == 'VIEW_3D':
-                    area.tag_redraw()
+                try:
+                    with open(self._progress_path, "r", encoding="utf-8") as f:
+                        _progress = json.load(f)
+                except Exception:
+                    pass
+                for area in context.screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
 
-            if self._proc.poll() is not None:
-                self._finish(context)
-                errs = _progress.get("errors", [])
-                if _progress.get("ok", False) and not errs:
-                    self.report({'INFO'}, d['done_ok'] %
-                                (_progress.get("done", 0), _progress.get("total", 0)))
-                else:
-                    self.report({'WARNING'}, d['done_err'] % len(errs))
-                    for e in errs[:20]:
-                        print("[FBXConv]", e)
-                return {'FINISHED'}
+                if self._proc.poll() is not None:
+                    _stop_modal(context.window_manager)
+                    errs = _progress.get("errors", [])
+                    if _progress.get("ok", False) and not errs:
+                        self.report({'INFO'}, tr("Xong %d/%d file.", "Done: %d/%d files.") %
+                                    (_progress.get("done", 0), _progress.get("total", 0)))
+                    else:
+                        self.report({'WARNING'}, tr("Xong nhưng có %d lỗi (xem System Console).",
+                                                    "Done with %d errors (see System Console).")
+                                    % len(errs))
+                        for e in errs[:20]:
+                            print("[FBXConv]", e)
+                    return {'FINISHED'}
+            except Exception:
+                # Loi giua chung: Blender bo modal ma khong goi cancel() -> tu don,
+                # khong thi _running (va ezg_i18n_busy) ket o True mai.
+                traceback.print_exc()
+                _stop_modal(context.window_manager)
+                self.report({'ERROR'}, tr("Lỗi khi theo dõi tiến trình (xem System Console).",
+                                          "Error while tracking the conversion (see System Console)."))
+                return {'CANCELLED'}
         return {'PASS_THROUGH'}
 
-    def _finish(self, context):
-        global _running
-        wm = context.window_manager
-        if self._timer:
-            wm.event_timer_remove(self._timer)
-            self._timer = None
-        _running = False
+    def cancel(self, context):
+        # Blender huy modal (mo file khac, dong cua so...). Tien trinh nen van
+        # chay tiep nhu truoc; chi ha co de panel/doi ngon ngu khong bi ket.
+        _stop_modal(getattr(context, "window_manager", None))
 
 
 # ---------------------------------------------------------------------------
 # PANEL
 # ---------------------------------------------------------------------------
 class FBXCONV_PT_panel(bpy.types.Panel):
-    bl_label = "FBX -> Blend"
+    bl_label = "FBX -> Blend"  # i18n-skip
     bl_idname = "FBXCONV_PT_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "FBX Convert"
 
+    def draw_header_preset(self, context):
+        ezg_i18n.draw_toggle(self.layout, "fbxconv")
+
     def draw(self, context):
         layout = self.layout
         props = context.scene.fbx_converter
-        d = L(context)
 
-        layout.label(text=d['language'] + ":")
-        layout.prop(props, "language", text="")
-
-        layout.separator()
-        layout.prop(props, "mode", text=d['mode'])
+        # Nhan cua cac property lay tu name=tr(...) trong FBXCONV_Props.
+        layout.prop(props, "mode")
 
         col = layout.column(align=True)
-        col.prop(props, "input_folder", text=d['input_folder'])
+        col.prop(props, "input_folder")
         if props.mode == 'SINGLE':
-            col.prop(props, "output_file", text=d['output_file'])
+            col.prop(props, "output_file")
         else:
-            col.prop(props, "output_folder", text=d['output_folder'])
+            col.prop(props, "output_folder")
 
         if props.mode == 'SINGLE':
-            layout.label(text=d['single_hint'], icon='INFO')
-            layout.prop(props, "spread", text=d['spread'])
+            layout.label(text=tr("Chọn file .blend có sẵn = thêm vào đó; tên mới/thư mục = tạo mới",
+                                 "Existing .blend = add into it; new name/folder = create new"),
+                         icon='INFO')
+            layout.prop(props, "spread")
             if props.spread:
-                layout.prop(props, "spread_gap", text=d['spread_gap'])
+                layout.prop(props, "spread_gap")
         else:
-            layout.prop(props, "preserve_structure", text=d['preserve_structure'])
-            layout.prop(props, "skip_existing", text=d['skip_existing'])
+            layout.prop(props, "preserve_structure")
+            layout.prop(props, "skip_existing")
 
         box = layout.box()
-        box.label(text=d['options'], icon='PREFERENCES')
-        box.prop(props, "recursive", text=d['recursive'])
-        box.prop(props, "pack", text=d['keep_textures'])
-        box.prop(props, "use_image_search", text=d['image_search'])
-        box.prop(props, "use_anim", text=d['use_anim'])
-        box.prop(props, "automatic_bone_orientation", text=d['auto_bone'])
-        box.prop(props, "global_scale", text=d['scale'])
-        box.prop(props, "bake_space_transform", text=d['bake_transform'])
+        box.label(text=tr("Tuỳ chọn", "Options"), icon='PREFERENCES')
+        box.prop(props, "recursive")
+        box.prop(props, "pack")
+        box.prop(props, "use_image_search")
+        box.prop(props, "use_anim")
+        box.prop(props, "automatic_bone_orientation")
+        box.prop(props, "global_scale")
+        box.prop(props, "bake_space_transform")
 
         layout.separator()
         if _running:
-            layout.label(text="%s %d/%d" % (
-                d['processing'], _progress.get("done", 0), _progress.get("total", 0)))
+            layout.label(text=tr("Đang xử lý: %d/%d", "Processing: %d/%d") % (
+                _progress.get("done", 0), _progress.get("total", 0)))
             cur = _progress.get("current", "")
             if cur:
                 layout.label(text=cur, icon='FILE')
             r = layout.row()
             r.enabled = False
-            r.operator("fbxconv.convert", text=d['running'])
+            r.operator("fbxconv.convert", text=tr("Đang chạy...", "Running..."))
         else:
-            layout.operator("fbxconv.convert", text=d['convert'], icon='PLAY')
+            layout.operator("fbxconv.convert", text=tr("CHUYỂN ĐỔI", "CONVERT"), icon='PLAY')
             if _progress.get("finished"):
                 errs = _progress.get("errors", [])
                 if errs:
-                    layout.label(text=d['last_errors'] % len(errs), icon='ERROR')
+                    layout.label(text=tr("Lần trước: %d lỗi", "Last run: %d errors") % len(errs),
+                                 icon='ERROR')
                 else:
-                    layout.label(text=d['last_ok'], icon='CHECKMARK')
+                    layout.label(text=tr("Lần trước: OK", "Last run: OK"), icon='CHECKMARK')
 
 
 # ---------------------------------------------------------------------------
 # REGISTER
 # ---------------------------------------------------------------------------
-classes = (FBXCONV_Props, FBXCONV_OT_convert, FBXCONV_PT_panel)
+classes = (FBXCONV_Props, FBXCONV_OT_convert, FBXCONV_PT_panel,
+           ezg_i18n.make_language_operator("fbxconv"))
 
 
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
     bpy.types.Scene.fbx_converter = bpy.props.PointerProperty(type=FBXCONV_Props)
 
 
 def unregister():
+    # Tat addon giua luc convert: Blender huy modal ma KHONG goi cancel()
+    # -> tu go timer va ha co. (Doi ngon ngu thi khong toi day khi dang ban.)
+    _stop_modal(getattr(bpy.context, "window_manager", None))
     del bpy.types.Scene.fbx_converter
-    for c in reversed(classes):
-        bpy.utils.unregister_class(c)
+    ezg_i18n.unregister_classes(classes)
