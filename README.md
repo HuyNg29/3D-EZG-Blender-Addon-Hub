@@ -127,6 +127,7 @@ sẽ xoá sạch thiết lập Blender của bạn. Lý do chi tiết ở [docs/
 | `test_mmr.py` | Bộ test của Marker Mixamo Rigger |
 | `test_mixamo_compat.py` | Rig sinh ra khớp rig Mixamo thật (**cần FBX mẫu**) |
 | `test_i18n.py` | Nút VI \| EN: lint song ngữ, bấm EN/VI thật, không sót chữ tiếng Việt ở EN, dữ liệu giữ nguyên |
+| `test_fbx_batch.py` | FBX Batch theo dõi tiến trình nền kể cả khi Blender huỷ modal: không cho convert chồng, worker chết giữa chừng thì báo lỗi |
 
 Một số test cần bộ FBX mẫu của Mixamo. Bộ này nặng ~33 MB nên **không nằm trong git**:
 

@@ -178,17 +178,83 @@ except Exception as e:
 # ---------------------------------------------------------------------------
 # TRANG THAI (module-level) cho Panel
 # ---------------------------------------------------------------------------
-_running = False     # True khi modal convert dang chay (xem ezg_i18n_busy)
 _progress = {"done": 0, "total": 0, "current": "", "errors": [], "finished": False, "ok": True}
 _enum_cache = {}
-_modal_timer = None  # timer cua modal convert, giu o cap module de unregister go duoc
+
+# Tien trinh Blender nen dang convert. Giu o cap module, KHONG tren operator:
+# Blender huy modal khi mo file khac / dong cua so, nhung tien trinh van chay
+# tiep va van phai duoc theo doi - khong thi panel bao xong trong khi file con
+# dang ghi, va nut convert cho chay chong lan hai.
+_proc = None
+_progress_path = None
+_modal_timer = None   # timer cua modal bao ket qua, giu de unregister go duoc
+_modal_alive = False  # modal bao ket qua con song (Blender huy no khi mo file khac)
+
+
+def _conversion_alive():
+    return _proc is not None and _proc.poll() is None
+
+
+def _read_progress():
+    global _progress
+    if not _progress_path:
+        return
+    try:
+        with open(_progress_path, "r", encoding="utf-8") as f:
+            _progress = json.load(f)
+    except Exception:
+        pass  # worker dang ghi do, lan sau doc lai
+
+
+def _finalize():
+    """Chot ket qua khi tien trinh nen da thoat. Watcher va modal deu goi, ai
+    toi truoc lam; lan sau _proc da la None nen khong lam lai."""
+    global _proc
+    if _proc is None or _proc.poll() is None:
+        return
+    code = _proc.returncode
+    _proc = None
+    _read_progress()
+    if not _progress.get("finished"):
+        # Worker chet ma khong kip ghi ket qua (crash, bi kill...): truoc day
+        # truong hop nay bi bao "Xong 0/N file" nhu thanh cong.
+        errors = list(_progress.get("errors", []))
+        errors.append(tr("Blender nền dừng giữa chừng (mã thoát %s)",
+                         "Background Blender stopped early (exit code %s)") % code)
+        _progress.update(errors=errors, finished=True, ok=False)
+    for e in _progress.get("errors", [])[:20]:
+        print("[FBXConv]", e)
+
+
+def _redraw_views():
+    for win in bpy.context.window_manager.windows:
+        for area in win.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
+
+
+def _watch():
+    """Timer song qua lan mo file: cap nhat tien do cho panel toi khi tien trinh
+    nen xong, ke ca khi Blender da huy modal."""
+    _read_progress()
+    _finalize()
+    try:
+        _redraw_views()
+    except Exception:
+        pass
+    return 0.5 if _proc is not None else None
+
+
+def _start_watch():
+    if not bpy.app.timers.is_registered(_watch):
+        bpy.app.timers.register(_watch, first_interval=0.5, persistent=True)
 
 
 def _stop_modal(wm):
-    """Ha co _running va go timer. Goi o MOI loi ra cua modal: xong, loi, cancel,
-    unregister. Sot mot cho la ezg_i18n_busy() ket o True, doi ngon ngu cho mai."""
-    global _running, _modal_timer
-    _running = False
+    """Go timer cua modal va ha co. Goi o MOI loi ra cua modal: xong, loi,
+    cancel, unregister. Tien trinh nen (neu con) van do _watch theo doi."""
+    global _modal_timer, _modal_alive
+    _modal_alive = False
     timer, _modal_timer = _modal_timer, None
     if timer is not None and wm is not None:
         try:
@@ -198,9 +264,9 @@ def _stop_modal(wm):
 
 
 def ezg_i18n_busy():
-    """ezg_i18n goi truoc khi doi ngon ngu: dang convert thi hoan, vi go class
-    cua modal dang chay la Blender co the crash."""
-    return _running
+    """ezg_i18n goi truoc khi doi ngon ngu: con convert (hoac modal con song)
+    thi hoan, vi go class cua modal dang chay la Blender co the crash."""
+    return _modal_alive or _conversion_alive()
 
 
 def mode_items(self, context):
@@ -290,12 +356,10 @@ class FBXCONV_OT_convert(bpy.types.Operator):
                         "Batch-convert the FBX files in the folder to .blend "
                         "(runs in a background Blender)")
 
-    _proc = None
-    _progress_path = None
-
     def invoke(self, context, event):
-        global _running, _progress, _modal_timer
-        if _running:
+        global _progress, _modal_timer, _modal_alive, _proc, _progress_path
+        _finalize()  # lan truoc da xong ma watcher chua kip chot
+        if _conversion_alive():
             self.report({'WARNING'}, tr("Đang chạy, đợi xong đã.", "Already running, please wait."))
             return {'CANCELLED'}
 
@@ -364,8 +428,8 @@ class FBXCONV_OT_convert(bpy.types.Operator):
         tmpdir = tempfile.mkdtemp(prefix="fbxconv_")
         worker_path = os.path.join(tmpdir, "worker.py")
         config_path = os.path.join(tmpdir, "config.json")
-        self._progress_path = os.path.join(tmpdir, "progress.json")
-        cfg["progress_file"] = self._progress_path
+        progress_path = os.path.join(tmpdir, "progress.json")
+        cfg["progress_file"] = progress_path
 
         with open(worker_path, "w", encoding="utf-8") as f:
             f.write(WORKER)
@@ -375,7 +439,7 @@ class FBXCONV_OT_convert(bpy.types.Operator):
         cmd = [bpy.app.binary_path, "--background", "--factory-startup",
                "--python", worker_path, "--", config_path]
         try:
-            self._proc = subprocess.Popen(
+            proc = subprocess.Popen(
                 cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception as e:
             self.report({'ERROR'}, tr("Không chạy được Blender nền: %s",
@@ -385,52 +449,44 @@ class FBXCONV_OT_convert(bpy.types.Operator):
         total = len(cfg.get("jobs", cfg.get("srcs", [])))
         _progress = {"done": 0, "total": total, "current": "",
                      "errors": [], "finished": False, "ok": True}
+        _proc, _progress_path = proc, progress_path
+        _start_watch()
 
+        # Modal chi con lo bao ket qua len thanh trang thai; theo doi tien do
+        # la viec cua _watch, nen modal co bi huy thi viec convert van dung.
         wm = context.window_manager
         _modal_timer = wm.event_timer_add(0.5, window=context.window)
         wm.modal_handler_add(self)
-        _running = True   # chi bat SAU khi modal da vao hang doi
+        _modal_alive = True   # chi bat SAU khi modal da vao hang doi
         return {'RUNNING_MODAL'}
 
     def modal(self, context, event):
-        global _progress
-        if event.type == 'TIMER':
-            try:
-                try:
-                    with open(self._progress_path, "r", encoding="utf-8") as f:
-                        _progress = json.load(f)
-                except Exception:
-                    pass
-                for area in context.screen.areas:
-                    if area.type == 'VIEW_3D':
-                        area.tag_redraw()
-
-                if self._proc.poll() is not None:
-                    _stop_modal(context.window_manager)
-                    errs = _progress.get("errors", [])
-                    if _progress.get("ok", False) and not errs:
-                        self.report({'INFO'}, tr("Xong %d/%d file.", "Done: %d/%d files.") %
-                                    (_progress.get("done", 0), _progress.get("total", 0)))
-                    else:
-                        self.report({'WARNING'}, tr("Xong nhưng có %d lỗi (xem System Console).",
-                                                    "Done with %d errors (see System Console).")
-                                    % len(errs))
-                        for e in errs[:20]:
-                            print("[FBXConv]", e)
-                    return {'FINISHED'}
-            except Exception:
-                # Loi giua chung: Blender bo modal ma khong goi cancel() -> tu don,
-                # khong thi _running (va ezg_i18n_busy) ket o True mai.
-                traceback.print_exc()
-                _stop_modal(context.window_manager)
-                self.report({'ERROR'}, tr("Lỗi khi theo dõi tiến trình (xem System Console).",
-                                          "Error while tracking the conversion (see System Console)."))
-                return {'CANCELLED'}
-        return {'PASS_THROUGH'}
+        if event.type != 'TIMER' or _conversion_alive():
+            return {'PASS_THROUGH'}
+        try:
+            _finalize()  # _watch co the da chot truoc; goi lai vo hai
+            _stop_modal(context.window_manager)
+            errs = _progress.get("errors", [])
+            if _progress.get("ok", False) and not errs:
+                self.report({'INFO'}, tr("Xong %d/%d file.", "Done: %d/%d files.") %
+                            (_progress.get("done", 0), _progress.get("total", 0)))
+            else:
+                self.report({'WARNING'}, tr("Xong nhưng có %d lỗi (xem System Console).",
+                                            "Done with %d errors (see System Console).")
+                            % len(errs))
+            return {'FINISHED'}
+        except Exception:
+            # Loi giua chung: Blender bo modal ma khong goi cancel() -> tu don,
+            # khong thi _modal_alive (va ezg_i18n_busy) ket o True mai.
+            traceback.print_exc()
+            _stop_modal(context.window_manager)
+            self.report({'ERROR'}, tr("Lỗi khi theo dõi tiến trình (xem System Console).",
+                                      "Error while tracking the conversion (see System Console)."))
+            return {'CANCELLED'}
 
     def cancel(self, context):
         # Blender huy modal (mo file khac, dong cua so...). Tien trinh nen van
-        # chay tiep nhu truoc; chi ha co de panel/doi ngon ngu khong bi ket.
+        # chay: _watch theo doi tiep, nut convert van bi chan toi khi no xong.
         _stop_modal(getattr(context, "window_manager", None))
 
 
@@ -483,7 +539,7 @@ class FBXCONV_PT_panel(bpy.types.Panel):
         box.prop(props, "bake_space_transform")
 
         layout.separator()
-        if _running:
+        if _conversion_alive():
             layout.label(text=tr("Đang xử lý: %d/%d", "Processing: %d/%d") % (
                 _progress.get("done", 0), _progress.get("total", 0)))
             cur = _progress.get("current", "")
@@ -513,11 +569,16 @@ classes = (FBXCONV_Props, FBXCONV_OT_convert, FBXCONV_PT_panel,
 def register():
     ezg_i18n.register_classes(classes)
     bpy.types.Scene.fbx_converter = bpy.props.PointerProperty(type=FBXCONV_Props)
+    # Tat roi bat lai addon trong luc tien trinh nen van chay: theo doi tiep.
+    if _conversion_alive():
+        _start_watch()
 
 
 def unregister():
     # Tat addon giua luc convert: Blender huy modal ma KHONG goi cancel()
     # -> tu go timer va ha co. (Doi ngon ngu thi khong toi day khi dang ban.)
     _stop_modal(getattr(bpy.context, "window_manager", None))
+    if bpy.app.timers.is_registered(_watch):
+        bpy.app.timers.unregister(_watch)
     del bpy.types.Scene.fbx_converter
     ezg_i18n.unregister_classes(classes)
