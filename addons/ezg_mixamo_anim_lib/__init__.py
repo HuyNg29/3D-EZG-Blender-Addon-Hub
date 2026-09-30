@@ -32,6 +32,9 @@ from bpy.props import (
     StringProperty,
 )
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 
 # Feature flag: hide the foot-grounding UI block (Ground Feet on Apply, Foot IK
 # / Floor Lock, Floor Z, and the Ground Feet / Clear buttons). Set True to
@@ -501,10 +504,12 @@ def _bake_foot_floor_lock(context, arm, floor_z=0.0):
     Returns (frames_baked, error_message). One of the two is meaningful.
     """
     if arm.animation_data is None or arm.animation_data.action is None:
-        return 0, "No animation on the armature. Apply an animation first."
+        return 0, tr("Armature chưa có animation. Hãy áp dụng một animation trước.",
+                     "No animation on the armature. Apply an animation first.")
     names = _ground_bone_names(arm)
     if not names:
-        return 0, "No foot/toe bones found on this rig."
+        return 0, tr("Rig này không có xương bàn chân/ngón chân nào.",
+                     "No foot/toe bones found on this rig.")
 
     scene = context.scene
     action = arm.animation_data.action
@@ -589,10 +594,12 @@ def _bake_foot_ik(context, arm, floor_z=0.0):
     Returns (frames_baked, error_message).
     """
     if arm.animation_data is None or arm.animation_data.action is None:
-        return 0, "No animation on the armature. Apply an animation first."
+        return 0, tr("Armature chưa có animation. Hãy áp dụng một animation trước.",
+                     "No animation on the armature. Apply an animation first.")
     legs = _leg_defs(arm)
     if not legs:
-        return 0, "Leg bones not found (need mixamorig:{L,R}UpLeg/Leg/Foot)."
+        return 0, tr("Không tìm thấy xương chân (cần mixamorig:{L,R}UpLeg/Leg/Foot).",
+                     "Leg bones not found (need mixamorig:{L,R}UpLeg/Leg/Foot).")
 
     scene = context.scene
     action = arm.animation_data.action
@@ -648,9 +655,12 @@ def _bake_foot_ik(context, arm, floor_z=0.0):
 
     if probe and not pose_has_motion:
         scene.frame_set(f0)
-        return 0, ("Rig is frozen at rest — the active action isn't driving the "
-                   "bones (check NLA solo / action slot). Grounding aborted so it "
-                   "won't bake a static pose over the animation.")
+        return 0, tr("Rig đứng yên ở rest pose — Action đang active không điều khiển "
+                     "được xương (kiểm tra NLA solo / action slot). Đã dừng chạm sàn "
+                     "để không bake một pose tĩnh đè lên animation.",
+                     "Rig is frozen at rest — the active action isn't driving the "
+                     "bones (check NLA solo / action slot). Grounding aborted so it "
+                     "won't bake a static pose over the animation.")
 
     # Pass 2: IK constraints + animated target empties.
     empties = []
@@ -692,7 +702,7 @@ def _bake_foot_ik(context, arm, floor_z=0.0):
         for _, emp in empties:
             bpy.data.objects.remove(emp, do_unlink=True)
         bpy.ops.object.mode_set(mode='OBJECT')
-        return 0, f"Bake failed: {exc}"
+        return 0, tr("Bake thất bại: %s", "Bake failed: %s") % exc
     bpy.ops.object.mode_set(mode='OBJECT')
 
     # Remove any leftover IK constraints (should be cleared by the bake) + empties.
@@ -934,8 +944,8 @@ def _rig_action_closure(arm, props):
 # ---------------------------------------------------------------------------
 
 class MIXLIB_item(PropertyGroup):
-    name: StringProperty(name="Name")
-    filepath: StringProperty(name="File Path", subtype='FILE_PATH')
+    name: StringProperty(name=tr("Tên", "Name"))
+    filepath: StringProperty(name=tr("Đường dẫn file", "File Path"), subtype='FILE_PATH')
 
 
 def _library_path_updated(self, context):
@@ -967,8 +977,9 @@ def _active_index_updated(self, context):
 
 class MIXLIB_props(PropertyGroup):
     library_path: StringProperty(
-        name="Library Folder",
-        description="Folder containing Mixamo FBX files (scanned recursively)",
+        name=tr("Thư mục thư viện", "Library Folder"),
+        description=tr("Thư mục chứa các file FBX Mixamo (quét cả thư mục con)",
+                       "Folder containing Mixamo FBX files (scanned recursively)"),
         subtype='DIR_PATH',
         update=_library_path_updated,
     )
@@ -976,79 +987,102 @@ class MIXLIB_props(PropertyGroup):
     active_index: IntProperty(default=0, update=_active_index_updated)
 
     preview_on_click: BoolProperty(
-        name="Click to Preview",
-        description=(
+        name=tr("Bấm để xem thử", "Click to Preview"),
+        description=tr(
+            "Bấm vào một animation đã import (✓) trong danh sách là gán ngay "
+            "Action của nó cho armature đang chọn — bật phát (Space) rồi bấm "
+            "lần lượt qua danh sách để xem thử",
             "Clicking an imported animation (✓) in the list instantly assigns "
             "its action to the active armature — start playback (Space) and "
-            "click through the list to preview"
+            "click through the list to preview",
         ),
         default=True,
     )
 
     in_place: BoolProperty(
-        name="In Place",
-        description="Strip root motion: remove hips location channels that travel away from the start",
+        name="In Place",  # i18n-skip
+        description=tr("Bỏ root motion: xoá các kênh location của hips có dịch chuyển xa khỏi điểm đầu",
+                       "Strip root motion: remove hips location channels that travel away from the start"),
         default=False,
     )
     push_nla: BoolProperty(
-        name="Push to NLA",
-        description="Also push the applied action down as a new NLA strip",
+        name="Push to NLA",  # i18n-skip
+        description=tr("Đẩy luôn Action vừa áp dụng xuống thành một NLA strip mới",
+                       "Also push the applied action down as a new NLA strip"),
         default=False,
     )
     foot_floor_lock: BoolProperty(
-        name="Ground Feet on Apply",
-        description=(
+        name=tr("Đặt chân chạm sàn khi áp dụng", "Ground Feet on Apply"),
+        description=tr(
+            "Sau khi áp dụng animation, đặt chân chạm sàn để không bị lún xuyên "
+            "sàn (cho nhân vật có tỉ lệ khác với animation)",
             "After applying an animation, ground the feet so they don't sink "
             "through the floor (for characters whose proportions differ from "
-            "the animation)"
+            "the animation)",
         ),
         default=False,
     )
     ground_method: EnumProperty(
-        name="Grounding",
-        description="How to keep the feet on the floor",
+        name=tr("Cách chạm sàn", "Grounding"),
+        description=tr("Cách giữ bàn chân trên sàn", "How to keep the feet on the floor"),
         items=[
-            ('FOOT_IK', "Foot IK",
-             "Retarget the legs with 2-bone IK so feet stay planted while the "
-             "body keeps its motion (Mixamo-style; bakes leg pose)"),
-            ('FLOOR_LOCK', "Floor Lock",
-             "Raise/lower the whole body so the lowest foot touches the floor "
-             "(simple, does not edit the pose; may float on some frames)"),
+            ('FOOT_IK', "Foot IK",  # i18n-skip
+             tr("Retarget chân bằng IK 2 xương để bàn chân bám sàn mà thân vẫn "
+                "giữ chuyển động (kiểu Mixamo; bake pose chân)",
+                "Retarget the legs with 2-bone IK so feet stay planted while the "
+                "body keeps its motion (Mixamo-style; bakes leg pose)")),
+            ('FLOOR_LOCK', tr("Khoá sàn", "Floor Lock"),
+             tr("Nâng/hạ cả thân để bàn chân thấp nhất chạm sàn (đơn giản, không "
+                "sửa pose; vài frame có thể bị lơ lửng)",
+                "Raise/lower the whole body so the lowest foot touches the floor "
+                "(simple, does not edit the pose; may float on some frames)")),
         ],
         default='FOOT_IK',
     )
     floor_z: FloatProperty(
-        name="Floor Z",
-        description="World Z height of the floor the feet should rest on",
+        name=tr("Z của sàn", "Floor Z"),
+        description=tr("Độ cao Z (world) của sàn mà bàn chân đặt lên",
+                       "World Z height of the floor the feet should rest on"),
         default=0.0,
     )
     set_frame_range: BoolProperty(
-        name="Set Frame Range",
-        description="Set the scene frame range to match the animation",
+        name=tr("Đặt frame range", "Set Frame Range"),
+        description=tr("Đặt frame range của scene khớp với animation",
+                       "Set the scene frame range to match the animation"),
         default=True,
     )
 
     rot_mode: EnumProperty(
-        name="Rotation",
-        description="Rotation channel type the bone keys should be rewritten in",
+        name="Rotation",  # i18n-skip
+        description=tr("Kiểu kênh rotation dùng để viết lại keyframe của xương",
+                       "Rotation channel type the bone keys should be rewritten in"),
         items=[
-            ('XYZ', "XYZ Euler",
-             "Readable X/Y/Z curves in the Graph Editor, easy to hand-edit; "
-             "can gimbal-lock on extreme poses"),
-            ('QUATERNION', "Quaternion",
-             "Back to Mixamo's native W/X/Y/Z — no gimbal lock, what the FBX "
-             "importer/exporter uses"),
+            ('XYZ', "XYZ Euler",  # i18n-skip
+             tr("Curve X/Y/Z dễ đọc trong Graph Editor, dễ sửa tay; có thể bị "
+                "gimbal lock ở pose quá gắt",
+                "Readable X/Y/Z curves in the Graph Editor, easy to hand-edit; "
+                "can gimbal-lock on extreme poses")),
+            ('QUATERNION', "Quaternion",  # i18n-skip
+             tr("Trở về W/X/Y/Z gốc của Mixamo — không bị gimbal lock, là kiểu "
+                "FBX importer/exporter dùng",
+                "Back to Mixamo's native W/X/Y/Z — no gimbal lock, what the FBX "
+                "importer/exporter uses")),
         ],
         default='XYZ',
     )
     rot_convert_all: BoolProperty(
-        name="All Matching Actions",
-        description=(
+        name=tr("Mọi Action khớp", "All Matching Actions"),
+        description=tr(
+            "Chuyển mọi Action thuộc bộ xương này — trong danh sách (✓), trên "
+            "NLA strip, và cả Action không dùng được giữ bằng fake user — thay "
+            "vì chỉ Action đang active. Nên bật: rotation_mode là thuộc tính "
+            "của xương chứ không phải của Action, nên Action nào bị bỏ sót sẽ "
+            "ngừng xoay khi xương đổi kiểu",
             "Convert every action that belongs to this skeleton — the list (✓), "
             "the NLA strips, and unused actions kept by a fake user — instead of "
             "only the active one. Recommended: rotation_mode is a property of "
             "the bone, not of the action, so any action left behind stops "
-            "rotating once the bones switch"
+            "rotating once the bones switch",
         ),
         default=True,
     )
@@ -1060,24 +1094,28 @@ class MIXLIB_props(PropertyGroup):
 
 class MIXLIB_OT_scan(Operator):
     bl_idname = "mixlib.scan"
-    bl_label = "Scan Library"
-    bl_description = "Scan the library folder for FBX files"
+    bl_label = tr("Quét thư viện", "Scan Library")
+    bl_description = tr("Quét thư mục thư viện để tìm file FBX",
+                        "Scan the library folder for FBX files")
 
     def execute(self, context):
         count = _rescan(context.scene.mixlib)
         if count < 0:
-            self.report({'WARNING'}, "Library folder not found")
+            self.report({'WARNING'}, tr("Không tìm thấy thư mục thư viện",
+                                        "Library folder not found"))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Found {count} animation(s)")
+        self.report({'INFO'}, tr("Tìm thấy %d animation", "Found %d animation(s)") % count)
         return {'FINISHED'}
 
 
 class MIXLIB_OT_apply(Operator):
     bl_idname = "mixlib.apply"
-    bl_label = "Apply to Selected Armature"
-    bl_description = (
+    bl_label = tr("Áp dụng lên Armature đang chọn", "Apply to Selected Armature")
+    bl_description = tr(
+        "Import FBX đang chọn, chép animation của nó sang armature đang chọn, "
+        "rồi xoá các object vừa import",
         "Import the selected FBX, copy its animation onto the active armature, "
-        "then delete the imported objects"
+        "then delete the imported objects",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1112,13 +1150,15 @@ class MIXLIB_OT_apply(Operator):
             stale, action = action, None
         if action is None:
             if not os.path.isfile(item.filepath):
-                self.report({'ERROR'}, f"File not found: {item.filepath}")
+                self.report({'ERROR'}, tr("Không tìm thấy file: %s", "File not found: %s")
+                            % item.filepath)
                 return {'CANCELLED'}
 
             src_arm, imported = _import_fbx(item.filepath)
             if src_arm is None or src_arm.animation_data is None or src_arm.animation_data.action is None:
                 _delete_objects(imported)
-                self.report({'ERROR'}, "No animation found in this FBX (T-pose file?)")
+                self.report({'ERROR'}, tr("Không có animation trong FBX này (file T-pose?)",
+                                          "No animation found in this FBX (T-pose file?)"))
                 return {'CANCELLED'}
 
             src_action = src_arm.animation_data.action
@@ -1135,12 +1175,16 @@ class MIXLIB_OT_apply(Operator):
                 # F-curve copy would bend the character. Retarget instead.
                 action = _retarget_bake(context, src_arm, target, src_action)
                 if units_differ:
-                    note = (f"rig scale {_rig_scale(target):g} vs {_rig_scale(src_arm):g} "
-                            "in the FBX")
+                    note = (tr("scale của rig %g so với %g trong FBX",
+                               "rig scale %g vs %g in the FBX")
+                            % (_rig_scale(target), _rig_scale(src_arm)))
                 else:
-                    note = f"rest poses differ ~{mism * 100:.0f}% of skeleton size"
+                    note = (tr("rest pose lệch ~%.0f%% kích thước bộ xương",
+                               "rest poses differ ~%.0f%% of skeleton size")
+                            % (mism * 100))
                 self.report({'INFO'},
-                            f"Retargeted via constraint bake ({note})")
+                            tr("Đã retarget bằng constraint bake (%s)",
+                               "Retargeted via constraint bake (%s)") % note)
             else:
                 action = src_action.copy()
             action.use_fake_user = True
@@ -1155,7 +1199,8 @@ class MIXLIB_OT_apply(Operator):
 
             if stale is not None:
                 _replace_action(stale, action)
-                self.report({'INFO'}, "FBX changed on disk — re-imported the animation")
+                self.report({'INFO'}, tr("FBX trên đĩa đã thay đổi — đã import lại animation",
+                                         "FBX changed on disk — re-imported the animation"))
             else:
                 action.name = item.name
 
@@ -1167,8 +1212,11 @@ class MIXLIB_OT_apply(Operator):
             if ratio < 0.5:
                 self.report(
                     {'WARNING'},
-                    f"Only {matched}/{len(anim_bones)} bones match the target rig — "
-                    "animation may not play correctly (different skeleton?)",
+                    tr("Chỉ %d/%d xương khớp với rig đích — animation có thể "
+                       "chạy sai (khác bộ xương?)",
+                       "Only %d/%d bones match the target rig — "
+                       "animation may not play correctly (different skeleton?)")
+                    % (matched, len(anim_bones)),
                 )
 
         # The rig may have been switched to Euler — an imported quaternion
@@ -1176,7 +1224,9 @@ class MIXLIB_OT_apply(Operator):
         rewritten, mode = _match_rig_rotation_mode(target, action)
         if rewritten:
             self.report({'INFO'},
-                        f"Rewrote {rewritten} bone(s) as {mode} to match this rig")
+                        tr("Đã viết lại %d xương sang %s cho khớp rig này",
+                           "Rewrote %d bone(s) as %s to match this rig")
+                        % (rewritten, mode))
 
         _assign_action(target, action)
 
@@ -1189,9 +1239,10 @@ class MIXLIB_OT_apply(Operator):
         if props.foot_floor_lock:
             baked, err = ground_feet(context, target, props)
             if err:
-                self.report({'WARNING'}, f"Grounding skipped: {err}")
+                self.report({'WARNING'}, tr("Bỏ qua chạm sàn: %s", "Grounding skipped: %s") % err)
             else:
-                self.report({'INFO'}, f"Grounded feet over {baked} frame(s)")
+                self.report({'INFO'}, tr("Đã đặt chân chạm sàn trên %d frame",
+                                         "Grounded feet over %d frame(s)") % baked)
 
         if props.push_nla:
             ad = target.animation_data
@@ -1211,18 +1262,23 @@ class MIXLIB_OT_apply(Operator):
                         except Exception:
                             pass
 
-        self.report({'INFO'}, f"Applied '{action.name}' to {target.name}")
+        self.report({'INFO'}, tr("Đã áp dụng '%s' lên %s", "Applied '%s' to %s")
+                    % (action.name, target.name))
         return {'FINISHED'}
 
 
 class MIXLIB_OT_ground_feet(Operator):
     bl_idname = "mixlib.ground_feet"
-    bl_label = "Ground Feet"
-    bl_description = (
+    bl_label = tr("Đặt chân chạm sàn", "Ground Feet")
+    bl_description = tr(
+        "Giữ bàn chân trên sàn cho animation hiện tại, theo cách chạm sàn đã "
+        "chọn (Foot IK retarget chân kiểu Mixamo; Khoá sàn dời cả thân). Sửa "
+        "lỗi nhân vật bị lún khi tỉ lệ khác với animation. Chạy lại sau khi "
+        "đổi animation",
         "Keep the feet on the floor for the current animation, using the chosen "
         "Grounding method (Foot IK retargets the legs like Mixamo; Floor Lock "
         "shifts the whole body). Fixes a character sinking when its proportions "
-        "differ from the animation. Re-run after changing the animation"
+        "differ from the animation. Re-run after changing the animation",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1239,15 +1295,18 @@ class MIXLIB_OT_ground_feet(Operator):
         if err:
             self.report({'ERROR'}, err)
             return {'CANCELLED'}
-        method = "Foot IK" if props.ground_method == 'FOOT_IK' else "Floor Lock"
-        self.report({'INFO'}, f"Grounded feet ({method}) over {baked} frame(s) on {arm.name}")
+        method = "Foot IK" if props.ground_method == 'FOOT_IK' else tr("Khoá sàn", "Floor Lock")
+        self.report({'INFO'}, tr("Đã đặt chân chạm sàn (%s) trên %d frame cho %s",
+                                 "Grounded feet (%s) over %d frame(s) on %s")
+                    % (method, baked, arm.name))
         return {'FINISHED'}
 
 
 class MIXLIB_OT_clear_ground(Operator):
     bl_idname = "mixlib.clear_ground"
-    bl_label = "Clear Floor Lock"
-    bl_description = "Remove the floor-lock vertical offset from the active armature"
+    bl_label = tr("Bỏ khoá sàn", "Clear Floor Lock")
+    bl_description = tr("Xoá độ lệch dọc do khoá sàn khỏi armature đang chọn",
+                        "Remove the floor-lock vertical offset from the active armature")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -1259,14 +1318,15 @@ class MIXLIB_OT_clear_ground(Operator):
         arm = _active_armature(context)
         _clear_object_z_keys(arm)
         arm.location.z = 0.0
-        self.report({'INFO'}, "Floor lock cleared")
+        self.report({'INFO'}, tr("Đã bỏ khoá sàn", "Floor lock cleared"))
         return {'FINISHED'}
 
 
 class MIXLIB_OT_import_character(Operator):
     bl_idname = "mixlib.import_character"
-    bl_label = "Import as New Character"
-    bl_description = "Import the selected FBX as a new character (mesh + armature + animation)"
+    bl_label = tr("Import thành nhân vật mới", "Import as New Character")
+    bl_description = tr("Import FBX đang chọn thành một nhân vật mới (mesh + armature + animation)",
+                        "Import the selected FBX as a new character (mesh + armature + animation)")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -1278,7 +1338,8 @@ class MIXLIB_OT_import_character(Operator):
         props = context.scene.mixlib
         item = props.items[props.active_index]
         if not os.path.isfile(item.filepath):
-            self.report({'ERROR'}, f"File not found: {item.filepath}")
+            self.report({'ERROR'}, tr("Không tìm thấy file: %s", "File not found: %s")
+                        % item.filepath)
             return {'CANCELLED'}
 
         armature, imported = _import_fbx(item.filepath)
@@ -1292,16 +1353,19 @@ class MIXLIB_OT_import_character(Operator):
                 context.scene.frame_start = int(f_start)
                 context.scene.frame_end = max(int(f_end), int(f_start) + 1)
 
-        self.report({'INFO'}, f"Imported {len(imported)} object(s) from '{item.name}'")
+        self.report({'INFO'}, tr("Đã import %d object từ '%s'", "Imported %d object(s) from '%s'")
+                    % (len(imported), item.name))
         return {'FINISHED'}
 
 
 class MIXLIB_OT_import_all_actions(Operator):
     bl_idname = "mixlib.import_all_actions"
-    bl_label = "Import All as Actions"
-    bl_description = (
+    bl_label = tr("Import tất cả thành Action", "Import All as Actions")
+    bl_description = tr(
+        "Import mọi FBX trong danh sách và chỉ giữ lại Action (có fake user), "
+        "để dùng trong Action Editor / NLA",
         "Import every FBX in the list and keep only the actions "
-        "(with fake user), for use in the Action Editor / NLA"
+        "(with fake user), for use in the Action Editor / NLA",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1365,20 +1429,25 @@ class MIXLIB_OT_import_all_actions(Operator):
         # Baking assigns each action while importing — put the original back.
         if target and prev_action and prev_action.name in bpy.data.actions:
             _assign_action(target, prev_action)
-        msg = f"Imported {count} action(s)"
+        msg = tr("Đã import %d Action", "Imported %d action(s)") % count
         if retargeted:
-            msg += f" ({retargeted} retargeted — rest pose differs from this rig)"
+            msg += (tr(" (%d cái được retarget — rest pose khác rig này)",
+                       " (%d retargeted — rest pose differs from this rig)")
+                    % retargeted)
         self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 
 class MIXLIB_OT_remove(Operator):
     bl_idname = "mixlib.remove"
-    bl_label = "Remove Animation"
-    bl_description = (
+    bl_label = tr("Xoá animation", "Remove Animation")
+    bl_description = tr(
+        "Xoá animation đang chọn khỏi file blend này: xoá Action của nó và mọi "
+        "NLA strip đang dùng nó. File FBX trên đĩa không bị đụng tới — bấm "
+        "Áp dụng để import lại sau",
         "Remove the selected animation from this blend file: delete its action "
         "and any NLA strips using it. The FBX file on disk is not touched — "
-        "press Apply to import it again later"
+        "press Apply to import it again later",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1420,18 +1489,22 @@ class MIXLIB_OT_remove(Operator):
         bpy.data.actions.remove(action)
         self.report(
             {'INFO'},
-            f"Removed '{name}' ({strips_removed} NLA strip(s) cleaned up)",
+            tr("Đã xoá '%s' (dọn %d NLA strip)", "Removed '%s' (%d NLA strip(s) cleaned up)")
+            % (name, strips_removed),
         )
         return {'FINISHED'}
 
 
 class MIXLIB_OT_reimport(Operator):
     bl_idname = "mixlib.reimport"
-    bl_label = "Reimport from FBX"
-    bl_description = (
+    bl_label = tr("Import lại từ FBX", "Reimport from FBX")
+    bl_description = tr(
+        "Buộc import lại animation đang chọn từ file FBX và thay Action trong "
+        "blend ở mọi nơi đang dùng (gán trực tiếp, NLA strip). CẢNH BÁO: mất "
+        "mọi chỉnh sửa keyframe bằng tay trên Action đó",
         "Force re-import the selected animation from its FBX file and replace "
         "the in-blend action everywhere it is used (assignments, NLA strips). "
-        "WARNING: discards any manual keyframe edits made to that action"
+        "WARNING: discards any manual keyframe edits made to that action",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1447,13 +1520,15 @@ class MIXLIB_OT_reimport(Operator):
         props = context.scene.mixlib
         item = props.items[props.active_index]
         if not os.path.isfile(item.filepath):
-            self.report({'ERROR'}, f"File not found: {item.filepath}")
+            self.report({'ERROR'}, tr("Không tìm thấy file: %s", "File not found: %s")
+                        % item.filepath)
             return {'CANCELLED'}
 
         src_arm, imported = _import_fbx(item.filepath)
         if src_arm is None or src_arm.animation_data is None or src_arm.animation_data.action is None:
             _delete_objects(imported)
-            self.report({'ERROR'}, "No animation found in this FBX (T-pose file?)")
+            self.report({'ERROR'}, tr("Không có animation trong FBX này (file T-pose?)",
+                                      "No animation found in this FBX (T-pose file?)"))
             return {'CANCELLED'}
 
         src_action = src_arm.animation_data.action
@@ -1464,11 +1539,15 @@ class MIXLIB_OT_reimport(Operator):
         if units_differ or (mism is not None and mism > _RETARGET_THRESHOLD):
             action = _retarget_bake(context, src_arm, target, src_action)
             if units_differ:
-                note = (f"rig scale {_rig_scale(target):g} vs "
-                        f"{_rig_scale(src_arm):g} in the FBX")
+                note = (tr("scale của rig %g so với %g trong FBX",
+                           "rig scale %g vs %g in the FBX")
+                        % (_rig_scale(target), _rig_scale(src_arm)))
             else:
-                note = f"rest poses differ ~{mism * 100:.0f}% of skeleton size"
-            self.report({'INFO'}, f"Retargeted via constraint bake ({note})")
+                note = (tr("rest pose lệch ~%.0f%% kích thước bộ xương",
+                           "rest poses differ ~%.0f%% of skeleton size")
+                        % (mism * 100))
+            self.report({'INFO'}, tr("Đã retarget bằng constraint bake (%s)",
+                                     "Retargeted via constraint bake (%s)") % note)
         else:
             action = src_action.copy()
         action.use_fake_user = True
@@ -1489,19 +1568,24 @@ class MIXLIB_OT_reimport(Operator):
         else:
             action.name = item.name
 
-        self.report({'INFO'}, f"Re-imported '{item.name}' from FBX")
+        self.report({'INFO'}, tr("Đã import lại '%s' từ FBX", "Re-imported '%s' from FBX")
+                    % item.name)
         return {'FINISHED'}
 
 
 class MIXLIB_OT_convert_rotation(Operator):
     bl_idname = "mixlib.convert_rotation"
-    bl_label = "Convert Rotation Keys"
-    bl_description = (
+    bl_label = tr("Chuyển keyframe rotation", "Convert Rotation Keys")
+    bl_description = tr(
+        "Viết lại keyframe rotation của xương trên armature đang chọn sang kiểu "
+        "kênh đã chọn, giữ nguyên chuyển động. Dùng nút này thay cho ô Rotation "
+        "trong N-panel: ô đó chỉ đổi mode của xương và bỏ rơi keyframe cũ "
+        "(Graph Editor vẫn hiện Quaternion, pose ngừng chuyển động)",
         "Rewrite the bone rotation keyframes of the active armature in the "
         "chosen channel type, keeping the motion. Use this instead of the "
         "N-panel Rotation dropdown, which only switches the bone's mode and "
         "leaves the old keys orphaned (Graph Editor still shows Quaternion, "
-        "pose stops animating)"
+        "pose stops animating)",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1525,7 +1609,8 @@ class MIXLIB_OT_convert_rotation(Operator):
             actions, rigs = ({current} if current else set()), {arm}
 
         if not actions:
-            self.report({'ERROR'}, "No action to convert — apply an animation first")
+            self.report({'ERROR'}, tr("Không có Action nào để chuyển — hãy áp dụng một animation trước",
+                                      "No action to convert — apply an animation first"))
             return {'CANCELLED'}
 
         total_bones, done, skipped = 0, set(), set()
@@ -1543,15 +1628,20 @@ class MIXLIB_OT_convert_rotation(Operator):
                 _set_pb_rotation_mode(pb, props.rot_mode)
 
         if not done:
-            self.report({'INFO'}, f"Already in {props.rot_mode} — nothing to convert")
+            self.report({'INFO'}, tr("Đã ở %s — không có gì để chuyển",
+                                     "Already in %s — nothing to convert") % props.rot_mode)
             return {'FINISHED'}
 
         label = "Quaternion" if props.rot_mode == 'QUATERNION' else f"{props.rot_mode} Euler"
-        msg = f"Converted {total_bones} bone(s) in {len(done)} action(s) to {label}"
+        msg = (tr("Đã chuyển %d xương trong %d Action sang %s",
+                  "Converted %d bone(s) in %d action(s) to %s")
+               % (total_bones, len(done), label))
         if len(rigs) > 1:
-            msg += f", across {len(rigs)} rigs"
+            msg += tr(", trên %d rig", ", across %d rigs") % len(rigs)
         if skipped:
-            self.report({'WARNING'}, msg + f" — {len(skipped)} bone(s) not on this rig were skipped")
+            self.report({'WARNING'}, msg + tr(" — bỏ qua %d xương không có trên rig này",
+                                              " — %d bone(s) not on this rig were skipped")
+                        % len(skipped))
         else:
             self.report({'INFO'}, msg)
         return {'FINISHED'}
@@ -1559,11 +1649,14 @@ class MIXLIB_OT_convert_rotation(Operator):
 
 class MIXLIB_OT_stash_all(Operator):
     bl_idname = "mixlib.stash_all"
-    bl_label = "Stash All to NLA (Unity)"
-    bl_description = (
+    bl_label = tr("Stash tất cả vào NLA (Unity)", "Stash All to NLA (Unity)")
+    bl_description = tr(
+        "Tạo một NLA strip cho mỗi Action đã import (✓) trên armature đang chọn. "
+        "Mỗi strip thành một animation clip riêng khi export ra FBX / Unity. "
+        "Track được để không mute — strip bị mute sẽ bị FBX exporter bỏ qua",
         "Create one NLA strip per imported action (✓) on the active armature. "
         "Each strip becomes a separate animation clip when exported to FBX / Unity. "
-        "Tracks are left unmuted — muted strips are skipped by the FBX exporter"
+        "Tracks are left unmuted — muted strips are skipped by the FBX exporter",
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -1600,16 +1693,19 @@ class MIXLIB_OT_stash_all(Operator):
                         pass
             count += 1
 
-        self.report({'INFO'}, f"Stashed {count} action(s) to NLA on {target.name}")
+        self.report({'INFO'}, tr("Đã stash %d Action vào NLA trên %s",
+                                 "Stashed %d action(s) to NLA on %s") % (count, target.name))
         return {'FINISHED'}
 
 
 class MIXLIB_OT_export_unity(Operator):
     bl_idname = "mixlib.export_unity"
-    bl_label = "Export FBX (Unity)"
-    bl_description = (
+    bl_label = tr("Export FBX cho Unity", "Export FBX (Unity)")
+    bl_description = tr(
+        "Mở FBX exporter với thiết lập sẵn cho Unity: chỉ object đang chọn, "
+        "mỗi NLA strip một clip riêng, không có leaf bone, áp dụng scale",
         "Open the FBX exporter preset for Unity: selected objects only, "
-        "NLA strips as separate clips, no leaf bones, applied scale"
+        "NLA strips as separate clips, no leaf bones, applied scale",
     )
 
     @classmethod
@@ -1660,11 +1756,14 @@ class MIXLIB_UL_anims(UIList):
 
 
 class MIXLIB_PT_panel(Panel):
-    bl_label = "Mixamo Animation Library"
+    bl_label = "Mixamo Animation Library"  # i18n-skip
     bl_idname = "MIXLIB_PT_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Mixamo Lib"
+
+    def draw_header_preset(self, context):
+        ezg_i18n.draw_toggle(self.layout, "mixlib")
 
     def draw(self, context):
         layout = self.layout
@@ -1687,7 +1786,7 @@ class MIXLIB_PT_panel(Panel):
             side.operator("mixlib.reimport", text="", icon='FILE_REFRESH')
 
             box = layout.box()
-            box.label(text="Options", icon='PREFERENCES')
+            box.label(text=tr("Tuỳ chọn", "Options"), icon='PREFERENCES')
             box.prop(props, "preview_on_click")
             box.prop(props, "in_place")
             box.prop(props, "set_frame_range")
@@ -1702,9 +1801,10 @@ class MIXLIB_PT_panel(Panel):
             target = _active_armature(context)
             col = layout.column(align=True)
             if target:
-                col.label(text=f"Target: {target.name}", icon='OUTLINER_OB_ARMATURE')
+                col.label(text=tr("Rig đích: %s", "Target: %s") % target.name,
+                          icon='OUTLINER_OB_ARMATURE')
             else:
-                col.label(text="Select an armature", icon='ERROR')
+                col.label(text=tr("Hãy chọn một Armature", "Select an armature"), icon='ERROR')
             col.operator("mixlib.apply", icon='PLAY')
             if SHOW_GROUNDING:
                 row = col.row(align=True)
@@ -1714,21 +1814,22 @@ class MIXLIB_PT_panel(Panel):
             col.operator("mixlib.import_all_actions", icon='ACTION')
 
             box = layout.box()
-            box.label(text="Rotation Channels", icon='ORIENTATION_GIMBAL')
+            box.label(text="Rotation Channels", icon='ORIENTATION_GIMBAL')  # i18n-skip
             row = box.row(align=True)
             row.prop(props, "rot_mode", expand=True)
             box.prop(props, "rot_convert_all")
             box.operator("mixlib.convert_rotation", icon='FILE_REFRESH')
 
             box = layout.box()
-            box.label(text="Game Engine Export", icon='EXPORT')
+            box.label(text=tr("Export cho Game Engine", "Game Engine Export"), icon='EXPORT')
             col = box.column(align=True)
             col.operator("mixlib.stash_all", icon='NLA')
             col.operator("mixlib.export_unity", icon='EXPORT')
         elif props.library_path:
-            layout.label(text="No FBX files found", icon='INFO')
+            layout.label(text=tr("Không tìm thấy file FBX nào", "No FBX files found"), icon='INFO')
         else:
-            layout.label(text="Pick your Mixamo FBX folder", icon='INFO')
+            layout.label(text=tr("Chọn thư mục FBX Mixamo", "Pick your Mixamo FBX folder"),
+                         icon='INFO')
 
 
 # ---------------------------------------------------------------------------
@@ -1751,19 +1852,23 @@ classes = (
     MIXLIB_OT_export_unity,
     MIXLIB_UL_anims,
     MIXLIB_PT_panel,
+    ezg_i18n.make_language_operator("mixlib"),
 )
 
 
+# Nut VI/EN go roi dang ki lai ca addon (xem docs/I18N.md). Du lieu nam trong
+# property Scene.mixlib (thu muc, danh sach da quet, muc dang chon, tuy chon)
+# la IDProperty cua scene nen van con sau lan dang ki lai. Addon khong co
+# modal/timer/cache cap module nao nen khong can ezg_i18n_busy().
+
 def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
+    ezg_i18n.register_classes(classes)
     bpy.types.Scene.mixlib = PointerProperty(type=MIXLIB_props)
 
 
 def unregister():
     del bpy.types.Scene.mixlib
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+    ezg_i18n.unregister_classes(classes)
 
 
 if __name__ == "__main__":
