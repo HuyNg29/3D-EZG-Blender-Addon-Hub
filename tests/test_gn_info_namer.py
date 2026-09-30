@@ -196,7 +196,7 @@ check(mod.node_waste_reason(no_obj) == mod.REASON_EMPTY_LINKED,
       % mod.node_waste_reason(no_obj))
 check(mod.node_waste_reason(orphan) == mod.REASON_UNLINKED,
       "node co object nhung khong noi -> thua (%s)" % mod.node_waste_reason(orphan))
-check(mod.node_waste_reason(dead) == "trống, không nối",
+check(mod.reason_text(mod.node_waste_reason(dead)) == "trống, không nối",
       "node vua trong vua khong noi -> bao ca hai (%s)" % mod.node_waste_reason(dead))
 
 # Tat tung dieu kien mot: nguoi dung phai chan duoc ve ma ho khong muon dong toi.

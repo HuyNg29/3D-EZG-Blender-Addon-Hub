@@ -33,6 +33,9 @@ Nhãn KHÔNG tự cập nhật khi đổi object trong node. Bấm lại nút l�
 
 import bpy
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 # Node muon dat nhan -> ten socket dau vao chua datablock lay ten.
 # Dung node.bl_idname (khong doi giua cac ban Blender) thay vi node.type.
 INFO_NODES = {
@@ -112,24 +115,28 @@ def _edit_tree(context):
 
 
 class EZG_GN_OT_label_info_nodes(bpy.types.Operator):
-    """Ghi ten object / collection vao nhan cua node Info"""
-
     bl_idname = "ezg_gn.label_info_nodes"
-    bl_label = "Đặt nhãn theo tên Object"
+    bl_label = tr("Đặt nhãn theo tên Object", "Label by Object Name")
+    bl_description = tr("Ghi tên object / collection vào nhãn của node Info",
+                        "Write the object / collection name into the Info node's label")
     bl_options = {'REGISTER', 'UNDO'}
 
     whole_file: bpy.props.BoolProperty(
-        name="Cả file",
+        name=tr("Cả file", "Whole File"),
         default=False,
-        description=("Xu li moi geometry node tree trong file, khong chi cay dang mo. "
-                     "Tat: chi cay dang mo va cac group long ben trong no"),
+        description=tr("Xử lí mọi geometry node tree trong file, không chỉ cây đang mở. "
+                       "Tắt: chỉ cây đang mở và các group lồng bên trong nó",
+                       "Process every geometry node tree in the file, not just the open one. "
+                       "Off: only the open tree and the groups nested inside it"),
     )
 
     @classmethod
     def description(cls, context, properties):
         if properties.whole_file:
-            return "Đặt nhãn cho node Info trong MỌI geometry node tree của file này"
-        return "Đặt nhãn cho node Info trong cây đang mở và các group lồng bên trong"
+            return tr("Đặt nhãn cho node Info trong MỌI geometry node tree của file này",
+                      "Label the Info nodes in EVERY geometry node tree of this file")
+        return tr("Đặt nhãn cho node Info trong cây đang mở và các group lồng bên trong",
+                  "Label the Info nodes in the open tree and the groups nested inside it")
 
     def execute(self, context):
         if self.whole_file:
@@ -137,17 +144,19 @@ class EZG_GN_OT_label_info_nodes(bpy.types.Operator):
         else:
             tree = _edit_tree(context)
             if tree is None:
-                self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+                self.report({'WARNING'}, tr("Không có cây Geometry Nodes nào đang mở.",
+                                            "No Geometry Nodes tree is open."))
                 return {'CANCELLED'}
             trees = _walk_trees(tree)
 
         renamed, empty = label_info_nodes(trees)
 
-        msg = "Đã đặt nhãn cho %d node." % renamed
+        msg = tr("Đã đặt nhãn cho %d node.", "Labeled %d nodes.") % renamed
         if renamed == 0:
-            msg = "Không có nhãn nào cần đổi."
+            msg = tr("Không có nhãn nào cần đổi.", "No labels needed changing.")
         if empty:
-            msg += " Bỏ qua %d node chưa trỏ tới object/collection nào." % empty
+            msg += tr(" Bỏ qua %d node chưa trỏ tới object/collection nào.",
+                      " Skipped %d nodes that point to no object/collection.") % empty
         self.report({'INFO'} if not empty else {'WARNING'}, msg)
         return {'FINISHED'}
 
@@ -311,55 +320,70 @@ def _arrange_targets(tree, scope):
 
 
 class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
-    """Dan node thang hang va thu nho lai cho gon"""
-
     bl_idname = "ezg_gn.arrange_nodes"
-    bl_label = "Thẳng hàng + thu nhỏ"
+    bl_label = tr("Thẳng hàng + thu nhỏ", "Align + Collapse")
+    bl_description = tr("Dàn node thẳng hàng và thu nhỏ lại cho gọn",
+                        "Line the nodes up and collapse them to save space")
     bl_options = {'REGISTER', 'UNDO'}
 
     scope: bpy.props.EnumProperty(
-        name="Phạm vi",
+        name=tr("Phạm vi", "Scope"),
         items=[
-            ('INFO', "Node Info", "Moi node Object Info / Collection Info trong cay dang mo"),
-            ('SELECTED', "Đang chọn", "Chi cac node dang chon, thuoc loai nao cung duoc"),
+            ('INFO', tr("Node Info", "Info Nodes"),
+             tr("Mọi node Object Info / Collection Info trong cây đang mở",
+                "Every Object Info / Collection Info node in the open tree")),
+            ('SELECTED', tr("Đang chọn", "Selected"),
+             tr("Chỉ các node đang chọn, thuộc loại nào cũng được",
+                "Only the selected nodes, of any type")),
         ],
         default='INFO',
     )
     collapse: bpy.props.EnumProperty(
-        name="Thu nhỏ",
+        name=tr("Thu nhỏ", "Collapse"),
         items=[
-            ('COLLAPSE', "Thu nhỏ", "Gap node lai thanh mot vach nho"),
-            ('EXPAND', "Mở ra", "Mo lai node dang bi gap"),
-            ('KEEP', "Giữ nguyên", "Khong dong den trang thai gap/mo"),
+            ('COLLAPSE', tr("Thu nhỏ", "Collapse"),
+             tr("Gập node lại thành một vạch nhỏ", "Fold the node into a thin bar")),
+            ('EXPAND', tr("Mở ra", "Expand"),
+             tr("Mở lại node đang bị gập", "Unfold collapsed nodes")),
+            ('KEEP', tr("Giữ nguyên", "Keep"),
+             tr("Không đụng đến trạng thái gập/mở", "Leave the collapsed/expanded state alone")),
         ],
         default='COLLAPSE',
     )
     axis: bpy.props.EnumProperty(
-        name="Hướng",
+        name=tr("Hướng", "Direction"),
         items=[
-            ('COLUMN', "Cột dọc", "Xep chong tu tren xuong, thang le trai"),
-            ('ROW', "Hàng ngang", "Xep tu trai sang phai, thang le tren"),
+            ('COLUMN', tr("Cột dọc", "Column"),
+             tr("Xếp chồng từ trên xuống, thẳng lề trái", "Stack top to bottom, aligned left")),
+            ('ROW', tr("Hàng ngang", "Row"),
+             tr("Xếp từ trái sang phải, thẳng lề trên", "Place left to right, aligned top")),
         ],
         default='COLUMN',
     )
     order: bpy.props.EnumProperty(
-        name="Thứ tự",
+        name=tr("Thứ tự", "Order"),
         items=[
-            ('POSITION', "Theo vị trí", "Giu nguyen thu tu dang thay tren man hinh"),
-            ('NAME', "Theo nhãn A→Z", "Sap theo nhan node, xep chua co nhan theo ten node"),
+            ('POSITION', tr("Theo vị trí", "By Position"),
+             tr("Giữ nguyên thứ tự đang thấy trên màn hình",
+                "Keep the order currently seen on screen")),
+            ('NAME', tr("Theo nhãn A→Z", "By Label A→Z"),
+             tr("Sắp theo nhãn node, node chưa có nhãn thì theo tên node",
+                "Sort by node label, unlabeled nodes by node name")),
         ],
         default='POSITION',
     )
     gap: bpy.props.FloatProperty(
-        name="Khoảng cách",
+        name=tr("Khoảng cách", "Spacing"),
         default=10.0, min=0.0, soft_max=120.0,
-        description="Khoang ho giua hai node lien nhau",
+        description=tr("Khoảng hở giữa hai node liền nhau", "Gap between two adjacent nodes"),
     )
     untangle: bpy.props.BoolProperty(
-        name="Gỡ xoắn dây",
+        name=tr("Gỡ xoắn dây", "Untangle Links"),
         default=True,
-        description=("Cam lai day vao Join Geometry theo dung thu tu tren xuong, "
-                     "de chung chay song song thay vi cheo qua nhau"),
+        description=tr("Cắm lại dây vào Join Geometry theo đúng thứ tự trên xuống, "
+                       "để chúng chạy song song thay vì chéo qua nhau",
+                       "Reconnect the links into Join Geometry in top-to-bottom order, "
+                       "so they run parallel instead of crossing each other"),
     )
 
     @classmethod
@@ -369,15 +393,17 @@ class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
     def execute(self, context):
         tree = _edit_tree(context)
         if tree is None:
-            self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+            self.report({'WARNING'}, tr("Không có cây Geometry Nodes nào đang mở.",
+                                        "No Geometry Nodes tree is open."))
             return {'CANCELLED'}
 
         targets = _arrange_targets(tree, self.scope)
         if not targets:
             if self.scope == 'SELECTED':
-                self.report({'WARNING'}, "Chưa chọn node nào.")
+                self.report({'WARNING'}, tr("Chưa chọn node nào.", "No nodes selected."))
             else:
-                self.report({'WARNING'}, "Cây này không có node Info nào.")
+                self.report({'WARNING'}, tr("Cây này không có node Info nào.",
+                                            "This tree has no Info nodes."))
             return {'CANCELLED'}
 
         collapse = {'COLLAPSE': True, 'EXPAND': False}.get(self.collapse)
@@ -391,9 +417,11 @@ class EZG_GN_OT_arrange_nodes(bpy.types.Operator):
         # het vao nhau. Hai viec nay luon phai di cung mot luot.
         rewired = untangle_downstream(tree, targets) if self.untangle else 0
 
-        msg = "Đã sắp xếp %d node (%d node đổi chỗ)." % (len(targets), moved)
+        msg = tr("Đã sắp xếp %d node (%d node đổi chỗ).",
+                 "Arranged %d nodes (%d moved).") % (len(targets), moved)
         if rewired:
-            msg += " Cắm lại %d dây cho hết xoắn." % rewired
+            msg += tr(" Cắm lại %d dây cho hết xoắn.",
+                      " Reconnected %d links to untangle them.") % rewired
         self.report({'INFO'}, msg)
         return {'FINISHED'}
 
@@ -529,33 +557,41 @@ def add_objects_to_join(tree, objects, join, relative=True, as_instance=False):
 
 
 class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
-    """Tạo node Object Info cho các object đang chọn rồi nối hết vào một Join Geometry"""
-
     bl_idname = "ezg_gn.add_selected_objects"
-    bl_label = "Thêm object đang chọn"
+    bl_label = tr("Thêm object đang chọn", "Add Selected Objects")
+    bl_description = tr("Tạo node Object Info cho các object đang chọn rồi nối hết vào "
+                        "một Join Geometry",
+                        "Create an Object Info node for each selected object and connect "
+                        "them all to one Join Geometry")
     bl_options = {'REGISTER', 'UNDO'}
 
     relative: bpy.props.BoolProperty(
-        name="Giữ đúng vị trí ngoài scene",
+        name=tr("Giữ đúng vị trí ngoài scene", "Keep Scene Position"),
         default=True,
-        description=("Transform Space = Relative: object hien ra dung cho no dang dung. "
-                     "Tat = Original: lay hinh o goc toa do rieng cua no"),
+        description=tr("Transform Space = Relative: object hiện ra đúng chỗ nó đang đứng. "
+                       "Tắt = Original: lấy hình ở gốc toạ độ riêng của nó",
+                       "Transform Space = Relative: the object shows up where it stands. "
+                       "Off = Original: take its shape at its own origin"),
     )
     as_instance: bpy.props.BoolProperty(
-        name="Lấy dạng instance",
+        name=tr("Lấy dạng instance", "As Instance"),
         default=False,
-        description="As Instance: nhe hon nhieu khi cung mot hinh lap lai nhieu lan",
+        description=tr("As Instance: nhẹ hơn nhiều khi cùng một hình lặp lại nhiều lần",
+                       "As Instance: much lighter when the same shape repeats many times"),
     )
     collapse: bpy.props.BoolProperty(
-        name="Thu nhỏ node",
+        name=tr("Thu nhỏ node", "Collapse Nodes"),
         default=True,
-        description="Gap cac node vua tao lai cho gon",
+        description=tr("Gập các node vừa tạo lại cho gọn",
+                       "Collapse the newly created nodes to save space"),
     )
     keep_group_input: bpy.props.BoolProperty(
-        name="Giữ dây Group Input",
+        name=tr("Giữ dây Group Input", "Keep Group Input Link"),
         default=False,
-        description=("Gop ca hinh khoi cua chinh object dang deo modifier vao Join. "
-                     "Tat: chi gop cac object them vao"),
+        description=tr("Gộp cả hình khối của chính object đang đeo modifier vào Join. "
+                       "Tắt: chỉ gộp các object thêm vào",
+                       "Also join the geometry of the object carrying the modifier. "
+                       "Off: only join the added objects"),
     )
 
     @classmethod
@@ -565,7 +601,8 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
     def execute(self, context):
         tree = _edit_tree(context)
         if tree is None:
-            self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+            self.report({'WARNING'}, tr("Không có cây Geometry Nodes nào đang mở.",
+                                        "No Geometry Nodes tree is open."))
             return {'CANCELLED'}
 
         hosts = _tree_hosts(tree)
@@ -584,12 +621,15 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
         if not wanted:
             if n_host and len(selected) == n_host:
                 self.report({'WARNING'},
-                            "Chỉ chọn mỗi object đang mang modifier — "
-                            "chọn thêm object nguồn.")
+                            tr("Chỉ chọn mỗi object đang mang modifier — "
+                               "chọn thêm object nguồn.",
+                               "Only the object carrying the modifier is selected — "
+                               "select the source objects too."))
             elif n_skip:
-                self.report({'WARNING'}, "Các object đang chọn đều không có hình khối.")
+                self.report({'WARNING'}, tr("Các object đang chọn đều không có hình khối.",
+                                            "None of the selected objects have geometry."))
             else:
-                self.report({'WARNING'}, "Chưa chọn object nào.")
+                self.report({'WARNING'}, tr("Chưa chọn object nào.", "No objects selected."))
             return {'CANCELLED'}
 
         join, join_created, wired = ensure_join(tree, self.keep_group_input)
@@ -620,16 +660,21 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
 
         notes = []
         if n_dup:
-            notes.append("%d object đã có node sẵn" % n_dup)
+            notes.append(tr("%d object đã có node sẵn",
+                            "%d objects already had a node") % n_dup)
         if n_host:
-            notes.append("bỏ qua %d object đang mang modifier" % n_host)
+            notes.append(tr("bỏ qua %d object đang mang modifier",
+                            "skipped %d objects carrying the modifier") % n_host)
         if n_skip:
-            notes.append("bỏ qua %d object không có hình khối" % n_skip)
+            notes.append(tr("bỏ qua %d object không có hình khối",
+                            "skipped %d objects without geometry") % n_skip)
         if join_created and not wired:
-            notes.append("Join CHƯA nối ra Group Output — cây này không có "
-                         "đầu ra hình khối")
+            notes.append(tr("Join CHƯA nối ra Group Output — cây này không có "
+                            "đầu ra hình khối",
+                            "Join is NOT connected to Group Output — this tree has "
+                            "no geometry output"))
 
-        msg = "Đã thêm %d object vào Join." % len(made)
+        msg = tr("Đã thêm %d object vào Join.", "Added %d objects to Join.") % len(made)
         if notes:
             msg += " (" + "; ".join(notes) + ")"
         self.report({'WARNING'} if (join_created and not wired) else {'INFO'}, msg)
@@ -641,12 +686,18 @@ class EZG_GN_OT_add_selected_objects(bpy.types.Operator):
 # O chon Transform Space nam trong THAN node, ma addon nay thu nho node lai cho
 # gon — thu nho xong thi khong con thay o do nua. Nen phai co cho bat tat o
 # ngoai panel, khong thi doi y roi la phai mo tung node ra.
-TRANSFORM_SPACES = (
-    ('RELATIVE', "Relative",
-     "Object hien ra dung cho no dang dung ngoai scene"),
-    ('ORIGINAL', "Original",
-     "Lay hinh o goc toa do rieng cua object, bo qua vi tri ngoai scene"),
-)
+#
+# La ham chu khong phai hang so: tooltip dong (description) can ghi chu theo
+# ngon ngu LUC GOI, hang so cap module thi dung o ngon ngu luc import.
+def _transform_spaces():
+    return (
+        ('RELATIVE', "Relative",  # i18n-skip
+         tr("Object hiện ra đúng chỗ nó đang đứng ngoài scene",
+            "The object shows up where it stands in the scene")),
+        ('ORIGINAL', "Original",  # i18n-skip
+         tr("Lấy hình ở gốc toạ độ riêng của object, bỏ qua vị trí ngoài scene",
+            "Take the object's shape at its own origin, ignoring its place in the scene")),
+    )
 
 
 def info_nodes_in(tree, selected_only=False):
@@ -666,17 +717,17 @@ def set_transform_space(nodes, space):
 
 
 class EZG_GN_OT_set_transform_space(bpy.types.Operator):
-    """Đổi Transform Space của node Info hàng loạt"""
-
     bl_idname = "ezg_gn.set_transform_space"
-    bl_label = "Transform Space"
+    bl_label = "Transform Space"  # i18n-skip
+    bl_description = tr("Đổi Transform Space của node Info hàng loạt",
+                        "Change the Transform Space of Info nodes in bulk")
     bl_options = {'REGISTER', 'UNDO'}
 
     space: bpy.props.EnumProperty(
-        name="Transform Space", items=TRANSFORM_SPACES, default='RELATIVE',
+        name="Transform Space", items=_transform_spaces(), default='RELATIVE',  # i18n-skip
     )
     selected_only: bpy.props.BoolProperty(
-        name="Chỉ node đang chọn", default=False,
+        name=tr("Chỉ node đang chọn", "Selected Nodes Only"), default=False,
     )
 
     @classmethod
@@ -685,7 +736,7 @@ class EZG_GN_OT_set_transform_space(bpy.types.Operator):
 
     @classmethod
     def description(cls, context, properties):
-        for ident, label, note in TRANSFORM_SPACES:
+        for ident, label, note in _transform_spaces():
             if ident == properties.space:
                 return "%s — %s" % (label, note)
         return ""
@@ -694,11 +745,12 @@ class EZG_GN_OT_set_transform_space(bpy.types.Operator):
         tree = _edit_tree(context)
         nodes = info_nodes_in(tree, self.selected_only)
         if not nodes:
-            self.report({'WARNING'}, "Không có node Info nào.")
+            self.report({'WARNING'}, tr("Không có node Info nào.", "No Info nodes."))
             return {'CANCELLED'}
 
         changed = set_transform_space(nodes, self.space)
-        self.report({'INFO'}, "Đã đổi %d/%d node sang %s."
+        self.report({'INFO'}, tr("Đã đổi %d/%d node sang %s.",
+                                 "Changed %d/%d nodes to %s.")
                     % (changed, len(nodes), self.space.title()))
         return {'FINISHED'}
 
@@ -811,18 +863,25 @@ def _sync_timer():
     return SYNC_INTERVAL
 
 
-def _on_sync_toggled(self, context):
-    global _sync_key
-    _sync_key = None
-    if self.ezg_gn_sync_select and not bpy.app.timers.is_registered(_sync_timer):
+def _start_sync():
+    if not bpy.app.timers.is_registered(_sync_timer):
         bpy.app.timers.register(_sync_timer, first_interval=0.0)
 
 
-class EZG_GN_OT_select_objects(bpy.types.Operator):
-    """Chọn object mà các node Info đang chọn trỏ tới, ngoài viewport và outliner"""
+def _on_sync_toggled(self, context):
+    global _sync_key
+    _sync_key = None
+    if self.ezg_gn_sync_select:
+        _start_sync()
 
+
+class EZG_GN_OT_select_objects(bpy.types.Operator):
     bl_idname = "ezg_gn.select_objects"
-    bl_label = "Chọn object của node"
+    bl_label = tr("Chọn object của node", "Select Node Objects")
+    bl_description = tr("Chọn object mà các node Info đang chọn trỏ tới, ngoài viewport "
+                        "và outliner",
+                        "Select the objects the selected Info nodes point to, in the viewport "
+                        "and outliner")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -833,24 +892,28 @@ class EZG_GN_OT_select_objects(bpy.types.Operator):
         tree = _edit_tree(context)
         nodes = selected_info_nodes(tree)
         if not nodes:
-            self.report({'WARNING'}, "Chưa chọn node Info nào.")
+            self.report({'WARNING'}, tr("Chưa chọn node Info nào.", "No Info nodes selected."))
             return {'CANCELLED'}
 
         objects = objects_of_nodes(nodes)
         if not objects:
-            self.report({'WARNING'}, "Các node đang chọn chưa trỏ tới object nào.")
+            self.report({'WARNING'}, tr("Các node đang chọn chưa trỏ tới object nào.",
+                                        "The selected nodes don't point to any object yet."))
             return {'CANCELLED'}
 
         picked = select_objects(context.view_layer, objects)
         if not picked:
             self.report({'WARNING'},
-                        "Object của node không có trong view layer này "
-                        "(collection bị loại trừ?).")
+                        tr("Object của node không có trong view layer này "
+                           "(collection bị loại trừ?).",
+                           "The nodes' objects are not in this view layer "
+                           "(collection excluded?)."))
             return {'CANCELLED'}
 
-        msg = "Đã chọn %d object." % picked
+        msg = tr("Đã chọn %d object.", "Selected %d objects.") % picked
         if picked < len(objects):
-            msg += " %d object không có trong view layer." % (len(objects) - picked)
+            msg += tr(" %d object không có trong view layer.",
+                      " %d objects are not in the view layer.") % (len(objects) - picked)
         self.report({'INFO'}, msg)
         return {'FINISHED'}
 
@@ -864,9 +927,22 @@ class EZG_GN_OT_select_objects(bpy.types.Operator):
 # Ly do mot node bi coi la thua. Thu tu quan trong: mot node vua trong vua khong
 # noi day thi bao ca hai, con "trong nhung DANG noi day" la truong hop can canh
 # vi xoa no la dut mach cay.
-REASON_EMPTY = "trống"
-REASON_UNLINKED = "không nối"
-REASON_EMPTY_LINKED = "trống, nhưng đang nối dây"
+#
+# Day la MA ly do (du lieu, dem so sanh trong code) — khong dich. Chu hien cho
+# nguoi dung do reason_text() dich luc ve.
+REASON_EMPTY = "EMPTY"
+REASON_UNLINKED = "UNLINKED"
+REASON_EMPTY_LINKED = "EMPTY_LINKED"
+
+
+def reason_text(reason):
+    """Chu hien ra cua mot ma ly do (vd "EMPTY, UNLINKED" -> "trống, không nối")."""
+    names = {
+        REASON_EMPTY: tr("trống", "empty"),
+        REASON_UNLINKED: tr("không nối", "not connected"),
+        REASON_EMPTY_LINKED: tr("trống, nhưng đang nối dây", "empty, but linked"),
+    }
+    return ", ".join(names.get(part, part) for part in reason.split(", "))
 
 
 def node_waste_reason(node, remove_empty=True, remove_unlinked=True):
@@ -923,26 +999,31 @@ def _node_title(node):
 
 
 class EZG_GN_OT_clean_info_nodes(bpy.types.Operator):
-    """Xoá các node Info không trỏ tới object nào, hoặc không nối vào đâu cả"""
-
     bl_idname = "ezg_gn.clean_info_nodes"
-    bl_label = "Dọn node thừa"
+    bl_label = tr("Dọn node thừa", "Clean Up Unused Nodes")
+    bl_description = tr("Xoá các node Info không trỏ tới object nào, hoặc không nối vào "
+                        "đâu cả",
+                        "Delete Info nodes that point to no object, or are not connected "
+                        "to anything")
     bl_options = {'REGISTER', 'UNDO'}
 
     remove_empty: bpy.props.BoolProperty(
-        name="Không chứa object",
+        name=tr("Không chứa object", "No Object"),
         default=True,
-        description="Node Info chua tro toi object / collection nao",
+        description=tr("Node Info chưa trỏ tới object / collection nào",
+                       "Info nodes that point to no object / collection yet"),
     )
     remove_unlinked: bpy.props.BoolProperty(
-        name="Không nối vào đâu",
+        name=tr("Không nối vào đâu", "Not Connected"),
         default=True,
-        description="Node Info khong co day nao di ra tu dau ra cua no",
+        description=tr("Node Info không có dây nào đi ra từ đầu ra của nó",
+                       "Info nodes with no link leaving their outputs"),
     )
     selected_only: bpy.props.BoolProperty(
-        name="Chỉ node đang chọn",
+        name=tr("Chỉ node đang chọn", "Selected Nodes Only"),
         default=False,
-        description="Chi xet cac node dang chon, thay vi ca cay dang mo",
+        description=tr("Chỉ xét các node đang chọn, thay vì cả cây đang mở",
+                       "Only consider the selected nodes instead of the whole open tree"),
     )
 
     @classmethod
@@ -958,10 +1039,11 @@ class EZG_GN_OT_clean_info_nodes(bpy.types.Operator):
 
     def invoke(self, context, event):
         if not (self.remove_empty or self.remove_unlinked):
-            self.report({'WARNING'}, "Chưa chọn điều kiện nào để dọn.")
+            self.report({'WARNING'}, tr("Chưa chọn điều kiện nào để dọn.",
+                                        "No cleanup condition selected."))
             return {'CANCELLED'}
         if not self._found(context):
-            self.report({'INFO'}, "Không có node Info nào thừa.")
+            self.report({'INFO'}, tr("Không có node Info nào thừa.", "No unused Info nodes."))
             return {'CANCELLED'}
         return context.window_manager.invoke_props_dialog(self, width=380)
 
@@ -977,47 +1059,54 @@ class EZG_GN_OT_clean_info_nodes(bpy.types.Operator):
 
         found = self._found(context)
         if not found:
-            layout.label(text="Không còn node nào khớp điều kiện.", icon='CHECKMARK')
+            layout.label(text=tr("Không còn node nào khớp điều kiện.",
+                                 "No nodes match the conditions anymore."),
+                         icon='CHECKMARK')
             return
 
-        layout.label(text="Sẽ xoá %d node:" % len(found), icon='TRASH')
+        layout.label(text=tr("Sẽ xoá %d node:", "Will delete %d nodes:") % len(found),
+                     icon='TRASH')
 
         box = layout.box()
         col = box.column(align=True)
         SHOWN = 12
         for node, reason in found[:SHOWN]:
             icon = 'ERROR' if reason == REASON_EMPTY_LINKED else 'DOT'
-            col.label(text="%s  —  %s" % (_node_title(node), reason), icon=icon)
+            col.label(text="%s  —  %s" % (_node_title(node), reason_text(reason)), icon=icon)
         if len(found) > SHOWN:
-            col.label(text="… và %d node nữa" % (len(found) - SHOWN))
+            col.label(text=tr("… và %d node nữa", "… and %d more nodes") % (len(found) - SHOWN))
 
         if any(r == REASON_EMPTY_LINKED for _, r in found):
-            layout.label(text="Node đánh dấu đỏ đang có dây — xoá là đứt mạch.",
+            layout.label(text=tr("Node đánh dấu đỏ đang có dây — xoá là đứt mạch.",
+                                 "Nodes marked red are linked — deleting them breaks "
+                                 "the tree."),
                          icon='ERROR')
 
     def execute(self, context):
         tree = _edit_tree(context)
         if tree is None:
-            self.report({'WARNING'}, "Không có cây Geometry Nodes nào đang mở.")
+            self.report({'WARNING'}, tr("Không có cây Geometry Nodes nào đang mở.",
+                                        "No Geometry Nodes tree is open."))
             return {'CANCELLED'}
 
         found = self._found(context)
         if not found:
-            self.report({'INFO'}, "Không có node Info nào thừa.")
+            self.report({'INFO'}, tr("Không có node Info nào thừa.", "No unused Info nodes."))
             return {'CANCELLED'}
 
         cut_links = sum(1 for _, r in found if r == REASON_EMPTY_LINKED)
         removed = remove_nodes(tree, [n for n, _ in found])
 
-        msg = "Đã xoá %d node thừa." % removed
+        msg = tr("Đã xoá %d node thừa.", "Deleted %d unused nodes.") % removed
         if cut_links:
-            msg += " %d node trong đó đang có dây — Ctrl+Z nếu cần." % cut_links
+            msg += tr(" %d node trong đó đang có dây — Ctrl+Z nếu cần.",
+                      " %d of them were linked — Ctrl+Z if needed.") % cut_links
         self.report({'WARNING'} if cut_links else {'INFO'}, msg)
         return {'FINISHED'}
 
 
 class EZG_GN_PT_info_namer(bpy.types.Panel):
-    bl_label = "GN Info Namer"
+    bl_label = "GN Info Namer"  # i18n-skip
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
     bl_category = CATEGORY
@@ -1028,12 +1117,15 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         space = getattr(context, "space_data", None)
         return space is not None and getattr(space, "tree_type", "") == 'GeometryNodeTree'
 
+    def draw_header_preset(self, context):
+        ezg_i18n.draw_toggle(self.layout, "ezg_gn")
+
     def draw(self, context):
         layout = self.layout
         tree = _edit_tree(context)
 
         if tree is None:
-            layout.label(text="Chưa mở cây node nào.", icon='INFO')
+            layout.label(text=tr("Chưa mở cây node nào.", "No node tree is open."), icon='INFO')
             return
 
         # Object se duoc them vao: dem san de nut noi ro no sap lam gi.
@@ -1048,14 +1140,16 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         col.operator(EZG_GN_OT_add_selected_objects.bl_idname, icon='ADD')
 
         if addable:
-            layout.label(text="Sẽ thêm: %d object" % len(addable),
+            layout.label(text=tr("Sẽ thêm: %d object", "Will add: %d objects") % len(addable),
                          icon='OUTLINER_OB_MESH')
         elif selected:
             # Chon moi object dang mang modifier la truong hop rat de gap:
             # no la object active, sang mau vang, nen nguoi dung tuong da chon du.
-            layout.label(text="Object đang chọn không thêm được.", icon='INFO')
+            layout.label(text=tr("Object đang chọn không thêm được.",
+                                 "The selected objects can't be added."), icon='INFO')
         else:
-            layout.label(text="Chưa chọn object nào ngoài viewport.", icon='INFO')
+            layout.label(text=tr("Chưa chọn object nào ngoài viewport.",
+                                 "No objects selected in the viewport."), icon='INFO')
 
         layout.separator()
 
@@ -1066,7 +1160,7 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
 
         row = layout.row(align=True)
         row.operator(EZG_GN_OT_label_info_nodes.bl_idname,
-                     text="Cả file", icon='FILE_BLEND').whole_file = True
+                     text=tr("Cả file", "Whole File"), icon='FILE_BLEND').whole_file = True
 
         layout.separator()
 
@@ -1076,11 +1170,15 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         # con thay. Bay ra day de doi duoc ma khong phai mo tung node.
         ts_nodes = info_nodes_in(tree, bool(n_info_sel))
         if ts_nodes:
-            layout.label(text="Transform Space — %d node%s"
-                              % (len(ts_nodes), " đang chọn" if n_info_sel else ""))
+            if n_info_sel:
+                head = tr("Transform Space — %d node đang chọn",
+                          "Transform Space — %d selected nodes")
+            else:
+                head = tr("Transform Space — %d node", "Transform Space — %d nodes")
+            layout.label(text=head % len(ts_nodes))
             spaces = {n.transform_space for n in ts_nodes}
             row = layout.row(align=True)
-            for ident, label, _note in TRANSFORM_SPACES:
+            for ident, label, _note in _transform_spaces():
                 op = row.operator(EZG_GN_OT_set_transform_space.bl_idname,
                                   text=label, depress=(spaces == {ident}))
                 op.space = ident
@@ -1091,8 +1189,8 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         row = layout.row(align=True)
         row.enabled = bool(n_info_sel)
         row.operator(EZG_GN_OT_select_objects.bl_idname,
-                     text="Chọn object của %d node" % n_info_sel
-                          if n_info_sel else "Chọn object của node",
+                     text=tr("Chọn object của %d node", "Select Objects of %d Nodes") % n_info_sel
+                          if n_info_sel else tr("Chọn object của node", "Select Node Objects"),
                      icon='RESTRICT_SELECT_OFF')
         layout.prop(context.window_manager, "ezg_gn_sync_select", toggle=True,
                     icon='UV_SYNC_SELECT')
@@ -1110,11 +1208,11 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
 
         row = layout.row(align=True)
         op = row.operator(EZG_GN_OT_arrange_nodes.bl_idname,
-                          text="Mở ra", icon='FULLSCREEN_ENTER')
+                          text=tr("Mở ra", "Expand"), icon='FULLSCREEN_ENTER')
         op.scope = scope
         op.collapse = 'EXPAND'
         op = row.operator(EZG_GN_OT_arrange_nodes.bl_idname,
-                          text="Theo nhãn A→Z", icon='SORTALPHA')
+                          text=tr("Theo nhãn A→Z", "By Label A→Z"), icon='SORTALPHA')
         op.scope = scope
         op.collapse = 'KEEP'
         op.order = 'NAME'
@@ -1123,10 +1221,12 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         # Noi ro ra vi hai truong hop cho ket qua rat khac nhau.
         n_info = sum(1 for node in tree.nodes if node.bl_idname in INFO_NODES)
         if n_sel:
-            layout.label(text="Sẽ sắp xếp: %d node đang chọn" % n_sel,
+            layout.label(text=tr("Sẽ sắp xếp: %d node đang chọn",
+                                 "Will arrange: %d selected nodes") % n_sel,
                          icon='RESTRICT_SELECT_OFF')
         else:
-            layout.label(text="Sẽ sắp xếp: %d node Info trong cây" % n_info,
+            layout.label(text=tr("Sẽ sắp xếp: %d node Info trong cây",
+                                 "Will arrange: %d Info nodes in the tree") % n_info,
                          icon='NODE')
 
         n_all = sum(
@@ -1134,7 +1234,9 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
             if node.bl_idname in INFO_NODES
         )
         if n_all != n_info:
-            layout.label(text="Kể cả group lồng: %d node Info" % n_all, icon='NODETREE')
+            layout.label(text=tr("Kể cả group lồng: %d node Info",
+                                 "Including nested groups: %d Info nodes") % n_all,
+                         icon='NODETREE')
 
         layout.separator()
 
@@ -1149,10 +1251,12 @@ class EZG_GN_PT_info_namer(bpy.types.Panel):
         op.selected_only = bool(n_sel)
 
         if waste:
-            layout.label(text="Thừa: %d node (bấm để xem trước)" % len(waste),
+            layout.label(text=tr("Thừa: %d node (bấm để xem trước)",
+                                 "Unused: %d nodes (click to preview)") % len(waste),
                          icon='INFO')
         else:
-            layout.label(text="Không có node Info nào thừa.", icon='CHECKMARK')
+            layout.label(text=tr("Không có node Info nào thừa.", "No unused Info nodes."),
+                         icon='CHECKMARK')
 
 
 classes = (
@@ -1163,14 +1267,18 @@ classes = (
     EZG_GN_OT_select_objects,
     EZG_GN_OT_clean_info_nodes,
     EZG_GN_PT_info_namer,
+    ezg_i18n.make_language_operator("ezg_gn"),
 )
 
 
 def _stop_sync():
     """Tat timer dong bo. Bo sot cho nay la timer con chay sau khi go addon,
-    goi vao ham da bien mat -> Blender bao loi moi 0.25 giay."""
-    global _sync_key
-    _sync_key = None
+    goi vao ham da bien mat -> Blender bao loi moi 0.25 giay.
+
+    KHONG xoa _sync_key: doi ngon ngu go roi dang ki lai addon va cho timer chay
+    tiep; xoa key thi luot dau cua timer se chon lai object theo node, de mat
+    selection nguoi dung vua chon tay ngoai viewport.
+    """
     try:
         if bpy.app.timers.is_registered(_sync_timer):
             bpy.app.timers.unregister(_sync_timer)
@@ -1178,34 +1286,42 @@ def _stop_sync():
         pass
 
 
+def _sync_switch_on():
+    """Cong tac dong bo dang bat? Doc duoc ca luc Blender dang khoi dong."""
+    try:
+        return bool(bpy.context.window_manager.ezg_gn_sync_select)
+    except Exception:
+        return False
+
+
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
 
     bpy.types.WindowManager.ezg_gn_sync_select = bpy.props.BoolProperty(
-        name="Tự chọn theo node",
+        name=tr("Tự chọn theo node", "Auto-Select from Nodes"),
         default=False,
         update=_on_sync_toggled,
-        description=("Chon node Info nao thi object cua no tu sang len ngoai viewport. "
-                     "Blender khong bao khi doi node dang chon nen cho nay phai doc "
-                     "lai moi 0.25 giay — tat di khi khong dung"),
+        description=tr("Chọn node Info nào thì object của nó tự sáng lên ngoài viewport. "
+                       "Blender không báo khi đổi node đang chọn nên chỗ này phải đọc "
+                       "lại mỗi 0.25 giây — tắt đi khi không dùng",
+                       "Selecting an Info node highlights its object in the viewport. "
+                       "Blender sends no event when the node selection changes, so this "
+                       "re-reads it every 0.25 s — turn it off when not in use"),
     )
+
+    # Doi ngon ngu = unregister() + register() ngay trong phien. Gia tri cong
+    # tac nam tren window manager nen van con sau lan dang ki lai (update khong
+    # duoc goi): dang bat thi phai chay lai timer, khong thi nut hien BAT ma
+    # khong dong bo gi.
+    if _sync_switch_on():
+        _start_sync()
 
 
 def unregister():
+    # Chi dung timer, GIU gia tri cong tac de register() chay tiep timer.
     _stop_sync()
 
-    wm = getattr(bpy.context, "window_manager", None)
-    if wm is not None and hasattr(wm, "ezg_gn_sync_select"):
-        try:
-            wm.ezg_gn_sync_select = False
-        except Exception:
-            pass
     if hasattr(bpy.types.WindowManager, "ezg_gn_sync_select"):
         del bpy.types.WindowManager.ezg_gn_sync_select
 
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    ezg_i18n.unregister_classes(classes)
