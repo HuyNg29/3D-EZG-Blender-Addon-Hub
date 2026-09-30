@@ -1,7 +1,8 @@
 # Manual Marker Mixamo Rigger
 # Blender 4.x add-on: place a minimal Mixamo-style set of joint markers
-# (chin, groin, wrists, elbows, knees) on a T-Pose humanoid, estimate the
-# full Mixamo-compatible skeleton, bind with automatic weights, clean weights.
+# (chin, groin, shoulders, wrists, elbows, knees) on a T-Pose humanoid,
+# estimate the full Mixamo-compatible skeleton, bind with automatic weights,
+# clean weights.
 # Right-side markers follow the left side in realtime via drivers, on a
 # user-selectable symmetry axis (X / Y / Z).
 
@@ -2001,11 +2002,11 @@ class MMR_OT_prepare_mesh(bpy.types.Operator):
 class MMR_OT_create_markers(bpy.types.Operator):
     bl_idname = "mmr.create_markers"
     bl_label = tr("Tạo marker Mixamo", "Create Mixamo Markers")
-    bl_description = tr("Tạo bộ marker Mixamo tối thiểu: cằm, háng, cổ tay, "
+    bl_description = tr("Tạo bộ marker Mixamo tối thiểu: cằm, háng, vai, cổ tay, "
                         "khuỷu tay, đầu gối. Driver đối xứng tức thời được dựng "
                         "sẵn khi bật 'Dùng đối xứng'",
-                        "Create the minimal Mixamo marker set: chin, groin, wrists, "
-                        "elbows, knees. Realtime symmetry drivers are set up "
+                        "Create the minimal Mixamo marker set: chin, groin, shoulders, "
+                        "wrists, elbows, knees. Realtime symmetry drivers are set up "
                         "automatically when Use Symmetry is on")
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -2134,11 +2135,11 @@ class MMR_OT_color_markers(bpy.types.Operator):
 class MMR_OT_mirror_markers(bpy.types.Operator):
     bl_idname = "mmr.mirror_markers"
     bl_label = tr("Lật gương trái sang phải", "Mirror Left To Right")
-    bl_description = tr("Cách làm tay: chép vị trí cổ tay/khuỷu tay/đầu gối bên "
+    bl_description = tr("Cách làm tay: chép vị trí vai/cổ tay/khuỷu tay/đầu gối bên "
                         "trái sang bên phải một lần, theo trục đối xứng đang dùng. "
                         "Không cần khi đối xứng tức thời đang bật",
-                        "Manual fallback: copy left wrist/elbow/knee positions to "
-                        "the right side once, using the active symmetry axis. Not "
+                        "Manual fallback: copy left shoulder/wrist/elbow/knee positions "
+                        "to the right side once, using the active symmetry axis. Not "
                         "needed while realtime symmetry is on")
     bl_options = {'REGISTER', 'UNDO'}
 

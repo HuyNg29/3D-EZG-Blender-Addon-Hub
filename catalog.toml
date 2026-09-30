@@ -129,12 +129,12 @@ recommended = false
 [items.ezg_mixamo_marker_rigger]
 title_vi = "Manual Marker Mixamo Rigger"
 summary_vi = """
-Đặt marker khớp (cằm, háng, cổ tay, khuỷu, đầu gối) lên nhân vật T-Pose,
+Đặt marker khớp (cằm, háng, vai, cổ tay, khuỷu, đầu gối) lên nhân vật T-Pose,
 tự sinh armature chuẩn Mixamo rồi bind weight tự động.
 Marker bên phải tự bám theo bên trái qua driver, chọn được trục đối xứng."""
 summary_en = """
-Place joint markers (chin, groin, wrists, elbows, knees) on a T-pose character,
-then generate a Mixamo-standard armature and bind weights automatically.
+Place joint markers (chin, groin, shoulders, wrists, elbows, knees) on a T-pose
+character, then generate a Mixamo-standard armature and bind weights automatically.
 Right-side markers follow the left side through drivers; pick the symmetry axis."""
 thumbnail = "thumbs/ezg_mixamo_marker_rigger.png"
 recommended = false
