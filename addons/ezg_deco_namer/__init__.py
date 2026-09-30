@@ -1,18 +1,24 @@
 import bpy
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 
 # ==== 5 rule tien to co dinh — sua danh sach nay neu can them/bot ====
 PREFIXES = ["deco_00_", "deco_01_", "deco_02_", "deco_03_", "deco_04_"]
 
-# Chu thich hien ngay duoi moi nut rule (kich thuoc tham chieu so voi nguoi).
-# Key phai trung voi mot phan tu trong PREFIXES.
-NOTES = {
-    "deco_00_": "cao hơn người",
-    "deco_01_": "ngang người",
-    "deco_02_": "thấp hơn người",
-    "deco_03_": "lớn hơn nhiều so với người",
-    "deco_04_": "trên mặt nước",
-}
+
+def rule_notes():
+    """Chu thich hien ngay duoi moi nut rule (kich thuoc tham chieu so voi nguoi).
+    Key phai trung voi mot phan tu trong PREFIXES. La ham (khong phai dict hang)
+    de tr() chay luc ve panel -> luon dung ngon ngu dang chon."""
+    return {
+        "deco_00_": tr("cao hơn người", "taller than a person"),
+        "deco_01_": tr("ngang người", "about a person's height"),
+        "deco_02_": tr("thấp hơn người", "shorter than a person"),
+        "deco_03_": tr("lớn hơn nhiều so với người", "much bigger than a person"),
+        "deco_04_": tr("trên mặt nước", "on the water surface"),
+    }
 
 # Chieu cao 2 dong trong 1 "the nut" (tang len neu muon nut to hon)
 BUTTON_SCALE = 1.7   # dong tren: prefix
@@ -112,21 +118,27 @@ def _schedule_hover_apply(prefix):
 
 
 class DECO_OT_rename_selected(bpy.types.Operator):
-    """Doi ten cac mesh dang chon theo tien to, TU DONG NHAY QUA cac hau to
-da bi mesh khac chiem. Vd da co deco_02_b -> them 3 mesh se thanh a, c, d."""
+    # Doi ten cac mesh dang chon theo tien to, TU DONG NHAY QUA cac hau to
+    # da bi mesh khac chiem. Vd da co deco_02_b -> them 3 mesh se thanh a, c, d.
     bl_idname = "deco.rename_selected"
-    bl_label = "Doi ten mesh theo rule"
+    bl_label = tr("Đổi tên mesh theo rule", "Rename Meshes by Rule")
+    bl_description = tr("Đổi tên các mesh đang chọn theo tiền tố, tự nhảy qua các hậu tố "
+                        "đã bị mesh khác chiếm",
+                        "Rename the selected meshes with the prefix, skipping suffixes "
+                        "already taken by other meshes")
     bl_options = {'REGISTER', 'UNDO'}
 
-    prefix: bpy.props.StringProperty(name="Tien to", default=PREFIXES[0])
+    prefix: bpy.props.StringProperty(name=tr("Tiền tố", "Prefix"), default=PREFIXES[0])
 
     @classmethod
     def description(cls, context, properties):
         # Duoc goi luc hover -> hen chon nhom cung ten (sang len trong outliner/viewport)
         _schedule_hover_apply(properties.prefix)
         p = properties.prefix
-        return ("Hover: sang len (chon) nhom '%s*'.\n"
-                "Bam: doi ten cac mesh DANG CHON theo rule nay (nhay qua slot da co)." % p)
+        return tr("Hover: sáng lên (chọn) nhóm '%s*'.\n"
+                  "Bấm: đổi tên các mesh ĐANG CHỌN theo rule này (nhảy qua slot đã có).",
+                  "Hover: highlight (select) the '%s*' group.\n"
+                  "Click: rename the SELECTED meshes with this rule (skipping taken slots).") % p
 
     @classmethod
     def poll(cls, context):
@@ -135,7 +147,7 @@ da bi mesh khac chiem. Vd da co deco_02_b -> them 3 mesh se thanh a, c, d."""
     def execute(self, context):
         objs = _selected_meshes(context)
         if not objs:
-            self.report({'WARNING'}, "Chua chon mesh nao.")
+            self.report({'WARNING'}, tr("Chưa chọn mesh nào.", "No mesh selected."))
             return {'CANCELLED'}
 
         # Sap theo ten hien tai (khong phan biet hoa/thuong) de gan chu cai on dinh
@@ -159,18 +171,24 @@ da bi mesh khac chiem. Vd da co deco_02_b -> them 3 mesh se thanh a, c, d."""
         shown = ", ".join(targets[:6]) + (" ..." if len(targets) > 6 else "")
         bad = [o.name for o, t in zip(objs, targets) if o.name != t]
         if bad:
-            self.report({'WARNING'}, "Mot so ten bi Blender doi khac du kien: %s" % ", ".join(bad))
+            self.report({'WARNING'}, tr("Một số tên bị Blender đổi khác dự kiến: %s",
+                                        "Blender changed some names unexpectedly: %s")
+                        % ", ".join(bad))
         else:
-            self.report({'INFO'}, "Da doi ten %d mesh -> %s" % (len(objs), shown))
+            self.report({'INFO'}, tr("Đã đổi tên %d mesh -> %s", "Renamed %d meshes -> %s")
+                        % (len(objs), shown))
         return {'FINISHED'}
 
 
 class DECO_PT_panel(bpy.types.Panel):
-    bl_label = "Deco Namer"
+    bl_label = "Deco Namer"  # i18n-skip
     bl_idname = "DECO_PT_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Deco"
+
+    def draw_header_preset(self, context):
+        ezg_i18n.draw_toggle(self.layout, "deco")
 
     def draw(self, context):
         layout = self.layout
@@ -178,8 +196,9 @@ class DECO_PT_panel(bpy.types.Panel):
         n = len(sel)
 
         box = layout.box()
-        box.label(text="Da chon: %d mesh" % n, icon='OUTLINER_OB_MESH')
+        box.label(text=tr("Đã chọn: %d mesh", "Meshes selected: %d") % n, icon='OUTLINER_OB_MESH')
 
+        notes = rule_notes()
         occupied = _occupied_names(sel) if n else set()
         for p in PREFIXES:
             top_text = p
@@ -188,7 +207,7 @@ class DECO_PT_panel(bpy.types.Panel):
                 shown = ", ".join(letters[:5]) + (" ..." if len(letters) > 5 else "")
                 top_text = "%s  ( %s )" % (p, shown)
 
-            note = NOTES.get(p, "")
+            note = notes.get(p, "")
 
             # Moi rule = 1 "the nut" lien khoi (align=True): dong tren = prefix,
             # dong duoi = chu thich NAM NGAY TRONG nut. Bam dong nao cung doi ten.
@@ -206,7 +225,7 @@ class DECO_PT_panel(bpy.types.Panel):
             layout.separator(factor=0.4)
 
 
-classes = (DECO_OT_rename_selected, DECO_PT_panel)
+classes = (DECO_OT_rename_selected, DECO_PT_panel, ezg_i18n.make_language_operator("deco"))
 
 
 def _cleanup_legacy():
@@ -226,18 +245,20 @@ def _cleanup_legacy():
 
 def register():
     _cleanup_legacy()
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
 
 
 def unregister():
     global _hover_prefix, _applied_prefix, _apply_pending
+    # Go timer hover dang hen (neu co): doi ngon ngu = unregister() + register()
+    # trong cung phien, de sot thi lan hover sau se co 2 timer chay chong nhau.
+    try:
+        if bpy.app.timers.is_registered(_apply_hover_selection):
+            bpy.app.timers.unregister(_apply_hover_selection)
+    except Exception:
+        pass
     _hover_prefix = None
     _applied_prefix = None
     _apply_pending = False
     _cleanup_legacy()
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    ezg_i18n.unregister_classes(classes)
