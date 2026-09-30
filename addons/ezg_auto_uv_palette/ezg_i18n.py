@@ -239,7 +239,10 @@ def request_refresh(mod):
             traceback.print_exc()
             return None
 
-    bpy.app.timers.register(tick, first_interval=0.0)
+    # persistent: timer thuong bi Blender huy khi mo file khac. Addon dang ban
+    # (vd dang convert FBX) co the phai cho lau; mat timer luc do thi addon ket
+    # o ngon ngu cu trong khi moi addon khac da doi.
+    bpy.app.timers.register(tick, first_interval=0.0, persistent=True)
 
 
 def set_language(value):

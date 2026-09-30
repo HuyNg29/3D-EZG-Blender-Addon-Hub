@@ -18,14 +18,14 @@ Addon hiện có:
 
 | id | Tên | Version | Nhóm |
 |---|---|---|---|
-| `ezg_addon_hub` | EZG Addon Hub | 0.1.0 | Hub |
-| `ezg_fbx_batch` | FBX Batch to Blender | 1.5.4 | Pipeline |
-| `ezg_deco_namer` | Deco Namer | 1.5.0 | Modeling / UV |
-| `ezg_auto_uv_palette` | Auto UV Palette | 1.0.0 | Modeling / UV |
-| `ezg_gn_info_namer` | GN Info Namer | 1.5.0 | Geometry Nodes |
-| `ezg_mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.21.0 | Rigging / Animation |
-| `ezg_mixamo_anim_lib` | Mixamo Animation Library | 1.4.2 | Rigging / Animation |
-| `ezg_anim_tools` | EZG Animation Tools | 1.1.0 | Rigging / Animation |
+| `ezg_addon_hub` | EZG Addon Hub | 0.2.0 | Hub |
+| `ezg_fbx_batch` | FBX Batch to Blender | 1.6.0 | Pipeline |
+| `ezg_deco_namer` | Deco Namer | 1.6.0 | Modeling / UV |
+| `ezg_auto_uv_palette` | Auto UV Palette | 1.8.0 | Modeling / UV |
+| `ezg_gn_info_namer` | GN Info Namer | 1.6.0 | Geometry Nodes |
+| `ezg_mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.25.0 | Rigging / Animation |
+| `ezg_mixamo_anim_lib` | Mixamo Animation Library | 1.6.0 | Rigging / Animation |
+| `ezg_anim_tools` | EZG Animation Tools | 1.5.0 | Rigging / Animation |
 
 Mọi `id` đều mang tiền tố `ezg_` để không đụng tên với addon trên extensions.blender.org.
 
@@ -126,6 +126,7 @@ sẽ xoá sạch thiết lập Blender của bạn. Lý do chi tiết ở [docs/
 | `test_hub.py` | 22 kiểm tra cho hub: quét máy, tải kho, backup, restore |
 | `test_mmr.py` | Bộ test của Marker Mixamo Rigger |
 | `test_mixamo_compat.py` | Rig sinh ra khớp rig Mixamo thật (**cần FBX mẫu**) |
+| `test_i18n.py` | Nút VI \| EN: lint song ngữ, bấm EN/VI thật, không sót chữ tiếng Việt ở EN, dữ liệu giữ nguyên |
 
 Một số test cần bộ FBX mẫu của Mixamo. Bộ này nặng ~33 MB nên **không nằm trong git**:
 
