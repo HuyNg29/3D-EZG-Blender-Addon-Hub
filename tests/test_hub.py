@@ -147,6 +147,13 @@ print("-" * 70)
 print("7) Nut 'Cap nhat muc dang chon'")
 check("operator co ton tai", hasattr(bpy.ops.ezg, "update_selected"))
 
+# execute() tim kho qua item.repo_module. Thieu thuoc tinh nay thi poll van dat
+# nhung bam nut la AttributeError — test poll ben duoi khong bat duoc.
+ext_rows = [r for r in wm.ezg_inventory if r.module.startswith("bl_ext.")]
+check("muc extension nho kho cua no (repo_module)",
+      ext_rows and all(getattr(r, "repo_module", "") for r in ext_rows),
+      "(%r)" % [r.pkg_id for r in ext_rows if not getattr(r, "repo_module", "")])
+
 # poll phai chan dung 2 truong hop, neu khong user se bam vao mot nut vo nghia
 no_update = next((i for i, r in enumerate(wm.ezg_inventory)
                   if not r.update_version and r.group != "C"), None)

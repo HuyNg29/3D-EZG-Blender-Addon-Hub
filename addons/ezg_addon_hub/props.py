@@ -21,6 +21,7 @@ class EZG_InventoryItem(PropertyGroup):
     group: StringProperty()          # A / B / C
     source_label: StringProperty()
     homepage: StringProperty()
+    repo_module: StringProperty()     # rong voi addon legacy
     update_version: StringProperty()  # rong neu khong co ban moi
 
 

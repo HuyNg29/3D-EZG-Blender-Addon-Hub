@@ -34,6 +34,7 @@ def _fill_inventory(wm, items, updates=None):
         row.group = it["group"]
         row.source_label = it["source_label"]
         row.homepage = it["homepage"]
+        row.repo_module = it["repo_module"]
         row.update_version = ""
         if updates:
             newer = updates.get((it["repo_module"], it["pkg_id"]), "")
