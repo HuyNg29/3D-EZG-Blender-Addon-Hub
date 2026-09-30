@@ -87,6 +87,8 @@ def main() -> int:
     for pkg_id, meta in items.items():
         meta["version"] = index_versions[pkg_id]
         meta["summary_vi"] = meta.get("summary_vi", "").strip()
+        if "summary_en" in meta:
+            meta["summary_en"] = meta["summary_en"].strip()
 
     out = {
         "schema": catalog.get("schema", 1),

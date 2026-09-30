@@ -5,7 +5,8 @@ Kho addon nội bộ của EZG cho Blender **4.5 LTS trở lên**, phát hành d
 mà Blender đọc trực tiếp.
 
 Thiết kế chi tiết: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ·
-Quy trình dev: [docs/DEV-WORKFLOW.md](docs/DEV-WORKFLOW.md)
+Quy trình dev: [docs/DEV-WORKFLOW.md](docs/DEV-WORKFLOW.md) ·
+Song ngữ Việt/Anh: [docs/I18N.md](docs/I18N.md)
 
 ---
 
@@ -36,6 +37,9 @@ riêng: Blender coi nó là addon khác, sẽ không tự cập nhật, và sẽ
 Hub nằm ở **View3D → phím N → tab "EZG Hub"**, gồm ba tab con: **Kho EZG** (cài addon công ty),
 **Máy của tôi** (kiểm kê mọi addon đang có, kèm nguồn gốc và bản mới), **Backup** (lưu và phục hồi
 profile addon).
+
+**Ngôn ngữ:** mọi addon EZG có cặp nút **VI | EN** ở góc phải header panel. Bấm ở addon nào
+thì mọi addon EZG đang bật đổi theo — cả nhãn, tooltip lẫn thông báo. Mặc định là tiếng Việt.
 
 ---
 
@@ -94,6 +98,7 @@ addons/<pkg_id>/
 | Tham chiếu module dùng `__package__`, không phải `__name__` | Ví dụ `AddonPreferences.bl_idname` |
 | Dependency Python đóng gói bằng **wheels** | Không được `pip install` lúc chạy |
 | `tags` phải nằm trong danh sách Blender công nhận | Sai tag → `extension validate` báo lỗi |
+| Chữ hiển thị viết `tr("Tiếng Việt", "English")` | Nút VI \| EN dùng chung — xem [docs/I18N.md](docs/I18N.md), `tools/i18n_lint.py` bắt chuỗi sót |
 
 Không có `bl_info` trong extension — mọi thông tin đó nằm trong manifest.
 

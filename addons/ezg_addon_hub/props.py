@@ -92,6 +92,13 @@ def register():
     wm.ezg_status = StringProperty(default="")
     wm.ezg_error = StringProperty(default="")
 
+    # Dang ki lai la do vua doi VI/EN: thong bao cu dang o ngon ngu kia, bo di.
+    try:
+        bpy.context.window_manager.ezg_status = ""
+        bpy.context.window_manager.ezg_error = ""
+    except AttributeError:
+        pass  # luc Blender khoi dong context chua co window_manager
+
     wm.ezg_restore_mode = EnumProperty(
         name=tr("Chế độ", "Mode"),
         items=[

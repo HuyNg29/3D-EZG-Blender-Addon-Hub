@@ -2,7 +2,10 @@
 #
 # File nay KHONG thay the blender_manifest.toml.
 #   - blender_manifest.toml -> Blender doc (qua index.json) de CAI va UPDATE
-#   - catalog.toml          -> hub doc de HIEN THI (nhom, mo ta tieng Viet, anh)
+#   - catalog.toml          -> hub doc de HIEN THI (nhom, mo ta, anh)
+#
+# Mo ta co hai ban: summary_vi (mac dinh) va summary_en (khi bam EN trong hub).
+# Thieu summary_en thi hub hien summary_vi.
 #
 # Dung TOML (khong phai YAML/JSON) vi doc duoc bang `tomllib` co san trong Python 3.11
 # cua Blender -> khong can cai them gi. Xem tools/gen_catalog.py.
@@ -48,6 +51,10 @@ summary_vi = """
 Trung tâm quản lí addon: cài addon EZG, kiểm kê mọi addon đang có trên máy,
 và backup / phục hồi profile addon khi đổi máy hoặc cài lại Blender.
 Hub tự cập nhật chính nó qua kho này."""
+summary_en = """
+Add-on manager: install EZG add-ons, take stock of every add-on on this machine,
+and back up / restore add-on profiles when changing machines or reinstalling Blender.
+The hub updates itself through this repository."""
 thumbnail = "thumbs/ezg_addon_hub.png"
 recommended = true
 
@@ -57,6 +64,10 @@ summary_vi = """
 Đổi tên hàng loạt mesh theo tiền tố deco_NN_ kèm hậu tố chữ cái.
 Tự động nhảy qua các hậu tố đã bị chiếm.
 Hover vào rule để sáng lên nhóm mesh cùng tên."""
+summary_en = """
+Batch-rename meshes with the deco_NN_ prefix plus a letter suffix.
+Automatically skips suffixes that are already taken.
+Hover a rule to highlight the meshes that share that name."""
 thumbnail = "thumbs/ezg_deco_namer.png"
 recommended = true
 
@@ -66,6 +77,10 @@ summary_vi = """
 Convert hàng loạt FBX trong 1 folder sang .blend, giữ texture (pack vào file).
 Hai chế độ: mỗi FBX ra 1 file riêng, hoặc gom tất cả vào 1 file.
 Chạy bằng tiến trình Blender nền riêng nên không đóng băng UI."""
+summary_en = """
+Batch-convert the FBX files in a folder to .blend, keeping textures (packed in).
+Two modes: one .blend per FBX, or everything gathered into a single file.
+Runs in a separate background Blender process, so the UI never freezes."""
 thumbnail = "thumbs/ezg_fbx_batch.png"
 recommended = true
 
@@ -84,6 +99,19 @@ Kèm nút dàn các node đó về một cột thẳng, cách đều và thu nh�
 sắp theo vị trí đang thấy hoặc theo nhãn A→Z.
 Và nút dọn: xoá các node Info không trỏ tới object nào hoặc không nối vào đâu,
 có bảng xem trước liệt kê đúng những node sắp bị xoá kèm lý do."""
+summary_en = """
+Select objects in the viewport and one click turns each into an Object Info node,
+joins them into a Join Geometry, labels them and lines them up — wires enter
+the Join in top-to-bottom order so they never cross.
+It works the other way too: select Info nodes and their objects light up in the
+viewport, with a switch to do it automatically.
+Labels Object Info / Collection Info nodes with the name of the object they point
+to, so a Geometry Nodes tree reads at a glance instead of clicking every node.
+Runs on the open tree (nested groups included) or on the whole file.
+Plus a button to stack those nodes into one straight, evenly spaced, collapsed
+column — sorted by current position or by label A→Z.
+And a cleanup button: deletes Info nodes that point to no object or connect to
+nothing, with a preview listing exactly which nodes will go and why."""
 thumbnail = "thumbs/ezg_gn_info_namer.png"
 recommended = false
 
@@ -92,6 +120,9 @@ title_vi = "Auto UV Palette"
 summary_vi = """
 Scale và sắp xếp UV của các object đang chọn vào một lưới palette.
 Dùng khi nhiều object dùng chung một texture bảng màu."""
+summary_en = """
+Scale and arrange the UVs of the selected objects into a palette grid.
+For many objects sharing one colour-swatch texture."""
 thumbnail = "thumbs/ezg_auto_uv_palette.png"
 recommended = false
 
@@ -101,6 +132,10 @@ summary_vi = """
 Đặt marker khớp (cằm, háng, cổ tay, khuỷu, đầu gối) lên nhân vật T-Pose,
 tự sinh armature chuẩn Mixamo rồi bind weight tự động.
 Marker bên phải tự bám theo bên trái qua driver, chọn được trục đối xứng."""
+summary_en = """
+Place joint markers (chin, groin, wrists, elbows, knees) on a T-pose character,
+then generate a Mixamo-standard armature and bind weights automatically.
+Right-side markers follow the left side through drivers; pick the symmetry axis."""
 thumbnail = "thumbs/ezg_mixamo_marker_rigger.png"
 recommended = false
 
@@ -109,6 +144,9 @@ title_vi = "Mixamo Animation Library"
 summary_vi = """
 Duyệt một thư mục chứa file FBX tải từ Mixamo và áp animation thẳng vào rig.
 Khỏi phải import từng file một rồi retarget bằng tay."""
+summary_en = """
+Browse a folder of FBX files downloaded from Mixamo and apply animations
+straight to your rig. No more importing files one by one and retargeting by hand."""
 thumbnail = "thumbs/ezg_mixamo_anim_lib.png"
 recommended = true
 
@@ -122,6 +160,15 @@ một action (sao đủ cả kênh cấp object nên không bị sai scale khi e
 Chạy được cả rig kiểu IK: bật truyền vị trí cho từng xương kèm xương neo, và
 lật gương đúng cả trên rig có rest pose hai bên lệch hướng.
 Cả hai đều có nút đo sai lệch để biết kết quả bám sát đến đâu."""
+summary_en = """
+Two motion jobs: RETARGET animation from any skeleton to another (guesses the
+bone mapping from bone names, compensates A-pose vs T-pose rest poses, scales
+hip translation by the height ratio), and MIRROR an action left/right (copies the
+object-level channels too, so the scale is never wrong on export).
+Works on IK-style rigs: enable position transfer per bone with an anchor bone,
+and mirroring stays correct on rigs whose two sides have differently oriented
+rest poses. Both have a button that measures the error, so you know how closely
+the result follows the source."""
 thumbnail = "thumbs/ezg_anim_tools.png"
 recommended = false
 
@@ -136,10 +183,12 @@ recommended = false
 id = "blender_mcp"
 title_vi = "Blender MCP"
 summary_vi = "Nối Blender với Claude qua MCP. Tác giả: Siddharth Ahuja"
+summary_en = "Connects Blender to Claude through MCP. Author: Siddharth Ahuja"
 homepage = "https://github.com/ahujasid/blender-mcp"
 
 [[external]]
 id = "tripo3d_blender_bridge"
 title_vi = "Tripo3D Blender Bridge"
 summary_vi = "Cầu nối Tripo3D sang Blender. Tác giả: Tripo3D"
+summary_en = "Bridge from Tripo3D to Blender. Author: Tripo3D"
 homepage = "https://www.tripo3d.ai/"
