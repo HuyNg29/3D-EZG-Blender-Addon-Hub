@@ -286,6 +286,9 @@ def make_language_operator(prefix):
 def draw_toggle(layout, prefix):
     """Cap nut VI | EN; nut cua ngon ngu dang dung duoc an xuong."""
     row = layout.row(align=True)
+    # Header panel hep: nut day du rong se che mat ten panel dai
+    # ("Mixamo Marker Rigger" con "Mixamo Marker Rigge").
+    row.scale_x = 0.75
     current = lang()
     for code, label in (("vi", "VI"), ("en", "EN")):
         op = row.operator("%s.ezg_language" % prefix, text=label, depress=(current == code))
