@@ -2,9 +2,9 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_mixamo_marker_rigger"
-version = "0.24.1"
+version = "0.25.0"
 name = "Manual Marker Mixamo Rigger"
-tagline = "Dat marker tren T-Pose de sinh armature Mixamo va bind weight"
+tagline = "Đặt marker trên T-Pose để sinh Armature Mixamo và bind weight"
 maintainer = "EasyGoing Visual <visual@easygoing.vn>"
 type = "add-on"
 

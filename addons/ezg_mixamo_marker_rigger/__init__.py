@@ -10,11 +10,14 @@ import math
 import bpy
 from mathutils import Vector, Matrix, Quaternion, Euler
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-ADDON_NAME = "Manual Marker Mixamo Rigger"
+ADDON_NAME = "Manual Marker Mixamo Rigger"  # i18n-skip
 MARKER_PREFIX = "MMR_MARKER_"
 MARKER_COLLECTION_NAME = "MMR_Joint_Markers"
 ARMATURE_NAME = "MMR_Mixamo_Armature"
@@ -395,6 +398,16 @@ def get_forward_vector(context):
     return v
 
 
+def forward_dir_word(value):
+    """Display word for a Forward Direction value, for report messages. The
+    enum identifier itself ('POSITIVE' / 'NEGATIVE') is data and never changes."""
+    if value == 'POSITIVE':
+        return tr("dương", "positive")
+    if value == 'NEGATIVE':
+        return tr("âm", "negative")
+    return value.lower()
+
+
 def get_or_create_symmetry_center(context):
     """The center empty whose location defines the mirror plane."""
     obj = bpy.data.objects.get(SYMMETRY_CENTER_NAME)
@@ -558,7 +571,8 @@ def set_symmetry_center_from_mesh(context):
     """
     mesh_obj = get_target_mesh(context)
     if mesh_obj is None:
-        return None, "No target mesh set. Use 'Set Selected Mesh' first."
+        return None, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                        "No target mesh set. Use 'Set Selected Mesh' first.")
     center = get_or_create_symmetry_center(context)
     axis = get_symmetry_axis(context)
     a = AXIS_INDEX[axis]
@@ -713,9 +727,10 @@ def estimate_skeleton(context, mesh_obj):
     """
     missing = missing_marker_joints()
     if missing:
-        return None, "Missing markers: " + ", ".join(missing), None
+        return None, tr("Thiếu marker: %s", "Missing markers: %s") % ", ".join(missing), None
     if mesh_obj is None:
-        return None, "No target mesh set. Use 'Set Selected Mesh' first.", None
+        return None, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                        "No target mesh set. Use 'Set Selected Mesh' first."), None
 
     depsgraph = context.evaluated_depsgraph_get()
     m = {j: marker_world_location(j, depsgraph) for j in ALL_MARKERS}
@@ -723,36 +738,47 @@ def estimate_skeleton(context, mesh_obj):
     # Guard against markers accidentally left at the world origin.
     at_origin = [j for j in ALL_MARKERS if m[j].length < 1e-4]
     if at_origin:
-        return None, ("Markers at world origin (move them onto the character): "
-                      + ", ".join(at_origin)), None
+        return None, (tr("Marker đang nằm ở gốc toạ độ (hãy đưa chúng lên nhân vật): %s",
+                         "Markers at world origin (move them onto the character): %s")
+                      % ", ".join(at_origin)), None
 
     axis = get_symmetry_axis(context)
     ai = AXIS_INDEX[axis]                     # left/right (side) axis
     up_index = AXIS_INDEX[get_up_axis(context)]  # world up (locked to Z)
     if up_index == ai:
-        return None, ("Symmetry Axis cannot be the up axis (Z). The character "
-                      "stands Z-up; set Symmetry Axis to X or Y."), None
+        return None, tr("Trục đối xứng không được trùng trục lên (Z). Nhân vật "
+                        "đứng theo trục Z; hãy đặt Trục đối xứng là X hoặc Y.",
+                        "Symmetry Axis cannot be the up axis (Z). The character "
+                        "stands Z-up; set Symmetry Axis to X or Y."), None
 
     # Height/base measured along the world up axis (Z).
     min_up, max_up, height = mesh_up_extent(mesh_obj, up_index)
     if height < 1e-6:
-        return None, "Target mesh has no height along the up axis (Z).", None
+        return None, tr("Mesh đích không có chiều cao theo trục lên (Z).",
+                        "Target mesh has no height along the up axis (Z)."), None
 
     chin, groin = m["Chin"], m["Groin"]
     body_vec = chin - groin
     if body_vec.length < 1e-6:
-        return None, "Chin and Groin markers coincide; move them apart.", None
+        return None, tr("Marker cằm và háng đang trùng nhau; hãy tách chúng ra.",
+                        "Chin and Groin markers coincide; move them apart."), None
     body_up = body_vec.normalized()
     # The character MUST stand upright (Chin above Groin along world Z) or the
     # Mixamo conversion produces a rig lying on its side. This catches markers
     # left in a horizontal/default layout.
     if abs(body_up[up_index]) < 0.6:
-        return None, ("Character is not standing upright: the Chin marker must be "
-                      "clearly ABOVE the Groin marker along world Z. Recreate the "
-                      "markers and place them on a Z-up standing character."), None
+        return None, tr("Nhân vật không đứng thẳng: marker cằm phải nằm rõ ràng "
+                        "CAO HƠN marker háng theo trục Z thế giới. Hãy tạo lại "
+                        "marker và đặt chúng lên nhân vật đứng thẳng theo trục Z.",
+                        "Character is not standing upright: the Chin marker must be "
+                        "clearly ABOVE the Groin marker along world Z. Recreate the "
+                        "markers and place them on a Z-up standing character."), None
     if body_up[up_index] < 0:
-        return None, ("Chin marker is BELOW the Groin marker. Place Chin at the "
-                      "head and Groin at the pelvis on a Z-up standing character."), None
+        return None, tr("Marker cằm đang THẤP HƠN marker háng. Đặt marker cằm ở "
+                        "đầu và marker háng ở xương chậu, trên nhân vật đứng thẳng "
+                        "theo trục Z.",
+                        "Chin marker is BELOW the Groin marker. Place Chin at the "
+                        "head and Groin at the pelvis on a Z-up standing character."), None
     # Depth/forward axis = the remaining axis (not up, not symmetry).
     depth_candidates = [i for i in range(3) if i != up_index and i != ai]
     depth_index = depth_candidates[0] if depth_candidates else None
@@ -771,9 +797,11 @@ def estimate_skeleton(context, mesh_obj):
     t_neck = min(max(t_shoulder, NECK_T_MIN), NECK_T_MAX)
     if t_neck != t_shoulder:
         warnings.append(
-            f"Shoulder markers sit at {t_shoulder:.2f} of the Groin->Chin span; "
-            f"the neck base was clamped to {t_neck:.2f}. Check the Chin and "
-            f"Shoulder marker heights.")
+            tr("Marker vai nằm ở mức %.2f của đoạn háng->cằm; gốc cổ đã bị giới "
+               "hạn về %.2f. Kiểm tra lại độ cao của marker cằm và vai.",
+               "Shoulder markers sit at %.2f of the Groin->Chin span; "
+               "the neck base was clamped to %.2f. Check the Chin and "
+               "Shoulder marker heights.") % (t_shoulder, t_neck))
 
     j["Hips"] = groin + body_up * (0.03 * height)
     neck = lerp(groin, chin, t_neck)
@@ -807,12 +835,19 @@ def estimate_skeleton(context, mesh_obj):
         d_shoulder = abs(shoulder[ai] - spine2[ai])
         d_elbow = abs(elbow[ai] - spine2[ai])
         d_wrist = abs(wrist[ai] - spine2[ai])
+        # `side` is part of the marker names (data); this is only its display word.
+        side_word = tr("trái", "Left") if side == "Left" else tr("phải", "Right")
         if d_wrist <= d_elbow:
-            warnings.append(f"{side} wrist is not farther from the body than the "
-                            f"elbow along {axis}; check marker placement.")
+            warnings.append(tr("Cổ tay %s không nằm xa thân hơn khuỷu tay theo "
+                               "trục %s; kiểm tra lại vị trí marker.",
+                               "%s wrist is not farther from the body than the "
+                               "elbow along %s; check marker placement.")
+                            % (side_word, axis))
         if d_elbow <= d_shoulder:
-            warnings.append(f"{side} elbow is not farther from the body than the "
-                            f"estimated shoulder along {axis}.")
+            warnings.append(tr("Khuỷu tay %s không nằm xa thân hơn vai theo trục %s.",
+                               "%s elbow is not farther from the body than the "
+                               "estimated shoulder along %s.")
+                            % (side_word, axis))
 
     # --- Legs: hip socket offset toward the knee, foot near mesh bottom ------
     # Foot forward direction comes from Character Forward Axis + Direction and
@@ -847,9 +882,12 @@ def estimate_skeleton(context, mesh_obj):
 
     fi = AXIS_INDEX[context.scene.mmr_forward_axis]
     if fi == ai or fi == up_index:
-        warnings.append("Character Forward Axis overlaps the up or symmetry axis; "
-                        "feet may point along the body. Use three distinct axes "
-                        "(e.g. Up=Y, Forward=Z, Symmetry=X).")
+        warnings.append(tr("Trục hướng trước của nhân vật trùng trục lên hoặc trục "
+                           "đối xứng; bàn chân có thể chĩa dọc theo thân. Hãy dùng "
+                           "ba trục khác nhau (vd. Up=Y, Forward=Z, Symmetry=X).",
+                           "Character Forward Axis overlaps the up or symmetry axis; "
+                           "feet may point along the body. Use three distinct axes "
+                           "(e.g. Up=Y, Forward=Z, Symmetry=X)."))
 
     info = {
         "axis": axis,
@@ -887,8 +925,10 @@ def build_mixamo_armature(context, keep_existing=False):
     """
     mesh_obj = get_target_mesh(context)
     if mesh_obj is not None and mesh_has_unapplied_transform(mesh_obj):
-        return None, ("Mesh '%s' has unapplied rotation/scale. Click 'Prepare "
-                      "Mesh' first so joint positions are computed correctly."
+        return None, (tr("Mesh '%s' còn rotation/scale chưa apply. Bấm 'Chuẩn bị "
+                         "Mesh' trước để vị trí các khớp được tính đúng.",
+                         "Mesh '%s' has unapplied rotation/scale. Click 'Prepare "
+                         "Mesh' first so joint positions are computed correctly.")
                       % mesh_obj.name), None
 
     joints, error, info = estimate_skeleton(context, mesh_obj)
@@ -908,8 +948,11 @@ def build_mixamo_armature(context, keep_existing=False):
         existing = bpy.data.objects.get(ARMATURE_NAME)
         if existing is not None:
             return None, (
-                f"An object named '{ARMATURE_NAME}' already exists and was not "
-                "generated by this add-on. Rename or remove it first."
+                tr("Đã có một object tên '%s' không phải do addon này tạo. Hãy "
+                   "đổi tên hoặc xoá nó trước.",
+                   "An object named '%s' already exists and was not "
+                   "generated by this add-on. Rename or remove it first.")
+                % ARMATURE_NAME
             ), None
 
     # Bone coordinates live in Mixamo data space (cm), so the minimum bone
@@ -1004,7 +1047,7 @@ def bind_automatic_weights(context, mesh_obj, arm_obj):
     try:
         bpy.ops.object.parent_set(type='ARMATURE_AUTO')
     except RuntimeError as exc:
-        return f"Automatic weighting failed: {exc}"
+        return tr("Automatic Weights thất bại: %s", "Automatic weighting failed: %s") % exc
     mesh_obj.matrix_world = world_before
 
     # Verify / repair the armature modifier.
@@ -1018,8 +1061,11 @@ def bind_automatic_weights(context, mesh_obj, arm_obj):
     bone_names = {b.name for b in arm_obj.data.bones if b.use_deform}
     created = bone_names & {vg.name for vg in mesh_obj.vertex_groups}
     if not created:
-        return ("No vertex groups were created. Automatic weights likely failed "
-                "(check for non-manifold/overlapping geometry or unapplied scale).")
+        return tr("Không có Vertex Group nào được tạo. Có lẽ Automatic Weights đã "
+                  "thất bại (kiểm tra hình học non-manifold/chồng lấn hoặc scale "
+                  "chưa apply).",
+                  "No vertex groups were created. Automatic weights likely failed "
+                  "(check for non-manifold/overlapping geometry or unapplied scale).")
     return None
 
 
@@ -1029,13 +1075,13 @@ def bind_accessory_to_nearest_bone(context, acc, arm_obj, bone_override=None):
     parented to the armature. Returns (bone_name, error_message).
     """
     if acc.type != 'MESH':
-        return None, f"'{acc.name}' is not a mesh."
+        return None, tr("'%s' không phải Mesh.", "'%s' is not a mesh.") % acc.name
     if not acc.data.vertices:
-        return None, f"'{acc.name}' has no geometry."
+        return None, tr("'%s' không có hình học.", "'%s' has no geometry.") % acc.name
 
     deform = [b for b in arm_obj.data.bones if b.use_deform]
     if not deform:
-        return None, "Armature has no deform bones."
+        return None, tr("Armature không có xương deform.", "Armature has no deform bones.")
 
     if bone_override and bone_override in arm_obj.data.bones:
         bone_name = bone_override
@@ -1057,7 +1103,8 @@ def bind_accessory_to_nearest_bone(context, acc, arm_obj, bone_override=None):
     try:
         bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
     except RuntimeError as exc:
-        return None, f"Could not parent '{acc.name}': {exc}"
+        return None, (tr("Không parent được '%s': %s", "Could not parent '%s': %s")
+                      % (acc.name, exc))
 
     # Single deform group = 1.0 (rigid follow), replacing any existing groups.
     for vg in list(acc.vertex_groups):
@@ -1085,19 +1132,21 @@ def transfer_weights_to_accessory(context, source_mesh, acc, arm_obj, reach=0.3)
     hem. Adds an armature modifier + parent. Returns error message or None.
     """
     if acc.type != 'MESH':
-        return f"'{acc.name}' is not a mesh."
+        return tr("'%s' không phải Mesh.", "'%s' is not a mesh.") % acc.name
     if not acc.data.vertices:
-        return f"'{acc.name}' has no geometry."
+        return tr("'%s' không có hình học.", "'%s' has no geometry.") % acc.name
     if not source_mesh.vertex_groups:
-        return ("Source mesh has no weights. Bind the body with Automatic "
-                "Weights first, then transfer.")
+        return tr("Mesh nguồn chưa có weight. Hãy bind thân bằng Automatic "
+                  "Weights trước rồi mới chuyển.",
+                  "Source mesh has no weights. Bind the body with Automatic "
+                  "Weights first, then transfer.")
 
     ensure_object_mode(context)
     select_only(context, [acc, arm_obj], active=arm_obj)
     try:
         bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
     except RuntimeError as exc:
-        return f"Could not parent '{acc.name}': {exc}"
+        return tr("Không parent được '%s': %s", "Could not parent '%s': %s") % (acc.name, exc)
 
     for vg in list(acc.vertex_groups):
         acc.vertex_groups.remove(vg)
@@ -1135,12 +1184,15 @@ def transfer_weights_to_accessory(context, source_mesh, acc, arm_obj, reach=0.3)
         except RuntimeError as exc:
             if dt.name in {m.name for m in acc.modifiers}:
                 acc.modifiers.remove(dt)
-            error = f"Weight transfer failed for '{acc.name}': {exc}"
+            error = (tr("Chuyển weight cho '%s' thất bại: %s",
+                        "Weight transfer failed for '%s': %s") % (acc.name, exc))
 
         deform = {b.name for b in arm_obj.data.bones if b.use_deform}
         if error is None and not (deform & {vg.name for vg in acc.vertex_groups}):
-            error = (f"No weights transferred to '{acc.name}' (is it far from "
-                     "the body surface?).")
+            error = (tr("Không có weight nào được chuyển sang '%s' (nó có nằm xa "
+                        "bề mặt thân không?).",
+                        "No weights transferred to '%s' (is it far from "
+                        "the body surface?).") % acc.name)
 
         if error is None:
             # 2) Smooth/spread along the accessory surface (topological, even).
@@ -1174,20 +1226,23 @@ def copy_weights_same_topology(context, source_mesh, dst, arm_obj):
     armature modifier + parent. Returns error message or None.
     """
     if dst.type != 'MESH':
-        return f"'{dst.name}' is not a mesh."
+        return tr("'%s' không phải Mesh.", "'%s' is not a mesh.") % dst.name
     if len(source_mesh.data.vertices) != len(dst.data.vertices):
-        return (f"'{dst.name}' has {len(dst.data.vertices)} vertices but the "
-                f"source has {len(source_mesh.data.vertices)} â€” topology differs. "
-                "Use 'Transfer Weights To Accessories' instead.")
+        return (tr("'%s' có %d vertex nhưng nguồn có %d — topology khác nhau. "
+                   "Hãy dùng 'Chuyển weight sang phụ kiện'.",
+                   "'%s' has %d vertices but the source has %d — topology "
+                   "differs. Use 'Transfer Weights To Accessories' instead.")
+                % (dst.name, len(dst.data.vertices), len(source_mesh.data.vertices)))
     if not source_mesh.vertex_groups:
-        return "Source mesh has no weights. Bind it first."
+        return tr("Mesh nguồn chưa có weight. Hãy bind nó trước.",
+                  "Source mesh has no weights. Bind it first.")
 
     ensure_object_mode(context)
     select_only(context, [dst, arm_obj], active=arm_obj)
     try:
         bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
     except RuntimeError as exc:
-        return f"Could not parent '{dst.name}': {exc}"
+        return tr("Không parent được '%s': %s", "Could not parent '%s': %s") % (dst.name, exc)
 
     for vg in list(dst.vertex_groups):
         dst.vertex_groups.remove(vg)
@@ -1219,13 +1274,14 @@ def bind_skirt(context, skirt, arm_obj, reach=0.5):
     Returns error message or None.
     """
     if skirt.type != 'MESH' or not skirt.data.vertices:
-        return f"'{skirt.name}' is not a usable mesh."
+        return tr("'%s' không phải Mesh dùng được.", "'%s' is not a usable mesh.") % skirt.name
 
     P = BONE_PREFIX
     bw = get_armature_bone_world_positions(arm_obj)
     cand = [P + n for n in SKIRT_BONES if P + n in bw]
     if not cand:
-        return "Armature is missing lower-body bones (build the armature first)."
+        return tr("Armature thiếu xương thân dưới (hãy Build Armature trước).",
+                  "Armature is missing lower-body bones (build the armature first).")
 
     # Lower reach -> higher power -> more localized; higher reach -> wider blend.
     power = 4.0 - 3.0 * min(max(reach, 0.0), 1.0)   # reach 0->4, 0.5->2.5, 1->1
@@ -1235,7 +1291,7 @@ def bind_skirt(context, skirt, arm_obj, reach=0.5):
     try:
         bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
     except RuntimeError as exc:
-        return f"Could not parent '{skirt.name}': {exc}"
+        return tr("Không parent được '%s': %s", "Could not parent '%s': %s") % (skirt.name, exc)
 
     for vg in list(skirt.vertex_groups):
         skirt.vertex_groups.remove(vg)
@@ -1291,7 +1347,8 @@ def symmetrize_weights(context, mesh_obj, from_positive=True):
     from mathutils.kdtree import KDTree
 
     if not mesh_obj.vertex_groups:
-        return f"'{mesh_obj.name}' has no vertex groups to symmetrize."
+        return (tr("'%s' không có Vertex Group nào để đối xứng.",
+                   "'%s' has no vertex groups to symmetrize.") % mesh_obj.name)
 
     ai = AXIS_INDEX[get_symmetry_axis(context)]
     center_obj = bpy.data.objects.get(SYMMETRY_CENTER_NAME)
@@ -1312,7 +1369,8 @@ def symmetrize_weights(context, mesh_obj, from_positive=True):
         else:
             plane_idx.append(i)
     if not source_idx and not plane_idx:
-        return "No vertices on the source side to symmetrize from."
+        return tr("Không có vertex nào ở phía nguồn để lấy đối xứng.",
+                  "No vertices on the source side to symmetrize from.")
 
     ensure_object_mode(context)
 
@@ -1409,7 +1467,8 @@ def symmetrize_weights(context, mesh_obj, from_positive=True):
         changed += 1
 
     if changed == 0 and not plane_idx:
-        return "No vertices on the target side to symmetrize."
+        return tr("Không có vertex nào ở phía đích để đối xứng.",
+                  "No vertices on the target side to symmetrize.")
     return None
 
 
@@ -1466,7 +1525,8 @@ def clean_weights(context, mesh_obj, arm_obj):
     Returns (removed_group_count, error_message).
     """
     if not mesh_obj.vertex_groups:
-        return 0, "Mesh has no vertex groups. Bind with automatic weights first."
+        return 0, tr("Mesh chưa có Vertex Group. Hãy bind bằng Automatic Weights trước.",
+                     "Mesh has no vertex groups. Bind with automatic weights first.")
 
     ensure_object_mode(context)
     select_only(context, [mesh_obj], active=mesh_obj)
@@ -1483,7 +1543,7 @@ def clean_weights(context, mesh_obj, arm_obj):
         bpy.ops.object.vertex_group_normalize_all(group_select_mode=mode,
                                                   lock_active=False)
     except RuntimeError as exc:
-        return 0, f"Weight cleanup failed: {exc}"
+        return 0, tr("Dọn weight thất bại: %s", "Weight cleanup failed: %s") % exc
     finally:
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -1652,8 +1712,10 @@ def smart_weight_refine(context, mesh_obj, arm_obj, profile_params,
     present = [n for n in ALL_DEFORM_BONES if n in mesh_obj.vertex_groups
                and n in deform_names]
     if not present:
-        return None, ("No Mixamo vertex groups found on the mesh. Bind with "
-                      "Automatic Weights first.")
+        return None, tr("Không tìm thấy Vertex Group Mixamo nào trên Mesh. Hãy "
+                        "bind bằng Automatic Weights trước.",
+                        "No Mixamo vertex groups found on the mesh. Bind with "
+                        "Automatic Weights first.")
 
     ensure_object_mode(context)
     depsgraph = context.evaluated_depsgraph_get()
@@ -1893,87 +1955,110 @@ def weight_diagnostics(mesh_obj, arm_obj, context):
 
 class MMR_OT_set_selected_mesh(bpy.types.Operator):
     bl_idname = "mmr.set_selected_mesh"
-    bl_label = "Set Selected Mesh"
-    bl_description = "Store the active mesh object as the rigging target"
+    bl_label = tr("Dùng Mesh đang chọn", "Set Selected Mesh")
+    bl_description = tr("Lưu object Mesh đang active làm Mesh đích để rig",
+                        "Store the active mesh object as the rigging target")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         obj = context.active_object
         if obj is None or obj.type != 'MESH':
-            self.report({'ERROR'}, "Select a mesh object first.")
+            self.report({'ERROR'}, tr("Hãy chọn một object Mesh trước.",
+                                      "Select a mesh object first."))
             return {'CANCELLED'}
         context.scene.mmr_target_mesh = obj
-        self.report({'INFO'}, f"Target mesh set to '{obj.name}'.")
+        self.report({'INFO'}, tr("Đã đặt Mesh đích là '%s'.",
+                                 "Target mesh set to '%s'.") % obj.name)
         return {'FINISHED'}
 
 
 class MMR_OT_prepare_mesh(bpy.types.Operator):
     bl_idname = "mmr.prepare_mesh"
-    bl_label = "Prepare Mesh"
-    bl_description = "Apply scale and rotation on the target mesh (location is kept)"
+    bl_label = tr("Chuẩn bị Mesh", "Prepare Mesh")
+    bl_description = tr("Apply scale và rotation cho Mesh đích (giữ nguyên location)",
+                        "Apply scale and rotation on the target mesh (location is kept)")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         mesh_obj = get_target_mesh(context)
         if mesh_obj is None:
-            self.report({'ERROR'}, "No target mesh set. Use 'Set Selected Mesh' first.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                                      "No target mesh set. Use 'Set Selected Mesh' first."))
             return {'CANCELLED'}
         ensure_object_mode(context)
         select_only(context, [mesh_obj], active=mesh_obj)
         try:
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
         except RuntimeError as exc:
-            self.report({'ERROR'}, f"Could not apply transforms: {exc}")
+            self.report({'ERROR'}, tr("Không apply được transform: %s",
+                                      "Could not apply transforms: %s") % exc)
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Applied rotation and scale on '{mesh_obj.name}'.")
+        self.report({'INFO'}, tr("Đã apply rotation và scale cho '%s'.",
+                                 "Applied rotation and scale on '%s'.") % mesh_obj.name)
         return {'FINISHED'}
 
 
 class MMR_OT_create_markers(bpy.types.Operator):
     bl_idname = "mmr.create_markers"
-    bl_label = "Create Mixamo Markers"
-    bl_description = ("Create the minimal Mixamo marker set: chin, groin, wrists, "
-                      "elbows, knees. Realtime symmetry drivers are set up "
-                      "automatically when Use Symmetry is on")
+    bl_label = tr("Tạo marker Mixamo", "Create Mixamo Markers")
+    bl_description = tr("Tạo bộ marker Mixamo tối thiểu: cằm, háng, cổ tay, "
+                        "khuỷu tay, đầu gối. Driver đối xứng tức thời được dựng "
+                        "sẵn khi bật 'Dùng đối xứng'",
+                        "Create the minimal Mixamo marker set: chin, groin, wrists, "
+                        "elbows, knees. Realtime symmetry drivers are set up "
+                        "automatically when Use Symmetry is on")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         mesh_obj = get_target_mesh(context)
         ensure_object_mode(context)
         create_all_markers(context, mesh_obj)
-        sym = " Realtime symmetry is ON." if context.scene.mmr_use_symmetry else ""
+        sym = (tr(" Đối xứng tức thời đang BẬT.", " Realtime symmetry is ON.")
+               if context.scene.mmr_use_symmetry else "")
         if mesh_obj is None:
             self.report({'WARNING'},
-                        "Markers created at default size. Set a target mesh first "
-                        "to scale them to your character." + sym)
+                        tr("Đã tạo marker với cỡ mặc định. Hãy đặt Mesh đích trước "
+                           "để marker được scale theo nhân vật.",
+                           "Markers created at default size. Set a target mesh first "
+                           "to scale them to your character.") + sym)
         else:
             self.report({'INFO'},
-                        f"Created {len(ALL_MARKERS)} Mixamo markers scaled to "
-                        f"'{mesh_obj.name}'. Move the left-side markers." + sym)
+                        tr("Đã tạo %d marker Mixamo theo cỡ của '%s'. Hãy di chuyển "
+                           "các marker bên trái.",
+                           "Created %d Mixamo markers scaled to "
+                           "'%s'. Move the left-side markers.")
+                        % (len(ALL_MARKERS), mesh_obj.name) + sym)
         return {'FINISHED'}
 
 
 class MMR_OT_refresh_symmetry(bpy.types.Operator):
     bl_idname = "mmr.refresh_symmetry"
-    bl_label = "Refresh Realtime Symmetry"
-    bl_description = ("Re-create the mirror drivers on the right-side markers for "
-                      "the current symmetry axis (clears old drivers first)")
+    bl_label = tr("Làm mới đối xứng tức thời", "Refresh Realtime Symmetry")
+    bl_description = tr("Tạo lại driver lật gương trên các marker bên phải theo "
+                        "trục đối xứng hiện tại (xoá driver cũ trước)",
+                        "Re-create the mirror drivers on the right-side markers for "
+                        "the current symmetry axis (clears old drivers first)")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         if not context.scene.mmr_use_symmetry:
-            self.report({'WARNING'}, "'Use Symmetry' is disabled. Enable it first.")
+            self.report({'WARNING'}, tr("'Dùng đối xứng' đang tắt. Hãy bật nó trước.",
+                                        "'Use Symmetry' is disabled. Enable it first."))
             return {'CANCELLED'}
         enabled, missing = enable_realtime_symmetry(context)
         if enabled == 0:
             self.report({'ERROR'},
-                        "No marker pairs found. Create Mixamo markers first. "
-                        "Missing: " + ", ".join(missing))
+                        tr("Không tìm thấy cặp marker nào. Hãy tạo marker Mixamo "
+                           "trước. Thiếu: %s",
+                           "No marker pairs found. Create Mixamo markers first. "
+                           "Missing: %s") % ", ".join(missing))
             return {'CANCELLED'}
         axis = get_symmetry_axis(context)
-        msg = f"Realtime symmetry active on {enabled} pair(s), axis {axis}."
+        msg = (tr("Đối xứng tức thời đang chạy trên %d cặp, trục %s.",
+                  "Realtime symmetry active on %d pair(s), axis %s.") % (enabled, axis))
         if missing:
-            msg += " Missing markers skipped: " + ", ".join(missing)
+            msg += (tr(" Bỏ qua marker bị thiếu: %s", " Missing markers skipped: %s")
+                    % ", ".join(missing))
             self.report({'WARNING'}, msg)
         else:
             self.report({'INFO'}, msg)
@@ -1982,9 +2067,11 @@ class MMR_OT_refresh_symmetry(bpy.types.Operator):
 
 class MMR_OT_set_center_from_mesh(bpy.types.Operator):
     bl_idname = "mmr.set_center_from_mesh"
-    bl_label = "Set Symmetry Center From Selected Mesh"
-    bl_description = ("Set the symmetry center's active-axis position to the "
-                      "target mesh bounding-box center")
+    bl_label = tr("Đặt tâm đối xứng theo Mesh", "Set Symmetry Center From Selected Mesh")
+    bl_description = tr("Đặt vị trí tâm đối xứng trên trục đang dùng vào tâm "
+                        "bounding box của Mesh đích",
+                        "Set the symmetry center's active-axis position to the "
+                        "target mesh bounding-box center")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1993,76 +2080,102 @@ class MMR_OT_set_center_from_mesh(bpy.types.Operator):
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
         axis = get_symmetry_axis(context)
-        self.report({'INFO'}, f"Symmetry center {axis} set to {value:.4f} "
-                              "(mesh bbox center).")
+        self.report({'INFO'}, tr("Đã đặt tâm đối xứng %s = %.4f (tâm bounding box "
+                                 "của Mesh).",
+                                 "Symmetry center %s set to %.4f "
+                                 "(mesh bbox center).") % (axis, value))
         return {'FINISHED'}
 
 
 class MMR_OT_snap_center_markers(bpy.types.Operator):
     bl_idname = "mmr.snap_center_markers"
-    bl_label = "Snap Center Markers To Symmetry Plane"
-    bl_description = ("Move Chin and Groin onto the symmetry plane along the "
-                      "active axis")
+    bl_label = tr("Đưa marker giữa về mặt phẳng đối xứng",
+                  "Snap Center Markers To Symmetry Plane")
+    bl_description = tr("Đưa marker cằm và háng về mặt phẳng đối xứng theo trục "
+                        "đang dùng",
+                        "Move Chin and Groin onto the symmetry plane along the "
+                        "active axis")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         snapped = snap_center_markers_to_symmetry_plane(context)
         if not snapped:
-            self.report({'WARNING'}, "No center markers found. Create Mixamo markers first.")
+            self.report({'WARNING'}, tr("Không tìm thấy marker giữa. Hãy tạo marker "
+                                        "Mixamo trước.",
+                                        "No center markers found. Create Mixamo "
+                                        "markers first."))
             return {'CANCELLED'}
         axis = get_symmetry_axis(context)
-        self.report({'INFO'}, f"Snapped {', '.join(snapped)} to the {axis} plane.")
+        self.report({'INFO'}, tr("Đã đưa %s về mặt phẳng %s.",
+                                 "Snapped %s to the %s plane.")
+                    % (", ".join(snapped), axis))
         return {'FINISHED'}
 
 
 class MMR_OT_color_markers(bpy.types.Operator):
     bl_idname = "mmr.color_markers"
-    bl_label = "Refresh Marker Colors"
-    bl_description = "Re-apply bright colors to existing markers without moving them"
+    bl_label = tr("Tô lại màu marker", "Refresh Marker Colors")
+    bl_description = tr("Tô lại màu sáng cho các marker hiện có mà không di chuyển chúng",
+                        "Re-apply bright colors to existing markers without moving them")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         colored = apply_marker_colors()
         if colored == 0:
-            self.report({'WARNING'}, "No MMR markers found. Create Mixamo markers first.")
+            self.report({'WARNING'}, tr("Không tìm thấy marker MMR nào. Hãy tạo "
+                                        "marker Mixamo trước.",
+                                        "No MMR markers found. Create Mixamo "
+                                        "markers first."))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Colored {colored} markers.")
+        self.report({'INFO'}, tr("Đã tô màu %d marker.", "Colored %d markers.") % colored)
         return {'FINISHED'}
 
 
 class MMR_OT_mirror_markers(bpy.types.Operator):
     bl_idname = "mmr.mirror_markers"
-    bl_label = "Mirror Left To Right"
-    bl_description = ("Manual fallback: copy left wrist/elbow/knee positions to "
-                      "the right side once, using the active symmetry axis. Not "
-                      "needed while realtime symmetry is on")
+    bl_label = tr("Lật gương trái sang phải", "Mirror Left To Right")
+    bl_description = tr("Cách làm tay: chép vị trí cổ tay/khuỷu tay/đầu gối bên "
+                        "trái sang bên phải một lần, theo trục đối xứng đang dùng. "
+                        "Không cần khi đối xứng tức thời đang bật",
+                        "Manual fallback: copy left wrist/elbow/knee positions to "
+                        "the right side once, using the active symmetry axis. Not "
+                        "needed while realtime symmetry is on")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         if context.scene.mmr_use_symmetry and realtime_symmetry_active():
             self.report({'INFO'},
-                        "Realtime symmetry is ON â€” right markers already follow "
-                        "the left side automatically.")
+                        tr("Đối xứng tức thời đang BẬT — marker bên phải đã tự "
+                           "bám theo bên trái.",
+                           "Realtime symmetry is ON — right markers already follow "
+                           "the left side automatically."))
             return {'FINISHED'}
         mirrored, missing_left, missing_right = mirror_left_to_right(context)
         if missing_left:
             self.report({'ERROR'},
-                        "Missing left markers: " + ", ".join(missing_left) +
-                        ". Create Mixamo markers first.")
+                        tr("Thiếu marker bên trái: %s. Hãy tạo marker Mixamo trước.",
+                           "Missing left markers: %s. Create Mixamo markers first.")
+                        % ", ".join(missing_left))
             return {'CANCELLED'}
         if missing_right:
             self.report({'WARNING'},
-                        "Missing right markers (skipped): " + ", ".join(missing_right))
+                        tr("Thiếu marker bên phải (bỏ qua): %s",
+                           "Missing right markers (skipped): %s")
+                        % ", ".join(missing_right))
         axis = get_symmetry_axis(context)
-        self.report({'INFO'}, f"Mirrored {mirrored} pair(s) across the {axis} axis.")
+        self.report({'INFO'}, tr("Đã lật gương %d cặp qua trục %s.",
+                                 "Mirrored %d pair(s) across the %s axis.")
+                    % (mirrored, axis))
         return {'FINISHED'}
 
 
 class MMR_OT_build_armature(bpy.types.Operator):
     bl_idname = "mmr.build_armature"
-    bl_label = "Build Mixamo Armature"
-    bl_description = ("Estimate the full Mixamo skeleton from the markers and "
-                      "mesh, then generate the armature (Skeleton LOD: No Fingers)")
+    bl_label = tr("Build Armature Mixamo", "Build Mixamo Armature")
+    bl_description = tr("Ước lượng toàn bộ bộ xương Mixamo từ marker và Mesh, rồi "
+                        "sinh Armature (LOD bộ xương: Không ngón tay)",
+                        "Estimate the full Mixamo skeleton from the markers and "
+                        "mesh, then generate the armature (Skeleton LOD: No Fingers)")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2081,9 +2194,12 @@ class MMR_OT_build_armature(bpy.types.Operator):
 
         if was_bound:
             self.report({'WARNING'},
-                        "Armature rebuilt â€” the previous bind is now stale. Click "
-                        "'Bind With Automatic Weights' again so the mesh follows "
-                        "the new armature.")
+                        tr("Đã build lại Armature — bind cũ không còn đúng nữa. Bấm "
+                           "lại 'Bind bằng Automatic Weights' để Mesh bám theo "
+                           "Armature mới.",
+                           "Armature rebuilt — the previous bind is now stale. Click "
+                           "'Bind With Automatic Weights' again so the mesh follows "
+                           "the new armature."))
 
         # Debug: print estimated joints to the system console.
         if info:
@@ -2103,21 +2219,28 @@ class MMR_OT_build_armature(bpy.types.Operator):
             for w in info.get("warnings", []):
                 self.report({'WARNING'}, w)
 
-        self.report({'INFO'}, f"Armature '{arm_obj.name}' created with "
-                              f"{len(arm_obj.data.bones)} bones (No Fingers), "
-                              f"symmetry {info['axis'] if info else '?'}, "
-                              f"forward {info['forward_dir'].lower() if info else '?'} "
-                              f"{info['forward_axis'] if info else '?'}.")
+        self.report({'INFO'},
+                    tr("Đã tạo Armature '%s' gồm %d xương (Không ngón tay), đối "
+                       "xứng %s, hướng trước về chiều %s của trục %s.",
+                       "Armature '%s' created with %d bones (No Fingers), "
+                       "symmetry %s, forward %s %s.")
+                    % (arm_obj.name, len(arm_obj.data.bones),
+                       info['axis'] if info else '?',
+                       forward_dir_word(info['forward_dir']) if info else '?',
+                       info['forward_axis'] if info else '?'))
         return {'FINISHED'}
 
 
 class MMR_OT_set_selected_armature(bpy.types.Operator):
     bl_idname = "mmr.set_selected_armature"
-    bl_label = "Set Selected Armature"
-    bl_description = ("Use the selected EXISTING armature as the rig target for "
-                      "Bind / weight tools, instead of building a new one â€” e.g. "
-                      "to reuse a previously generated rig or another character's "
-                      "skeleton")
+    bl_label = tr("Dùng Armature đang chọn", "Set Selected Armature")
+    bl_description = tr("Dùng Armature CÓ SẴN đang chọn làm rig đích cho Bind / "
+                        "công cụ weight, thay vì build Armature mới — vd. để dùng "
+                        "lại rig đã tạo trước đó hoặc bộ xương của nhân vật khác",
+                        "Use the selected EXISTING armature as the rig target for "
+                        "Bind / weight tools, instead of building a new one — e.g. "
+                        "to reuse a previously generated rig or another character's "
+                        "skeleton")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2126,7 +2249,8 @@ class MMR_OT_set_selected_armature(bpy.types.Operator):
             obj = next((o for o in context.selected_objects
                         if o.type == 'ARMATURE'), None)
         if obj is None:
-            self.report({'ERROR'}, "Select an armature object first.")
+            self.report({'ERROR'}, tr("Hãy chọn một object Armature trước.",
+                                      "Select an armature object first."))
             return {'CANCELLED'}
 
         context.scene.mmr_armature = obj
@@ -2136,40 +2260,59 @@ class MMR_OT_set_selected_armature(bpy.types.Operator):
                            if b.name.startswith(BONE_PREFIX))
         if mixamo_bones == 0:
             self.report({'WARNING'},
-                        f"'{obj.name}' has no 'mixamorig:' bones â€” binding works, "
-                        "but Mixamo animations will not match by bone name.")
+                        tr("'%s' không có xương 'mixamorig:' — vẫn bind được, "
+                           "nhưng animation Mixamo sẽ không khớp theo tên xương.",
+                           "'%s' has no 'mixamorig:' bones — binding works, "
+                           "but Mixamo animations will not match by bone name.")
+                        % obj.name)
         elif not armature_space_ok(obj):
             self.report({'WARNING'},
-                        f"'{obj.name}' is not in Mixamo object space (rot X=90, "
-                        "scale 0.01) â€” Mixamo animations may play wrong on it.")
-        self.report({'INFO'}, f"Rig target set to '{obj.name}' "
-                              f"({mixamo_bones} mixamorig bones). Bind and weight "
-                              "tools now use this armature.")
+                        tr("'%s' không ở object space của Mixamo (rot X=90, scale "
+                           "0.01) — animation Mixamo có thể chạy sai trên nó.",
+                           "'%s' is not in Mixamo object space (rot X=90, "
+                           "scale 0.01) — Mixamo animations may play wrong on it.")
+                        % obj.name)
+        self.report({'INFO'}, tr("Đã đặt rig đích là '%s' (%d xương mixamorig). Bind "
+                                 "và công cụ weight giờ dùng Armature này.",
+                                 "Rig target set to '%s' "
+                                 "(%d mixamorig bones). Bind and weight "
+                                 "tools now use this armature.")
+                    % (obj.name, mixamo_bones))
         return {'FINISHED'}
 
 
 class MMR_OT_clear_armature(bpy.types.Operator):
     bl_idname = "mmr.clear_armature"
-    bl_label = "Clear Armature Target"
-    bl_description = ("Forget the current rig target, so Bind / weight tools "
-                      "stop using it. Does not delete the armature object")
+    bl_label = tr("Bỏ Armature đích", "Clear Armature Target")
+    bl_description = tr("Bỏ rig đích hiện tại để Bind / công cụ weight thôi dùng "
+                        "nó. Không xoá object Armature",
+                        "Forget the current rig target, so Bind / weight tools "
+                        "stop using it. Does not delete the armature object")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         old = valid_object(context.scene.mmr_armature, 'ARMATURE')
         context.scene.mmr_armature = None
-        self.report({'INFO'}, "Rig target cleared"
-                              + (f" (was '{old.name}')." if old else "."))
+        if old:
+            msg = (tr("Đã bỏ rig đích (trước đó là '%s').",
+                      "Rig target cleared (was '%s').") % old.name)
+        else:
+            msg = tr("Đã bỏ rig đích.", "Rig target cleared.")
+        self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 
 class MMR_OT_build_new_armature(bpy.types.Operator):
     bl_idname = "mmr.build_new_armature"
-    bl_label = "Build As New Armature"
-    bl_description = ("Build an ADDITIONAL armature from the current markers "
-                      "with its own name, WITHOUT touching any armature already "
-                      "in the file â€” for rigging several characters in one file. "
-                      "The new armature becomes the target for Bind")
+    bl_label = tr("Build thành Armature mới", "Build As New Armature")
+    bl_description = tr("Build thêm một Armature MỚI từ marker hiện tại với tên "
+                        "riêng, KHÔNG động vào Armature nào đang có trong file — "
+                        "để rig nhiều nhân vật trong một file. Armature mới trở "
+                        "thành đích để Bind",
+                        "Build an ADDITIONAL armature from the current markers "
+                        "with its own name, WITHOUT touching any armature already "
+                        "in the file — for rigging several characters in one file. "
+                        "The new armature becomes the target for Bind")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2182,17 +2325,22 @@ class MMR_OT_build_new_armature(bpy.types.Operator):
             for w in info.get("warnings", []):
                 self.report({'WARNING'}, w)
         self.report({'INFO'},
-                    f"New armature '{arm_obj.name}' created "
-                    f"({len(arm_obj.data.bones)} bones); existing armatures "
-                    "untouched. Bind now targets this rig.")
+                    tr("Đã tạo Armature mới '%s' (%d xương); các Armature có sẵn "
+                       "giữ nguyên. Bind giờ nhắm vào rig này.",
+                       "New armature '%s' created "
+                       "(%d bones); existing armatures "
+                       "untouched. Bind now targets this rig.")
+                    % (arm_obj.name, len(arm_obj.data.bones)))
         return {'FINISHED'}
 
 
 class MMR_OT_flip_foot_direction(bpy.types.Operator):
     bl_idname = "mmr.flip_foot_direction"
-    bl_label = "Flip Foot Direction"
-    bl_description = ("Toggle Forward Direction (Positive <-> Negative) and rebuild "
-                      "the armature's foot bones if an armature already exists")
+    bl_label = tr("Đảo hướng bàn chân", "Flip Foot Direction")
+    bl_description = tr("Đảo 'Chiều hướng trước' (Dương <-> Âm) và build lại xương "
+                        "bàn chân nếu đã có Armature",
+                        "Toggle Forward Direction (Positive <-> Negative) and rebuild "
+                        "the armature's foot bones if an armature already exists")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2200,55 +2348,72 @@ class MMR_OT_flip_foot_direction(bpy.types.Operator):
         scene.mmr_forward_dir = ('NEGATIVE' if scene.mmr_forward_dir == 'POSITIVE'
                                  else 'POSITIVE')
         new_dir = scene.mmr_forward_dir
+        dir_word = forward_dir_word(new_dir)
         # Rebuild if we already have a generated armature (and markers are ready).
         if get_generated_armature(context) is not None:
             arm_obj, error, info = build_mixamo_armature(context)
             if error:
                 self.report({'WARNING'},
-                            f"Forward direction set to {new_dir.lower()}, but the "
-                            f"armature could not be rebuilt ({error}). Rebuild manually.")
+                            tr("Đã đặt hướng trước về chiều %s, nhưng không build "
+                               "lại được Armature (%s). Hãy build lại bằng tay.",
+                               "Forward direction set to %s, but the "
+                               "armature could not be rebuilt (%s). Rebuild manually.")
+                            % (dir_word, error))
                 return {'FINISHED'}
             context.scene.mmr_armature = arm_obj
-            self.report({'INFO'}, f"Forward direction {new_dir.lower()}; feet now "
-                                  f"point {new_dir.lower()} {scene.mmr_forward_axis}.")
+            self.report({'INFO'}, tr("Hướng trước: chiều %s; bàn chân giờ chĩa về "
+                                     "chiều %s của trục %s.",
+                                     "Forward direction %s; feet now "
+                                     "point %s %s.")
+                        % (dir_word, dir_word, scene.mmr_forward_axis))
             return {'FINISHED'}
-        self.report({'INFO'}, f"Forward direction set to {new_dir.lower()}. "
-                              "Build the armature to apply it.")
+        self.report({'INFO'}, tr("Đã đặt hướng trước về chiều %s. Hãy Build Armature "
+                                 "để áp dụng.",
+                                 "Forward direction set to %s. "
+                                 "Build the armature to apply it.") % dir_word)
         return {'FINISHED'}
 
 
 class MMR_OT_bind_auto_weights(bpy.types.Operator):
     bl_idname = "mmr.bind_auto_weights"
-    bl_label = "Bind With Automatic Weights"
-    bl_description = "Parent the target mesh to the generated armature with automatic weights"
+    bl_label = tr("Bind bằng Automatic Weights", "Bind With Automatic Weights")
+    bl_description = tr("Parent Mesh đích vào Armature đã tạo, với Automatic Weights",
+                        "Parent the target mesh to the generated armature with automatic weights")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         mesh_obj = get_target_mesh(context)
         if mesh_obj is None:
-            self.report({'ERROR'}, "No target mesh set. Use 'Set Selected Mesh' first.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                                      "No target mesh set. Use 'Set Selected Mesh' first."))
             return {'CANCELLED'}
         arm_obj = get_generated_armature(context)
         if arm_obj is None:
-            self.report({'ERROR'}, "No generated armature found. Build the armature first.")
+            self.report({'ERROR'}, tr("Không tìm thấy Armature đã tạo. Hãy Build Armature trước.",
+                                      "No generated armature found. Build the armature first."))
             return {'CANCELLED'}
         error = bind_automatic_weights(context, mesh_obj, arm_obj)
         if error:
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
-        self.report({'INFO'}, f"'{mesh_obj.name}' bound to '{arm_obj.name}' "
-                              "with automatic weights.")
+        self.report({'INFO'}, tr("Đã bind '%s' vào '%s' bằng Automatic Weights.",
+                                 "'%s' bound to '%s' "
+                                 "with automatic weights.") % (mesh_obj.name, arm_obj.name))
         return {'FINISHED'}
 
 
 class MMR_OT_symmetrize_weights(bpy.types.Operator):
     bl_idname = "mmr.symmetrize_weights"
-    bl_label = "Symmetrize Weights"
-    bl_description = ("Make the selected mesh's weights symmetric: the target "
-                      "half is zeroed first, then rebuilt from the source half "
-                      "(flips Left/Right bone names); vertices on the symmetry "
-                      "plane get equal Left/Right weights. Choose the source "
-                      "side with 'Symmetrize From'")
+    bl_label = tr("Đối xứng weight", "Symmetrize Weights")
+    bl_description = tr("Làm weight của Mesh đang chọn đối xứng: nửa đích được đưa "
+                        "về 0 trước, rồi dựng lại từ nửa nguồn (đảo tên xương "
+                        "Left/Right); vertex nằm trên mặt phẳng đối xứng nhận weight "
+                        "Left/Right bằng nhau. Chọn phía nguồn ở 'Đối xứng từ'",
+                        "Make the selected mesh's weights symmetric: the target "
+                        "half is zeroed first, then rebuilt from the source half "
+                        "(flips Left/Right bone names); vertices on the symmetry "
+                        "plane get equal Left/Right weights. Choose the source "
+                        "side with 'Symmetrize From'")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2259,7 +2424,8 @@ class MMR_OT_symmetrize_weights(bpy.types.Operator):
             if target is not None:
                 meshes = [target]
         if not meshes:
-            self.report({'ERROR'}, "Select a mesh (or set a target mesh).")
+            self.report({'ERROR'}, tr("Chọn một Mesh (hoặc đặt Mesh đích).",
+                                      "Select a mesh (or set a target mesh)."))
             return {'CANCELLED'}
 
         from_pos = context.scene.mmr_weight_sym_dir == 'POS_NEG'
@@ -2271,21 +2437,27 @@ class MMR_OT_symmetrize_weights(bpy.types.Operator):
                 continue
             done.append(mesh_obj.name)
         if not done:
-            self.report({'ERROR'}, "No mesh was symmetrized.")
+            self.report({'ERROR'}, tr("Không có Mesh nào được đối xứng.",
+                                      "No mesh was symmetrized."))
             return {'CANCELLED'}
         src = "+X" if from_pos else "-X"
-        self.report({'INFO'}, f"Symmetrized weights ({src} -> other side): "
-                              + ", ".join(done))
+        self.report({'INFO'}, tr("Đã đối xứng weight (%s -> phía còn lại): %s",
+                                 "Symmetrized weights (%s -> other side): %s")
+                    % (src, ", ".join(done)))
         return {'FINISHED'}
 
 
 class MMR_OT_zero_weights(bpy.types.Operator):
     bl_idname = "mmr.zero_weights"
-    bl_label = "Zero All Weights"
-    bl_description = ("Set every vertex weight of the SELECTED mesh(es) to 0 in "
-                      "all vertex groups (groups, armature modifier and parent "
-                      "are kept) â€” a clean slate for manual weight painting. "
-                      "Falls back to the stored target mesh if none selected")
+    bl_label = tr("Đưa mọi weight về 0", "Zero All Weights")
+    bl_description = tr("Đặt mọi weight của vertex trên (các) Mesh ĐANG CHỌN về 0 "
+                        "trong mọi Vertex Group (giữ nguyên group, Armature modifier "
+                        "và parent) — nền sạch để tự vẽ Weight Paint. Không chọn gì "
+                        "thì dùng Mesh đích đã lưu",
+                        "Set every vertex weight of the SELECTED mesh(es) to 0 in "
+                        "all vertex groups (groups, armature modifier and parent "
+                        "are kept) — a clean slate for manual weight painting. "
+                        "Falls back to the stored target mesh if none selected")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2296,7 +2468,8 @@ class MMR_OT_zero_weights(bpy.types.Operator):
             if target is not None:
                 meshes = [target]
         if not meshes:
-            self.report({'ERROR'}, "Select a mesh (or set a target mesh).")
+            self.report({'ERROR'}, tr("Chọn một Mesh (hoặc đặt Mesh đích).",
+                                      "Select a mesh (or set a target mesh)."))
             return {'CANCELLED'}
 
         total = 0
@@ -2305,18 +2478,24 @@ class MMR_OT_zero_weights(bpy.types.Operator):
             total += zero_all_weights(mesh_obj)
             names.append(mesh_obj.name)
         self.report({'INFO'},
-                    f"Zeroed all weights on {', '.join(names)} "
-                    f"({total} group(s) cleared, groups kept).")
+                    tr("Đã đưa mọi weight về 0 trên %s (làm trống %d group, "
+                       "vẫn giữ các group).",
+                       "Zeroed all weights on %s "
+                       "(%d group(s) cleared, groups kept).")
+                    % (", ".join(names), total))
         return {'FINISHED'}
 
 
 class MMR_OT_unbind_mesh(bpy.types.Operator):
     bl_idname = "mmr.unbind_mesh"
-    bl_label = "Unbind Mesh"
-    bl_description = ("Unbind the SELECTED mesh(es): remove the Armature "
-                      "modifier, unparent (keep position), and delete ALL vertex "
-                      "groups. Falls back to the stored target mesh if none "
-                      "selected")
+    bl_label = tr("Gỡ bind Mesh", "Unbind Mesh")
+    bl_description = tr("Gỡ bind (các) Mesh ĐANG CHỌN: xoá Armature modifier, bỏ "
+                        "parent (giữ vị trí) và xoá MỌI Vertex Group. Không chọn gì "
+                        "thì dùng Mesh đích đã lưu",
+                        "Unbind the SELECTED mesh(es): remove the Armature "
+                        "modifier, unparent (keep position), and delete ALL vertex "
+                        "groups. Falls back to the stored target mesh if none "
+                        "selected")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2327,7 +2506,8 @@ class MMR_OT_unbind_mesh(bpy.types.Operator):
             if target is not None:
                 meshes = [target]
         if not meshes:
-            self.report({'ERROR'}, "Select a mesh to unbind (or set a target mesh).")
+            self.report({'ERROR'}, tr("Chọn Mesh cần gỡ bind (hoặc đặt Mesh đích).",
+                                      "Select a mesh to unbind (or set a target mesh)."))
             return {'CANCELLED'}
 
         total_mods = total_vg = 0
@@ -2338,31 +2518,39 @@ class MMR_OT_unbind_mesh(bpy.types.Operator):
             total_vg += vgs
             names.append(mesh_obj.name)
         self.report({'INFO'},
-                    f"Unbound {', '.join(names)}: removed {total_mods} armature "
-                    f"modifier(s) and {total_vg} vertex group(s).")
+                    tr("Đã gỡ bind %s: xoá %d Armature modifier và %d Vertex Group.",
+                       "Unbound %s: removed %d armature "
+                       "modifier(s) and %d vertex group(s).")
+                    % (", ".join(names), total_mods, total_vg))
         return {'FINISHED'}
 
 
 class MMR_OT_bind_accessories(bpy.types.Operator):
     bl_idname = "mmr.bind_accessories"
-    bl_label = "Bind Accessories (Rigid)"
-    bl_description = ("Rigidly bind each SELECTED extra mesh (glasses, hat, "
-                      "beard, belt...) to its nearest bone so it follows the rig "
-                      "without deforming. Select the accessory meshes first")
+    bl_label = tr("Bind phụ kiện (cứng)", "Bind Accessories (Rigid)")
+    bl_description = tr("Bind cứng từng Mesh phụ ĐANG CHỌN (kính, mũ, râu, thắt "
+                        "lưng...) vào xương gần nhất để nó đi theo rig mà không bị "
+                        "biến dạng. Hãy chọn các Mesh phụ kiện trước",
+                        "Rigidly bind each SELECTED extra mesh (glasses, hat, "
+                        "beard, belt...) to its nearest bone so it follows the rig "
+                        "without deforming. Select the accessory meshes first")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         arm_obj = get_generated_armature(context)
         if arm_obj is None:
-            self.report({'ERROR'}, "No generated armature found. Build the armature first.")
+            self.report({'ERROR'}, tr("Không tìm thấy Armature đã tạo. Hãy Build Armature trước.",
+                                      "No generated armature found. Build the armature first."))
             return {'CANCELLED'}
         target = get_target_mesh(context)
         # Accessories = selected meshes that aren't the body target or armature.
         accessories = [o for o in context.selected_objects
                        if o.type == 'MESH' and o is not target and o is not arm_obj]
         if not accessories:
-            self.report({'ERROR'}, "Select the accessory mesh(es) (glasses, hat...) "
-                                   "to bind. The stored body mesh is skipped.")
+            self.report({'ERROR'}, tr("Chọn (các) Mesh phụ kiện (kính, mũ...) cần "
+                                      "bind. Mesh thân đã lưu sẽ được bỏ qua.",
+                                      "Select the accessory mesh(es) (glasses, hat...) "
+                                      "to bind. The stored body mesh is skipped."))
             return {'CANCELLED'}
 
         bound = []
@@ -2373,38 +2561,51 @@ class MMR_OT_bind_accessories(bpy.types.Operator):
                 continue
             bound.append(f"{acc.name}->{bone.replace(BONE_PREFIX, '')}")
         if not bound:
-            self.report({'ERROR'}, "No accessories were bound.")
+            self.report({'ERROR'}, tr("Không bind được phụ kiện nào.",
+                                      "No accessories were bound."))
             return {'CANCELLED'}
-        self.report({'INFO'}, "Bound accessories: " + ", ".join(bound))
+        self.report({'INFO'}, tr("Đã bind phụ kiện: %s", "Bound accessories: %s")
+                    % ", ".join(bound))
         return {'FINISHED'}
 
 
 class MMR_OT_transfer_accessory_weights(bpy.types.Operator):
     bl_idname = "mmr.transfer_accessory_weights"
-    bl_label = "Transfer Weights To Accessories"
-    bl_description = ("Copy the body mesh's skin weights onto each SELECTED extra "
-                      "mesh by nearest surface (hat, hair, cloth...), so it "
-                      "deforms smoothly like the body. Bind the body first, then "
-                      "select the accessories and click this")
+    bl_label = tr("Chuyển weight sang phụ kiện", "Transfer Weights To Accessories")
+    bl_description = tr("Chép skin weight của Mesh thân sang từng Mesh phụ ĐANG CHỌN "
+                        "theo bề mặt gần nhất (mũ, tóc, vải...), để nó biến dạng "
+                        "mượt như thân. Bind thân trước, rồi chọn các phụ kiện và "
+                        "bấm nút này",
+                        "Copy the body mesh's skin weights onto each SELECTED extra "
+                        "mesh by nearest surface (hat, hair, cloth...), so it "
+                        "deforms smoothly like the body. Bind the body first, then "
+                        "select the accessories and click this")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         arm_obj = get_generated_armature(context)
         if arm_obj is None:
-            self.report({'ERROR'}, "No generated armature found. Build the armature first.")
+            self.report({'ERROR'}, tr("Không tìm thấy Armature đã tạo. Hãy Build Armature trước.",
+                                      "No generated armature found. Build the armature first."))
             return {'CANCELLED'}
         source = get_target_mesh(context)
         if source is None:
-            self.report({'ERROR'}, "No target (body) mesh set. Use 'Set Selected Mesh' first.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích (thân). Bấm 'Dùng Mesh "
+                                      "đang chọn' trước.",
+                                      "No target (body) mesh set. Use 'Set Selected "
+                                      "Mesh' first."))
             return {'CANCELLED'}
         if not source.vertex_groups:
-            self.report({'ERROR'}, "Body mesh has no weights. Bind With Automatic "
-                                   "Weights first.")
+            self.report({'ERROR'}, tr("Mesh thân chưa có weight. Hãy 'Bind bằng "
+                                      "Automatic Weights' trước.",
+                                      "Body mesh has no weights. Bind With Automatic "
+                                      "Weights first."))
             return {'CANCELLED'}
         accessories = [o for o in context.selected_objects
                        if o.type == 'MESH' and o is not source and o is not arm_obj]
         if not accessories:
-            self.report({'ERROR'}, "Select the accessory mesh(es) to receive weights.")
+            self.report({'ERROR'}, tr("Chọn (các) Mesh phụ kiện sẽ nhận weight.",
+                                      "Select the accessory mesh(es) to receive weights."))
             return {'CANCELLED'}
 
         done = []
@@ -2417,34 +2618,47 @@ class MMR_OT_transfer_accessory_weights(bpy.types.Operator):
                 continue
             done.append(acc.name)
         if not done:
-            self.report({'ERROR'}, "No accessories received weights.")
+            self.report({'ERROR'}, tr("Không phụ kiện nào nhận được weight.",
+                                      "No accessories received weights."))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Transferred body weights to: {', '.join(done)}.")
+        self.report({'INFO'}, tr("Đã chuyển weight của thân sang: %s.",
+                                 "Transferred body weights to: %s.") % ", ".join(done))
         return {'FINISHED'}
 
 
 class MMR_OT_copy_weights_topology(bpy.types.Operator):
     bl_idname = "mmr.copy_weights_topology"
-    bl_label = "Copy Weights (Same Topology)"
-    bl_description = ("Copy the body mesh's weights 1:1 by vertex index onto "
-                      "each SELECTED mesh with IDENTICAL topology (a duplicate/"
-                      "re-skinned variant) â€” exact, and the meshes do NOT need "
-                      "to overlap in space. For different topology use Transfer")
+    bl_label = tr("Chép weight (cùng topology)", "Copy Weights (Same Topology)")
+    bl_description = tr("Chép weight của Mesh thân 1:1 theo chỉ số vertex sang từng "
+                        "Mesh ĐANG CHỌN có topology Y HỆT (bản duplicate / biến thể "
+                        "đổi skin) — chính xác, và các Mesh KHÔNG cần chồng lên nhau "
+                        "trong không gian. Topology khác thì dùng Chuyển weight",
+                        "Copy the body mesh's weights 1:1 by vertex index onto "
+                        "each SELECTED mesh with IDENTICAL topology (a duplicate/"
+                        "re-skinned variant) — exact, and the meshes do NOT need "
+                        "to overlap in space. For different topology use Transfer")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         arm_obj = get_generated_armature(context)
         if arm_obj is None:
-            self.report({'ERROR'}, "No rig target. Build or Set Selected Armature first.")
+            self.report({'ERROR'}, tr("Chưa có rig đích. Hãy Build hoặc 'Dùng Armature "
+                                      "đang chọn' trước.",
+                                      "No rig target. Build or Set Selected Armature "
+                                      "first."))
             return {'CANCELLED'}
         source = get_target_mesh(context)
         if source is None:
-            self.report({'ERROR'}, "No target (source) mesh set. Use 'Set Selected Mesh'.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích (nguồn). Bấm 'Dùng Mesh "
+                                      "đang chọn'.",
+                                      "No target (source) mesh set. Use 'Set Selected "
+                                      "Mesh'."))
             return {'CANCELLED'}
         dsts = [o for o in context.selected_objects
                 if o.type == 'MESH' and o is not source and o is not arm_obj]
         if not dsts:
-            self.report({'ERROR'}, "Select the destination mesh(es) to copy onto.")
+            self.report({'ERROR'}, tr("Chọn (các) Mesh đích cần chép weight sang.",
+                                      "Select the destination mesh(es) to copy onto."))
             return {'CANCELLED'}
         done = []
         for dst in dsts:
@@ -2454,25 +2668,32 @@ class MMR_OT_copy_weights_topology(bpy.types.Operator):
                 continue
             done.append(dst.name)
         if not done:
-            self.report({'ERROR'}, "No mesh received weights.")
+            self.report({'ERROR'}, tr("Không Mesh nào nhận được weight.",
+                                      "No mesh received weights."))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Copied weights 1:1 to: {', '.join(done)}.")
+        self.report({'INFO'}, tr("Đã chép weight 1:1 sang: %s.",
+                                 "Copied weights 1:1 to: %s.") % ", ".join(done))
         return {'FINISHED'}
 
 
 class MMR_OT_bind_skirt(bpy.types.Operator):
     bl_idname = "mmr.bind_skirt"
-    bl_label = "Bind Skirt / Dress"
-    bl_description = ("Weight the SELECTED skirt/dress mesh(es) by height "
-                      "(waist->Hips, thigh->UpLeg, shin->Leg) split across both "
-                      "legs, so the lower skirt follows the lower leg and doesn't "
-                      "penetrate the thigh. Select the skirt mesh(es) first")
+    bl_label = tr("Bind váy / đầm", "Bind Skirt / Dress")
+    bl_description = tr("Gán weight cho (các) Mesh váy/đầm ĐANG CHỌN theo chiều cao "
+                        "(eo->Hips, đùi->UpLeg, ống chân->Leg), chia cho cả hai "
+                        "chân, để phần váy dưới đi theo cẳng chân và không xuyên vào "
+                        "đùi. Hãy chọn (các) Mesh váy trước",
+                        "Weight the SELECTED skirt/dress mesh(es) by height "
+                        "(waist->Hips, thigh->UpLeg, shin->Leg) split across both "
+                        "legs, so the lower skirt follows the lower leg and doesn't "
+                        "penetrate the thigh. Select the skirt mesh(es) first")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         arm_obj = get_generated_armature(context)
         if arm_obj is None:
-            self.report({'ERROR'}, "No generated armature found. Build the armature first.")
+            self.report({'ERROR'}, tr("Không tìm thấy Armature đã tạo. Hãy Build Armature trước.",
+                                      "No generated armature found. Build the armature first."))
             return {'CANCELLED'}
         target = get_target_mesh(context)
         skirts = [o for o in context.selected_objects
@@ -2480,7 +2701,8 @@ class MMR_OT_bind_skirt(bpy.types.Operator):
         # Don't silently re-weight the whole body if it's selected alongside.
         skirts = [o for o in skirts if o is not target] or skirts
         if not skirts:
-            self.report({'ERROR'}, "Select the skirt/dress mesh(es) to bind.")
+            self.report({'ERROR'}, tr("Chọn (các) Mesh váy/đầm cần bind.",
+                                      "Select the skirt/dress mesh(es) to bind."))
             return {'CANCELLED'}
 
         done = []
@@ -2492,33 +2714,42 @@ class MMR_OT_bind_skirt(bpy.types.Operator):
                 continue
             done.append(skirt.name)
         if not done:
-            self.report({'ERROR'}, "No skirt was bound.")
+            self.report({'ERROR'}, tr("Không bind được váy nào.", "No skirt was bound."))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Bound skirt(s): {', '.join(done)} "
-                              "(inverse-distance to nearby leg/hip bones).")
+        self.report({'INFO'}, tr("Đã bind váy: %s (nghịch đảo khoảng cách tới các "
+                                 "xương chân/hông gần đó).",
+                                 "Bound skirt(s): %s "
+                                 "(inverse-distance to nearby leg/hip bones).")
+                    % ", ".join(done))
         return {'FINISHED'}
 
 
 class MMR_OT_clean_weights(bpy.types.Operator):
     bl_idname = "mmr.clean_weights"
-    bl_label = "Clean Weights"
-    bl_description = ("Normalize weights, remove tiny influences, limit to 4 "
-                      "influences per vertex, and delete unused non-bone groups")
+    bl_label = tr("Dọn weight", "Clean Weights")
+    bl_description = tr("Normalize weight, xoá ảnh hưởng quá nhỏ, giới hạn 4 ảnh "
+                        "hưởng mỗi vertex và xoá các group không phải xương mà "
+                        "không dùng tới",
+                        "Normalize weights, remove tiny influences, limit to 4 "
+                        "influences per vertex, and delete unused non-bone groups")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         mesh_obj = get_target_mesh(context)
         if mesh_obj is None:
-            self.report({'ERROR'}, "No target mesh set. Use 'Set Selected Mesh' first.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                                      "No target mesh set. Use 'Set Selected Mesh' first."))
             return {'CANCELLED'}
         arm_obj = get_generated_armature(context)
         removed, error = clean_weights(context, mesh_obj, arm_obj)
         if error:
             self.report({'ERROR'}, error)
             return {'CANCELLED'}
-        msg = "Weights normalized, cleaned and limited to 4 influences per vertex."
+        msg = tr("Đã normalize, dọn và giới hạn weight còn 4 ảnh hưởng mỗi vertex.",
+                 "Weights normalized, cleaned and limited to 4 influences per vertex.")
         if removed:
-            msg += f" Removed {removed} unused vertex group(s)."
+            msg += (tr(" Đã xoá %d Vertex Group không dùng.",
+                       " Removed %d unused vertex group(s).") % removed)
         self.report({'INFO'}, msg)
         return {'FINISHED'}
 
@@ -2527,73 +2758,93 @@ def _validate_weight_target(context, op):
     """Shared validation for weight operators. Returns (mesh, arm) or (None, None)."""
     mesh_obj = get_target_mesh(context)
     if mesh_obj is None:
-        op.report({'ERROR'}, "No target mesh set. Use 'Set Selected Mesh' first.")
+        op.report({'ERROR'}, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                                "No target mesh set. Use 'Set Selected Mesh' first."))
         return None, None
     arm_obj = get_generated_armature(context)
     if arm_obj is None:
-        op.report({'ERROR'}, "No generated armature found. Build the armature first.")
+        op.report({'ERROR'}, tr("Không tìm thấy Armature đã tạo. Hãy Build Armature trước.",
+                                "No generated armature found. Build the armature first."))
         return None, None
     has_mod = any(m.type == 'ARMATURE' and m.object == arm_obj
                   for m in mesh_obj.modifiers)
     if not has_mod:
-        op.report({'ERROR'}, "Mesh has no Armature modifier for the generated "
-                             "armature. Bind with Automatic Weights first.")
+        op.report({'ERROR'}, tr("Mesh chưa có Armature modifier trỏ tới Armature đã "
+                                "tạo. Hãy bind bằng Automatic Weights trước.",
+                                "Mesh has no Armature modifier for the generated "
+                                "armature. Bind with Automatic Weights first."))
         return None, None
     if not mesh_obj.vertex_groups:
-        op.report({'ERROR'}, "Mesh has no vertex groups. Bind with Automatic "
-                             "Weights first.")
+        op.report({'ERROR'}, tr("Mesh chưa có Vertex Group. Hãy bind bằng Automatic "
+                                "Weights trước.",
+                                "Mesh has no vertex groups. Bind with Automatic "
+                                "Weights first."))
         return None, None
     return mesh_obj, arm_obj
 
 
 class MMR_OT_backup_weights(bpy.types.Operator):
     bl_idname = "mmr.backup_weights"
-    bl_label = "Backup Weights"
-    bl_description = ("Save the current weights into MMR_BACKUP_ vertex groups "
-                      "(only the latest backup is kept)")
+    bl_label = tr("Backup weight", "Backup Weights")
+    bl_description = tr("Lưu weight hiện tại vào các Vertex Group MMR_BACKUP_ (chỉ "
+                        "giữ bản backup mới nhất)",
+                        "Save the current weights into MMR_BACKUP_ vertex groups "
+                        "(only the latest backup is kept)")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         mesh_obj = get_target_mesh(context)
         if mesh_obj is None:
-            self.report({'ERROR'}, "No target mesh set. Use 'Set Selected Mesh' first.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                                      "No target mesh set. Use 'Set Selected Mesh' first."))
             return {'CANCELLED'}
         if not mesh_obj.vertex_groups:
-            self.report({'ERROR'}, "Mesh has no vertex groups to back up.")
+            self.report({'ERROR'}, tr("Mesh không có Vertex Group nào để backup.",
+                                      "Mesh has no vertex groups to back up."))
             return {'CANCELLED'}
         ensure_object_mode(context)
         n = backup_weights(mesh_obj)
-        self.report({'INFO'}, f"Backed up {n} vertex group(s) into "
-                              f"'{WEIGHT_BACKUP_PREFIX}' groups.")
+        self.report({'INFO'}, tr("Đã backup %d Vertex Group vào các group '%s'.",
+                                 "Backed up %d vertex group(s) into "
+                                 "'%s' groups.") % (n, WEIGHT_BACKUP_PREFIX))
         return {'FINISHED'}
 
 
 class MMR_OT_restore_weights(bpy.types.Operator):
     bl_idname = "mmr.restore_weights"
-    bl_label = "Restore Weight Backup"
-    bl_description = "Restore weights from the latest MMR_BACKUP_ groups"
+    bl_label = tr("Phục hồi backup weight", "Restore Weight Backup")
+    bl_description = tr("Phục hồi weight từ các group MMR_BACKUP_ mới nhất",
+                        "Restore weights from the latest MMR_BACKUP_ groups")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         mesh_obj = get_target_mesh(context)
         if mesh_obj is None:
-            self.report({'ERROR'}, "No target mesh set. Use 'Set Selected Mesh' first.")
+            self.report({'ERROR'}, tr("Chưa đặt Mesh đích. Bấm 'Dùng Mesh đang chọn' trước.",
+                                      "No target mesh set. Use 'Set Selected Mesh' first."))
             return {'CANCELLED'}
         ensure_object_mode(context)
         n = restore_weights(mesh_obj)
         if n < 0:
-            self.report({'WARNING'}, "No weight backup found. Use 'Backup Weights' first.")
+            self.report({'WARNING'}, tr("Không tìm thấy backup weight. Hãy bấm "
+                                        "'Backup weight' trước.",
+                                        "No weight backup found. Use 'Backup Weights' "
+                                        "first."))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Restored {n} vertex group(s) from backup.")
+        self.report({'INFO'}, tr("Đã phục hồi %d Vertex Group từ backup.",
+                                 "Restored %d vertex group(s) from backup.") % n)
         return {'FINISHED'}
 
 
 class MMR_OT_smart_mixamo_weight_refine(bpy.types.Operator):
     bl_idname = "mmr.smart_mixamo_weight_refine"
-    bl_label = "Smart Mixamo Weight Refine"
-    bl_description = ("Post-process automatic weights: remove cross-side "
-                      "contamination, clean unrelated limb weights, refine small "
-                      "parts, then limit to 4 and normalize")
+    bl_label = tr("Tinh chỉnh weight Mixamo thông minh", "Smart Mixamo Weight Refine")
+    bl_description = tr("Hậu xử lí Automatic Weights: xoá weight lẫn sang bên đối "
+                        "diện, dọn weight của chi không liên quan, xử lí các chi "
+                        "tiết nhỏ, rồi giới hạn 4 và normalize",
+                        "Post-process automatic weights: remove cross-side "
+                        "contamination, clean unrelated limb weights, refine small "
+                        "parts, then limit to 4 and normalize")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -2616,18 +2867,25 @@ class MMR_OT_smart_mixamo_weight_refine(bpy.types.Operator):
             return {'CANCELLED'}
         print("[MMR] Weight refine stats:", stats)
         self.report({'INFO'},
-                    f"Refined weights (profile {scene.mmr_weight_profile}): "
-                    f"removed {stats['cross_removed']} cross-side, "
-                    f"{stats['region_removed']} unrelated; "
-                    f"{stats['islands_rigid']} rigid part(s).")
+                    tr("Đã tinh chỉnh weight (profile %s): xoá %d weight chéo bên, "
+                       "%d không liên quan; %d chi tiết gán cứng.",
+                       "Refined weights (profile %s): "
+                       "removed %d cross-side, "
+                       "%d unrelated; "
+                       "%d rigid part(s).")
+                    % (scene.mmr_weight_profile, stats['cross_removed'],
+                       stats['region_removed'], stats['islands_rigid']))
         return {'FINISHED'}
 
 
 class MMR_OT_weight_diagnostics(bpy.types.Operator):
     bl_idname = "mmr.weight_diagnostics"
-    bl_label = "Weight Diagnostics"
-    bl_description = ("Report weight quality: zero-weight verts, >4-influence "
-                      "verts, cross-side verts, empty groups, top groups")
+    bl_label = tr("Chẩn đoán weight", "Weight Diagnostics")
+    bl_description = tr("Báo cáo chất lượng weight: vertex không có weight, vertex "
+                        "quá 4 ảnh hưởng, vertex chéo bên, group rỗng, các group "
+                        "nhiều vertex nhất",
+                        "Report weight quality: zero-weight verts, >4-influence "
+                        "verts, cross-side verts, empty groups, top groups")
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -2651,26 +2909,34 @@ class MMR_OT_weight_diagnostics(bpy.types.Operator):
             print("  all required Mixamo groups present")
         print("=" * 56)
         self.report({'INFO'},
-                    f"Diagnostics: {d['zero']} zero-weight, {d['over4']} over-4, "
-                    f"{d['cross']} cross-side verts, {len(d['empty_groups'])} empty "
-                    f"groups. See System Console for details.")
+                    tr("Chẩn đoán: %d vertex không có weight, %d quá 4 ảnh hưởng, "
+                       "%d vertex chéo bên, %d group rỗng. Xem chi tiết ở System "
+                       "Console.",
+                       "Diagnostics: %d zero-weight, %d over-4, "
+                       "%d cross-side verts, %d empty "
+                       "groups. See System Console for details.")
+                    % (d['zero'], d['over4'], d['cross'], len(d['empty_groups'])))
         return {'FINISHED'}
 
 
 class MMR_OT_remove_markers(bpy.types.Operator):
     bl_idname = "mmr.remove_markers"
-    bl_label = "Remove Markers"
-    bl_description = ("Delete all MMR joint markers and the symmetry center "
-                      "(user objects are never touched)")
+    bl_label = tr("Xoá marker", "Remove Markers")
+    bl_description = tr("Xoá mọi marker khớp MMR và tâm đối xứng (không bao giờ đụng "
+                        "tới object của người dùng)",
+                        "Delete all MMR joint markers and the symmetry center "
+                        "(user objects are never touched)")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         ensure_object_mode(context)
         removed = remove_all_markers()
         if removed == 0:
-            self.report({'WARNING'}, "No MMR markers found.")
+            self.report({'WARNING'}, tr("Không tìm thấy marker MMR nào.",
+                                        "No MMR markers found."))
             return {'CANCELLED'}
-        self.report({'INFO'}, f"Removed {removed} marker object(s).")
+        self.report({'INFO'}, tr("Đã xoá %d object marker.",
+                                 "Removed %d marker object(s).") % removed)
         return {'FINISHED'}
 
 
@@ -3123,12 +3389,14 @@ def retarget_actions(context, src, dst, use_remap, in_place, only_used,
 
 
 class MMR_OT_retarget_report(bpy.types.Operator):
-    """Print how far the two rigs' rest poses differ, without changing anything.
-
-    Run this first: it is the size of the error each action currently suffers
-    """
     bl_idname = "mmr.retarget_report"
-    bl_label = "Check Rest Difference"
+    bl_label = tr("Kiểm tra độ lệch rest", "Check Rest Difference")
+    bl_description = tr("In ra độ lệch rest pose giữa hai rig, không thay đổi gì. "
+                        "Chạy cái này trước: đó chính là mức sai lệch mà từng "
+                        "Action đang gặp",
+                        "Print how far the two rigs' rest poses differ, without "
+                        "changing anything. Run this first: it is the size of the "
+                        "error each action currently suffers")
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -3136,16 +3404,19 @@ class MMR_OT_retarget_report(bpy.types.Operator):
         src = scene.mmr_retarget_source
         dst = scene.mmr_retarget_target or get_generated_armature(context)
         if src is None or dst is None:
-            self.report({'ERROR'}, "Set both the Source and Target armature.")
+            self.report({'ERROR'}, tr("Hãy đặt cả Armature nguồn lẫn đích.",
+                                      "Set both the Source and Target armature."))
             return {'CANCELLED'}
         if src is dst:
-            self.report({'ERROR'}, "Source and Target are the same armature.")
+            self.report({'ERROR'}, tr("Nguồn và đích đang là cùng một Armature.",
+                                      "Source and Target are the same armature."))
             return {'CANCELLED'}
 
         remap = LEG_REMAP if scene.mmr_retarget_leg_remap else None
         rows, worst = retarget_rest_report(src, dst, remap)
         if not rows:
-            self.report({'ERROR'}, "The two rigs share no bone names.")
+            self.report({'ERROR'}, tr("Hai rig không có tên xương nào chung.",
+                                      "The two rigs share no bone names."))
             return {'CANCELLED'}
 
         print("\n[MMR] rest difference  %s -> %s" % (src.name, dst.name))
@@ -3161,17 +3432,21 @@ class MMR_OT_retarget_report(bpy.types.Operator):
             print("[MMR] only on the target rig (left at rest): %s"
                   % ", ".join(missing))
         self.report({'INFO'},
-                    "Worst rest difference %.1f deg on %s - see System Console"
+                    tr("Lệch rest lớn nhất %.1f độ ở %s - xem System Console",
+                       "Worst rest difference %.1f deg on %s - see System Console")
                     % (worst, rows[0][1]))
         return {'FINISHED'}
 
 
 class MMR_OT_retarget_actions(bpy.types.Operator):
-    """Rewrite every action so it plays on the Target rig the way it played on
-    the Source rig. SAVE YOUR FILE FIRST when 'Rewrite In Place' is on
-    """
     bl_idname = "mmr.retarget_actions"
-    bl_label = "Retarget Actions To Target Rig"
+    bl_label = tr("Retarget Action sang rig đích", "Retarget Actions To Target Rig")
+    bl_description = tr("Viết lại mọi Action để chúng chạy trên rig đích giống hệt như "
+                        "đã chạy trên rig nguồn. LƯU FILE TRƯỚC khi bật 'Ghi đè tại "
+                        "chỗ'",
+                        "Rewrite every action so it plays on the Target rig the way "
+                        "it played on the Source rig. SAVE YOUR FILE FIRST when "
+                        "'Rewrite In Place' is on")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -3179,10 +3454,12 @@ class MMR_OT_retarget_actions(bpy.types.Operator):
         src = scene.mmr_retarget_source
         dst = scene.mmr_retarget_target or get_generated_armature(context)
         if src is None or dst is None:
-            self.report({'ERROR'}, "Set both the Source and Target armature.")
+            self.report({'ERROR'}, tr("Hãy đặt cả Armature nguồn lẫn đích.",
+                                      "Set both the Source and Target armature."))
             return {'CANCELLED'}
         if src is dst:
-            self.report({'ERROR'}, "Source and Target are the same armature.")
+            self.report({'ERROR'}, tr("Nguồn và đích đang là cùng một Armature.",
+                                      "Source and Target are the same armature."))
             return {'CANCELLED'}
 
         ensure_object_mode(context)
@@ -3195,11 +3472,14 @@ class MMR_OT_retarget_actions(bpy.types.Operator):
 
         if converted == 0:
             self.report({'WARNING'},
-                        "Nothing to do (%d action(s) already retargeted)." % skipped)
+                        tr("Không có gì để làm (%d Action đã được retarget từ trước).",
+                           "Nothing to do (%d action(s) already retargeted).") % skipped)
             return {'CANCELLED'}
         self.report({'INFO'},
-                    "Retargeted %d action(s), skipped %d. Worst rest gap was "
-                    "%.1f deg; location factor %.3f."
+                    tr("Đã retarget %d Action, bỏ qua %d. Lệch rest lớn nhất là "
+                       "%.1f độ; hệ số location %.3f.",
+                       "Retargeted %d action(s), skipped %d. Worst rest gap was "
+                       "%.1f deg; location factor %.3f.")
                     % (converted, skipped, worst, factor))
         return {'FINISHED'}
 
@@ -3255,8 +3535,8 @@ def action_user_objects(action):
         if ad is None:
             continue
         if ad.action is action or any(st.action is action
-                                      for tr in ad.nla_tracks
-                                      for st in tr.strips):
+                                      for track in ad.nla_tracks
+                                      for st in track.strips):
             users.append(ob)
     return users
 
@@ -3294,16 +3574,19 @@ def normalize_check(arm_obj, targets):
     """
     scale = arm_obj.scale
     if (abs(scale.x - scale.y) > 1e-6) or (abs(scale.y - scale.z) > 1e-6):
-        return ("'%s': scale is not uniform (%.4f, %.4f, %.4f)."
+        return (tr("'%s': scale không đồng đều (%.4f, %.4f, %.4f).",
+                   "'%s': scale is not uniform (%.4f, %.4f, %.4f).")
                 % (arm_obj.name, scale.x, scale.y, scale.z))
     if abs(scale.x) < 1e-9:
-        return "'%s': scale is zero." % arm_obj.name
+        return tr("'%s': scale bằng 0.", "'%s': scale is zero.") % arm_obj.name
 
     shared_data = [ob.name for ob in [arm_obj] + rig_deformed_meshes(arm_obj)
                    if ob.data.users > 1]
     if shared_data:
-        return ("'%s': data shared with another object (%s) - Blender refuses to "
-                "apply transforms. Make it single-user first."
+        return (tr("'%s': data đang dùng chung với object khác (%s) - Blender không "
+                   "cho apply transform. Hãy chuyển nó thành single-user trước.",
+                   "'%s': data shared with another object (%s) - Blender refuses to "
+                   "apply transforms. Make it single-user first.")
                 % (arm_obj.name, ", ".join(sorted(set(shared_data)))))
 
     # An action shared with a rig that stays at 0.01 cannot be rescaled for one
@@ -3312,8 +3595,10 @@ def normalize_check(arm_obj, targets):
         outside = [ob.name for ob in action_user_objects(action)
                    if ob not in targets]
         if outside:
-            return ("'%s': action '%s' is also used by %s. Select those rigs too, "
-                    "or make the action single-user."
+            return (tr("'%s': Action '%s' cũng đang được %s dùng. Hãy chọn cả các "
+                       "rig đó, hoặc chuyển Action thành single-user.",
+                       "'%s': action '%s' is also used by %s. Select those rigs too, "
+                       "or make the action single-user.")
                     % (arm_obj.name, action.name, ", ".join(sorted(set(outside)))))
     return None
 
@@ -3329,7 +3614,7 @@ def normalize_rig_scale(context, arm_obj, converted_actions):
     rot = arm_obj.rotation_euler
     if abs(factor - 1.0) < 1e-6 and all(abs(r) < 1e-6 for r in rot):
         arm_obj[NORMALIZED_TAG] = True
-        return "'%s' was already at 1,1,1." % arm_obj.name
+        return tr("'%s' đã ở 1,1,1 từ trước.", "'%s' was already at 1,1,1.") % arm_obj.name
 
     meshes = rig_deformed_meshes(arm_obj)
     select_only(context, [arm_obj] + meshes, active=arm_obj)
@@ -3344,15 +3629,20 @@ def normalize_rig_scale(context, arm_obj, converted_actions):
         converted_actions.add(action)
 
     arm_obj[NORMALIZED_TAG] = True
-    return ("'%s': scale %g -> 1 (%d mesh, %d action, %d location curve%s)."
-            % (arm_obj.name, factor, len(meshes), len(actions), curves,
-               "" if curves == 1 else "s"))
+    # The English plural suffix; Vietnamese has none.
+    plural = "" if curves == 1 else tr("", "s")
+    return (tr("'%s': scale %g -> 1 (%d Mesh, %d Action, %d F-Curve location%s).",
+               "'%s': scale %g -> 1 (%d mesh, %d action, %d location curve%s).")
+            % (arm_obj.name, factor, len(meshes), len(actions), curves, plural))
 
 
 class MMR_OT_normalize_rig_scale(bpy.types.Operator):
     bl_idname = "mmr.normalize_rig_scale"
-    bl_label = "Normalize Rig Scale"
-    bl_description = (
+    bl_label = tr("Chuẩn hoá scale rig", "Normalize Rig Scale")
+    bl_description = tr(
+        "Apply rotation và scale của Armature để nó thành 1,1,1 - cho engine không "
+        "ưa node rig 0.01. Key location của pose bone được đổi cùng lúc, nên "
+        "animation có sẵn không bị xê dịch. Chạy trên mọi Armature đang chọn",
         "Apply the armature's rotation and scale so it reads 1,1,1 - for engines "
         "that dislike a 0.01 rig node. Pose-bone location keys are converted at "
         "the same time, so existing animations do not move. Runs on every "
@@ -3363,7 +3653,8 @@ class MMR_OT_normalize_rig_scale(bpy.types.Operator):
     def poll(cls, context):
         if any(ob.type == 'ARMATURE' for ob in context.selected_objects):
             return True
-        cls.poll_message_set("Select the armature(s) to normalize.")
+        cls.poll_message_set(tr("Chọn (các) Armature cần chuẩn hoá.",
+                                "Select the armature(s) to normalize."))
         return get_generated_armature(context) is not None
 
     def execute(self, context):
@@ -3373,7 +3664,8 @@ class MMR_OT_normalize_rig_scale(bpy.types.Operator):
             arm_obj = get_generated_armature(context)
             targets = [arm_obj] if arm_obj is not None else []
         if not targets:
-            self.report({'ERROR'}, "Select an armature, or set a rig target first.")
+            self.report({'ERROR'}, tr("Hãy chọn một Armature, hoặc đặt rig đích trước.",
+                                      "Select an armature, or set a rig target first."))
             return {'CANCELLED'}
 
         problems = [msg for msg in (normalize_check(ob, targets) for ob in targets)
@@ -3382,7 +3674,9 @@ class MMR_OT_normalize_rig_scale(bpy.types.Operator):
             for msg in problems:
                 print("[MMR] normalize refused: " + msg)
             self.report({'ERROR'}, problems[0] if len(problems) == 1 else
-                        "%d rig(s) cannot be normalized, nothing changed. First: %s"
+                        tr("%d rig không chuẩn hoá được, chưa đổi gì cả. Lỗi đầu "
+                           "tiên: %s",
+                           "%d rig(s) cannot be normalized, nothing changed. First: %s")
                         % (len(problems), problems[0]))
             return {'CANCELLED'}
 
@@ -3401,17 +3695,21 @@ class MMR_OT_normalize_rig_scale(bpy.types.Operator):
         for msg in messages:
             print("[MMR] " + msg)
         self.report({'INFO'}, messages[0] if len(messages) == 1 else
-                    "Normalized %d rigs (details in the System Console)."
+                    tr("Đã chuẩn hoá %d rig (chi tiết ở System Console).",
+                       "Normalized %d rigs (details in the System Console).")
                     % len(messages))
         return {'FINISHED'}
 
 
 class MMR_PT_main_panel(bpy.types.Panel):
-    bl_label = "Mixamo Marker Rigger"
+    bl_label = "Mixamo Marker Rigger"  # i18n-skip
     bl_idname = "MMR_PT_main_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Mixamo Rigger"
+
+    def draw_header_preset(self, context):
+        ezg_i18n.draw_toggle(self.layout, "mmr")
 
     def draw(self, context):
         layout = self.layout
@@ -3423,81 +3721,97 @@ class MMR_PT_main_panel(bpy.types.Panel):
 
         # Status
         box = layout.box()
-        box.label(text="Status", icon='INFO')
-        box.label(text=f"Mesh: {mesh_obj.name if mesh_obj else '-'}",
+        box.label(text=tr("Trạng thái", "Status"), icon='INFO')
+        box.label(text="Mesh: %s" % (mesh_obj.name if mesh_obj else "-"),  # i18n-skip
                   icon='MESH_DATA' if mesh_obj else 'ERROR')
         if arm_obj is None:
-            arm_text = "Armature: -"
+            arm_text = "Armature: -"  # i18n-skip
         else:
-            source = "built" if arm_obj.get(GENERATED_TAG) else "external"
-            arm_text = f"Armature: {arm_obj.name} ({source})"
+            source = (tr("do addon tạo", "built") if arm_obj.get(GENERATED_TAG)
+                      else tr("có sẵn", "external"))
+            arm_text = "Armature: %s (%s)" % (arm_obj.name, source)  # i18n-skip
         box.label(text=arm_text,
                   icon='ARMATURE_DATA' if arm_obj else 'ERROR')
         placed = len(ALL_MARKERS) - len(missing)
-        box.label(text=f"Markers: {placed} / {len(ALL_MARKERS)}",
+        box.label(text=tr("Marker: %d / %d", "Markers: %d / %d") % (placed, len(ALL_MARKERS)),
                   icon='EMPTY_DATA' if not missing else 'ERROR')
-        box.label(text=f"Realtime Symmetry: {'ON' if sym_active else 'OFF'}"
-                       f" (axis {scene.mmr_symmetry_axis})",
+        box.label(text=tr("Đối xứng tức thời: %s (trục %s)",
+                          "Realtime Symmetry: %s (axis %s)")
+                  % (tr("BẬT", "ON") if sym_active else tr("TẮT", "OFF"),
+                     scene.mmr_symmetry_axis),
                   icon='MOD_MIRROR' if sym_active else 'X')
 
         # Warnings
         if mesh_obj is None:
-            box.label(text="Select a mesh, then 'Set Selected Mesh'.", icon='ERROR')
+            box.label(text=tr("Chọn một Mesh rồi bấm 'Dùng Mesh đang chọn'.",
+                              "Select a mesh, then 'Set Selected Mesh'."), icon='ERROR')
         elif arm_obj is not None and missing:
             # Rig already set (e.g. imported from Mixamo): markers are optional.
-            box.label(text="Rig ready. Markers not needed - use Weight Tools.",
+            box.label(text=tr("Rig đã sẵn sàng. Không cần marker - dùng Weight Tools.",
+                              "Rig ready. Markers not needed - use Weight Tools."),
                       icon='CHECKMARK')
         elif missing and placed > 0:
-            box.label(text="Some markers are missing. Recreate them.", icon='ERROR')
+            box.label(text=tr("Thiếu một số marker. Hãy tạo lại.",
+                              "Some markers are missing. Recreate them."), icon='ERROR')
         elif missing:
-            box.label(text="No markers yet. Create Mixamo markers.", icon='ERROR')
+            box.label(text=tr("Chưa có marker. Hãy tạo marker Mixamo.",
+                              "No markers yet. Create Mixamo markers."), icon='ERROR')
         elif arm_obj is None:
-            box.label(text="Markers ready. Build the armature.", icon='CHECKMARK')
+            box.label(text=tr("Marker đã sẵn sàng. Hãy Build Armature.",
+                              "Markers ready. Build the armature."), icon='CHECKMARK')
 
         # Mixamo-space guard: applying/zeroing the transform breaks animations,
         # UNLESS it went through Normalize Rig Scale, which converts the keys.
         if arm_obj is not None and not armature_space_ok(arm_obj):
             warn = box.column(align=True)
-            warn.label(text="Armature transform changed!", icon='ERROR')
-            warn.label(text="Keep rot X=90, scale 0.01 for Mixamo anims.")
-            warn.label(text="Do NOT Apply by hand - use Normalize Rig Scale.")
+            warn.label(text=tr("Transform của Armature đã bị đổi!",
+                               "Armature transform changed!"), icon='ERROR')
+            warn.label(text=tr("Giữ rot X=90, scale 0.01 cho animation Mixamo.",
+                               "Keep rot X=90, scale 0.01 for Mixamo anims."))
+            warn.label(text=tr("KHÔNG Apply bằng tay - dùng 'Chuẩn hoá scale rig'.",
+                               "Do NOT Apply by hand - use Normalize Rig Scale."))
 
         # Workflow
         col = layout.column(align=True)
-        col.label(text="1. Mesh")
+        col.label(text="1. Mesh")  # i18n-skip
         col.operator("mmr.set_selected_mesh", icon='RESTRICT_SELECT_OFF')
         col.operator("mmr.prepare_mesh", icon='CON_SIZELIKE')
 
         # Existing-rig shortcut: an armature imported from Mixamo (or any rig
         # already in the file) can be used directly, skipping markers + build.
         abox = layout.box()
-        abox.label(text="Existing Armature (optional)", icon='OUTLINER_OB_ARMATURE')
-        abox.label(text="Have a Mixamo rig already? Pick it here,", icon='INFO')
-        abox.label(text="then skip to Weight Tools.")
+        abox.label(text=tr("Armature có sẵn (tuỳ chọn)", "Existing Armature (optional)"),
+                   icon='OUTLINER_OB_ARMATURE')
+        abox.label(text=tr("Đã có sẵn rig Mixamo? Chọn nó ở đây,",
+                           "Have a Mixamo rig already? Pick it here,"), icon='INFO')
+        abox.label(text=tr("rồi chuyển thẳng tới Weight Tools.",
+                           "then skip to Weight Tools."))
         row = abox.row(align=True)
         row.operator("mmr.set_selected_armature",
-                     text="Set Selected Armature", icon='RESTRICT_SELECT_OFF')
+                     text=tr("Dùng Armature đang chọn", "Set Selected Armature"),
+                     icon='RESTRICT_SELECT_OFF')
         sub = row.row(align=True)
         sub.enabled = arm_obj is not None
         sub.operator("mmr.clear_armature", text="", icon='X')
         abox.prop(scene, "mmr_armature", text="")
 
         col = layout.column(align=True)
-        col.label(text="2. Markers")
+        col.label(text=tr("2. Marker", "2. Markers"))
         col.operator("mmr.create_markers", icon='EMPTY_DATA')
 
         # Symmetry sub-section
         sbox = layout.box()
-        sbox.label(text="Symmetry", icon='MOD_MIRROR')
+        sbox.label(text=tr("Đối xứng", "Symmetry"), icon='MOD_MIRROR')
         sbox.prop(scene, "mmr_use_symmetry")
         row = sbox.row()
         row.enabled = scene.mmr_use_symmetry
         row.prop(scene, "mmr_symmetry_axis", expand=True)
         center = bpy.data.objects.get(SYMMETRY_CENTER_NAME)
         if center is not None:
-            sbox.prop(center, "location", text="Center")
+            sbox.prop(center, "location", text=tr("Tâm", "Center"))
         else:
-            sbox.label(text="Center: created with markers", icon='INFO')
+            sbox.label(text=tr("Tâm: được tạo cùng marker", "Center: created with markers"),
+                       icon='INFO')
         colc = sbox.column(align=True)
         colc.enabled = scene.mmr_use_symmetry
         colc.operator("mmr.refresh_symmetry", icon='FILE_REFRESH')
@@ -3509,15 +3823,16 @@ class MMR_PT_main_panel(bpy.types.Panel):
         sbox.operator("mmr.color_markers", icon='COLOR')
 
         col = layout.column(align=True)
-        col.label(text="3. Rig")
+        col.label(text="3. Rig")  # i18n-skip
         col.prop(scene, "mmr_skeleton_lod")
 
         # Character orientation. Up is locked to world Z (character stands
         # upright in Blender); only the foot-forward direction is configurable.
         fbox = layout.box()
-        fbox.label(text="Orientation (Up = world Z)", icon='ORIENTATION_GIMBAL')
+        fbox.label(text=tr("Hướng nhân vật (trục lên = Z thế giới)",
+                           "Orientation (Up = world Z)"), icon='ORIENTATION_GIMBAL')
         row = fbox.row(align=True)
-        row.label(text="Forward")
+        row.label(text=tr("Hướng trước", "Forward"))
         row.prop(scene, "mmr_forward_axis", expand=True)
         row = fbox.row()
         row.prop(scene, "mmr_forward_dir", expand=True)
@@ -3530,18 +3845,22 @@ class MMR_PT_main_panel(bpy.types.Panel):
         # Optional, and deliberately after the build buttons: Mixamo space is
         # still the default. This is for engines that dislike a 0.01 rig node.
         nbox = layout.box()
-        nbox.label(text="Rig Scale", icon='CON_SIZELIKE')
+        nbox.label(text=tr("Scale rig", "Rig Scale"), icon='CON_SIZELIKE')
         if arm_obj is not None and armature_normalized(arm_obj):
-            nbox.label(text="Normalized to 1,1,1.", icon='CHECKMARK')
-            nbox.label(text="New anims still apply (retarget bake).")
+            nbox.label(text=tr("Đã chuẩn hoá về 1,1,1.", "Normalized to 1,1,1."),
+                       icon='CHECKMARK')
+            nbox.label(text=tr("Animation mới vẫn áp dụng được (bake retarget).",
+                               "New anims still apply (retarget bake)."))
         else:
-            nbox.label(text="Mixamo rigs sit at 0.01 by design.", icon='INFO')
-            nbox.label(text="Only normalize if your engine needs 1.")
+            nbox.label(text=tr("Rig Mixamo vốn để scale 0.01.",
+                               "Mixamo rigs sit at 0.01 by design."), icon='INFO')
+            nbox.label(text=tr("Chỉ chuẩn hoá khi engine cần scale 1.",
+                               "Only normalize if your engine needs 1."))
         nbox.operator("mmr.normalize_rig_scale", icon='CON_SIZELIKE')
 
         # Weight tools
         wbox = layout.box()
-        wbox.label(text="Weight Tools", icon='MOD_VERTEX_WEIGHT')
+        wbox.label(text="Weight Tools", icon='MOD_VERTEX_WEIGHT')  # i18n-skip
         wbox.operator("mmr.bind_auto_weights", icon='MOD_VERTEX_WEIGHT')
         wbox.operator("mmr.bind_accessories", icon='LINKED')
         wbox.prop(scene, "mmr_transfer_reach")
@@ -3572,41 +3891,50 @@ class MMR_PT_main_panel(bpy.types.Panel):
 
         # Retarget existing actions onto a replacement rig
         rbox = layout.box()
-        rbox.label(text="Retarget Actions", icon='ANIM')
-        rbox.prop(scene, "mmr_retarget_source", text="From (old rig)")
-        rbox.prop(scene, "mmr_retarget_target", text="To (new rig)")
+        rbox.label(text=tr("Retarget Action", "Retarget Actions"), icon='ANIM')
+        rbox.prop(scene, "mmr_retarget_source", text=tr("Từ (rig cũ)", "From (old rig)"))
+        rbox.prop(scene, "mmr_retarget_target", text=tr("Sang (rig mới)", "To (new rig)"))
         rsrc = scene.mmr_retarget_source
         rdst = scene.mmr_retarget_target or arm_obj
         if rsrc is not None and rdst is not None and rsrc is not rdst:
             remap = LEG_REMAP if scene.mmr_retarget_leg_remap else None
             _rows, worst = retarget_rest_report(rsrc, rdst, remap)
-            rbox.label(text="Worst rest gap: %.1f deg" % worst,
+            rbox.label(text=tr("Lệch rest lớn nhất: %.1f độ",
+                               "Worst rest gap: %.1f deg") % worst,
                        icon='CHECKMARK' if worst < 20.0 else 'ERROR')
             if worst >= 45.0:
                 warn = rbox.column(align=True)
-                warn.label(text="Chains differ structurally.", icon='ERROR')
-                warn.label(text="Rotations will match but limb")
-                warn.label(text="shapes may still look wrong.")
+                warn.label(text=tr("Cấu trúc chuỗi xương khác nhau.",
+                                   "Chains differ structurally."), icon='ERROR')
+                warn.label(text=tr("Góc xoay sẽ khớp nhưng hình dáng",
+                                   "Rotations will match but limb"))
+                warn.label(text=tr("tay chân vẫn có thể trông sai.",
+                                   "shapes may still look wrong."))
         rbox.operator("mmr.retarget_report", icon='INFO')
         if rsrc is not None and rdst is not None and rsrc is not rdst:
             auto = retarget_hips_location_factor(rsrc, rdst)
-            rbox.label(text="Root motion auto factor: %.3f" % auto,
+            rbox.label(text=tr("Hệ số root motion tự động: %.3f",
+                               "Root motion auto factor: %.3f") % auto,
                        icon='CON_LOCLIKE')
             if abs(auto - 1.0) > 0.05:
                 hint = rbox.column(align=True)
-                hint.label(text="Hip heights differ. If both rigs are")
-                hint.label(text="the same character, set Root Motion")
-                hint.label(text="Scale to 1.0 or the feet will slide.")
+                hint.label(text=tr("Độ cao hông lệch nhau. Nếu cả hai rig",
+                                   "Hip heights differ. If both rigs are"))
+                hint.label(text=tr("là cùng một nhân vật, hãy đặt",
+                                   "the same character, set Root Motion"))
+                hint.label(text=tr("'Tỉ lệ root motion' = 1.0 kẻo chân bị trượt.",
+                                   "Scale to 1.0 or the feet will slide."))
         rbox.prop(scene, "mmr_retarget_root_scale")
         rbox.prop(scene, "mmr_retarget_leg_remap")
         rbox.prop(scene, "mmr_retarget_only_used")
         rbox.prop(scene, "mmr_retarget_in_place")
         if scene.mmr_retarget_in_place:
-            rbox.label(text="Save the .blend first!", icon='ERROR')
+            rbox.label(text=tr("Hãy lưu file .blend trước!", "Save the .blend first!"),
+                       icon='ERROR')
         rbox.operator("mmr.retarget_actions", icon='CON_ROTLIKE')
 
         col = layout.column(align=True)
-        col.label(text="Cleanup")
+        col.label(text=tr("Dọn dẹp", "Cleanup"))
         col.operator("mmr.remove_markers", icon='TRASH')
 
 
@@ -3645,6 +3973,7 @@ CLASSES = (
     MMR_OT_retarget_report,
     MMR_OT_retarget_actions,
     MMR_OT_remove_markers,
+    ezg_i18n.make_language_operator("mmr"),
     MMR_PT_main_panel,
 )
 
@@ -3658,132 +3987,187 @@ def _poll_armature(self, obj):
 
 
 def register():
-    for cls in CLASSES:
-        bpy.utils.register_class(cls)
+    # Runs again on every VI/EN switch (ezg_i18n unregisters + re-registers the
+    # whole add-on), so every tr() below picks up the current language. Scene
+    # values live in the .blend and survive the round trip.
+    ezg_i18n.register_classes(CLASSES)
     bpy.types.Scene.mmr_target_mesh = bpy.props.PointerProperty(
-        name="Target Mesh", type=bpy.types.Object, poll=_poll_mesh)
+        name=tr("Mesh đích", "Target Mesh"), type=bpy.types.Object, poll=_poll_mesh)
     bpy.types.Scene.mmr_armature = bpy.props.PointerProperty(
-        name="Rig Target", type=bpy.types.Object, poll=_poll_armature)
+        name=tr("Rig đích", "Rig Target"), type=bpy.types.Object, poll=_poll_armature)
     bpy.types.Scene.mmr_use_symmetry = bpy.props.BoolProperty(
-        name="Use Symmetry",
-        description="Right-side markers follow the left side in realtime via drivers",
+        name=tr("Dùng đối xứng", "Use Symmetry"),
+        description=tr("Marker bên phải bám theo bên trái tức thời qua driver",
+                       "Right-side markers follow the left side in realtime via drivers"),
         default=True,
         update=_symmetry_toggled)
     bpy.types.Scene.mmr_symmetry_axis = bpy.props.EnumProperty(
-        name="Symmetry Axis",
-        description="Axis that gets mirrored/inverted; the other two are copied",
+        name=tr("Trục đối xứng", "Symmetry Axis"),
+        description=tr("Trục bị lật/đảo dấu; hai trục còn lại được chép nguyên",
+                       "Axis that gets mirrored/inverted; the other two are copied"),
         items=[
-            ('X', "X", "Mirror across the X axis (left/right along X)"),
-            ('Y', "Y", "Mirror across the Y axis (left/right along Y)"),
-            ('Z', "Z", "Mirror across the Z axis (left/right along Z)"),
+            ('X', "X", tr("Lật gương qua trục X (trái/phải dọc theo X)",
+                          "Mirror across the X axis (left/right along X)")),
+            ('Y', "Y", tr("Lật gương qua trục Y (trái/phải dọc theo Y)",
+                          "Mirror across the Y axis (left/right along Y)")),
+            ('Z', "Z", tr("Lật gương qua trục Z (trái/phải dọc theo Z)",
+                          "Mirror across the Z axis (left/right along Z)")),
         ],
         default='X',
         update=_symmetry_axis_changed)
     bpy.types.Scene.mmr_skeleton_lod = bpy.props.EnumProperty(
-        name="Skeleton LOD",
-        description="Level of detail of the generated skeleton",
-        items=[('NO_FINGERS', "No Fingers", "Body bones only, no finger bones")],
+        name=tr("LOD bộ xương", "Skeleton LOD"),
+        description=tr("Mức chi tiết của bộ xương được tạo",
+                       "Level of detail of the generated skeleton"),
+        items=[('NO_FINGERS', tr("Không ngón tay", "No Fingers"),
+                tr("Chỉ có xương thân, không có xương ngón tay",
+                   "Body bones only, no finger bones"))],
         default='NO_FINGERS')
     bpy.types.Scene.mmr_forward_axis = bpy.props.EnumProperty(
-        name="Character Forward Axis",
-        description="World axis the toes/feet point along (independent of "
-                    "symmetry axis). Mixamo characters face -Y in Blender",
+        name=tr("Trục hướng trước của nhân vật", "Character Forward Axis"),
+        description=tr("Trục thế giới mà mũi chân/bàn chân chĩa theo (độc lập với "
+                       "trục đối xứng). Nhân vật Mixamo nhìn về -Y trong Blender",
+                       "World axis the toes/feet point along (independent of "
+                       "symmetry axis). Mixamo characters face -Y in Blender"),
         items=[
-            ('X', "X", "Feet point along the X axis"),
-            ('Y', "Y", "Feet point along the Y axis"),
-            ('Z', "Z", "Feet point along the Z axis"),
+            ('X', "X", tr("Bàn chân chĩa theo trục X", "Feet point along the X axis")),
+            ('Y', "Y", tr("Bàn chân chĩa theo trục Y", "Feet point along the Y axis")),
+            ('Z', "Z", tr("Bàn chân chĩa theo trục Z", "Feet point along the Z axis")),
         ],
         default='Y')
     bpy.types.Scene.mmr_forward_dir = bpy.props.EnumProperty(
-        name="Forward Direction",
-        description="Sign of the forward axis the feet point toward",
+        name=tr("Chiều hướng trước", "Forward Direction"),
+        description=tr("Dấu của trục hướng trước mà bàn chân chĩa về",
+                       "Sign of the forward axis the feet point toward"),
         items=[
-            ('POSITIVE', "Positive", "Feet point toward the positive axis direction"),
-            ('NEGATIVE', "Negative", "Feet point toward the negative axis direction"),
+            ('POSITIVE', tr("Dương", "Positive"),
+             tr("Bàn chân chĩa về chiều dương của trục",
+                "Feet point toward the positive axis direction")),
+            ('NEGATIVE', tr("Âm", "Negative"),
+             tr("Bàn chân chĩa về chiều âm của trục",
+                "Feet point toward the negative axis direction")),
         ],
         default='NEGATIVE')
     bpy.types.Scene.mmr_weight_profile = bpy.props.EnumProperty(
-        name="Weight Profile",
-        description="Preset controlling how aggressively weights are refined",
+        name=tr("Profile weight", "Weight Profile"),
+        description=tr("Preset quyết định mức mạnh tay khi tinh chỉnh weight",
+                       "Preset controlling how aggressively weights are refined"),
         items=[
-            ('BALANCED', "Balanced", "Good default; smooth joints, removes obvious errors"),
-            ('SOFT_ORGANIC', "Soft Organic", "More smoothing, wider joint blending"),
-            ('RIGID_GAME', "Rigid Game Model", "Aggressive cleanup; rigid small parts"),
+            ('BALANCED', tr("Cân bằng", "Balanced"),
+             tr("Mặc định tốt; khớp mượt, xoá các lỗi rõ ràng",
+                "Good default; smooth joints, removes obvious errors")),
+            ('SOFT_ORGANIC', tr("Mềm tự nhiên", "Soft Organic"),
+             tr("Làm mượt nhiều hơn, vùng hoà trộn quanh khớp rộng hơn",
+                "More smoothing, wider joint blending")),
+            ('RIGID_GAME', tr("Model game cứng", "Rigid Game Model"),
+             tr("Dọn mạnh tay; chi tiết nhỏ gán cứng",
+                "Aggressive cleanup; rigid small parts")),
         ],
         default='BALANCED')
     bpy.types.Scene.mmr_cross_side_cleanup = bpy.props.BoolProperty(
-        name="Cross Side Cleanup",
-        description="Remove opposite-side (left/right) bone weights",
+        name=tr("Dọn weight chéo bên", "Cross Side Cleanup"),
+        description=tr("Xoá weight của xương ở phía đối diện (trái/phải)",
+                       "Remove opposite-side (left/right) bone weights"),
         default=True)
     bpy.types.Scene.mmr_limit_weights_4 = bpy.props.BoolProperty(
-        name="Limit Weights To 4",
-        description="Limit total influences per vertex to 4 (Unity/mobile)",
+        name=tr("Giới hạn 4 weight", "Limit Weights To 4"),
+        description=tr("Giới hạn tổng số ảnh hưởng mỗi vertex còn 4 (Unity/mobile)",
+                       "Limit total influences per vertex to 4 (Unity/mobile)"),
         default=True)
     bpy.types.Scene.mmr_clean_threshold = bpy.props.FloatProperty(
-        name="Clean Threshold",
-        description="Weights below this value are removed",
+        name=tr("Ngưỡng dọn", "Clean Threshold"),
+        description=tr("Weight nhỏ hơn giá trị này sẽ bị xoá",
+                       "Weights below this value are removed"),
         default=0.005, min=0.0, max=0.5, precision=4, step=0.1)
     bpy.types.Scene.mmr_joint_blend_strength = bpy.props.FloatProperty(
-        name="Joint Blend Strength",
-        description="How wide the joint blending zone is kept (higher = softer)",
+        name=tr("Độ hoà trộn khớp", "Joint Blend Strength"),
+        description=tr("Vùng hoà trộn quanh khớp được giữ rộng tới đâu (cao = mềm hơn)",
+                       "How wide the joint blending zone is kept (higher = softer)"),
         default=0.35, min=0.0, max=1.0)
     bpy.types.Scene.mmr_skirt_reach = bpy.props.FloatProperty(
-        name="Skirt Bone Reach",
-        description="How wide the skirt searches for bones: low = nearest bone "
-                    "dominates, high = more bones (Hips/UpLeg/Leg) blend in",
+        name=tr("Tầm với xương của váy", "Skirt Bone Reach"),
+        description=tr("Váy tìm xương trong phạm vi rộng tới đâu: thấp = xương gần "
+                       "nhất chiếm ưu thế, cao = nhiều xương (Hips/UpLeg/Leg) hoà "
+                       "vào hơn",
+                       "How wide the skirt searches for bones: low = nearest bone "
+                       "dominates, high = more bones (Hips/UpLeg/Leg) blend in"),
         default=0.5, min=0.0, max=1.0)
     bpy.types.Scene.mmr_weight_sym_dir = bpy.props.EnumProperty(
-        name="Symmetrize From",
-        description="Which side's weights are the source when symmetrizing",
+        name=tr("Đối xứng từ", "Symmetrize From"),
+        description=tr("Weight của phía nào là nguồn khi đối xứng",
+                       "Which side's weights are the source when symmetrizing"),
         items=[
-            ('POS_NEG', "+X to -X", "Copy the +X half onto the -X half"),
-            ('NEG_POS', "-X to +X", "Copy the -X half onto the +X half"),
+            ('POS_NEG', tr("+X sang -X", "+X to -X"),
+             tr("Chép nửa +X sang nửa -X", "Copy the +X half onto the -X half")),
+            ('NEG_POS', tr("-X sang +X", "-X to +X"),
+             tr("Chép nửa -X sang nửa +X", "Copy the -X half onto the +X half")),
         ],
         default='POS_NEG')
     bpy.types.Scene.mmr_transfer_reach = bpy.props.FloatProperty(
-        name="Transfer Reach",
-        description="How much Transfer Weights smooths/spreads the copied weights "
-                    "along the mesh: 0 = crisp nearest-surface (hat, glove), "
-                    "higher = smoother and spreads a loose garment's hem "
-                    "influence up (skirt picks up the Leg bone)",
+        name=tr("Tầm lan khi chuyển", "Transfer Reach"),
+        description=tr("Mức 'Chuyển weight' làm mượt/lan weight đã chép dọc theo "
+                       "Mesh: 0 = bám sát bề mặt gần nhất (mũ, găng tay), cao hơn = "
+                       "mượt hơn và kéo ảnh hưởng ở gấu của đồ rộng lên cao (váy "
+                       "nhận thêm xương Leg)",
+                       "How much Transfer Weights smooths/spreads the copied weights "
+                       "along the mesh: 0 = crisp nearest-surface (hat, glove), "
+                       "higher = smoother and spreads a loose garment's hem "
+                       "influence up (skirt picks up the Leg bone)"),
         default=0.15, min=0.0, max=1.0)
     bpy.types.Scene.mmr_rigid_small_parts = bpy.props.BoolProperty(
-        name="Rigid Small Parts",
-        description="Assign small disconnected islands (armor, helmet, boots) "
-                    "rigidly to the nearest bone",
+        name=tr("Chi tiết nhỏ gán cứng", "Rigid Small Parts"),
+        description=tr("Gán cứng các mảng rời nhỏ (giáp, mũ bảo hiểm, giày) vào "
+                       "xương gần nhất",
+                       "Assign small disconnected islands (armor, helmet, boots) "
+                       "rigidly to the nearest bone"),
         default=True)
     bpy.types.Scene.mmr_retarget_source = bpy.props.PointerProperty(
-        name="Retarget Source",
-        description="The rig the existing actions were authored on (usually "
-                    "the add-on's own MMR_Mixamo_Armature)",
+        name=tr("Nguồn retarget", "Retarget Source"),
+        description=tr("Rig mà các Action hiện có được làm trên đó (thường là "
+                       "MMR_Mixamo_Armature của chính addon)",
+                       "The rig the existing actions were authored on (usually "
+                       "the add-on's own MMR_Mixamo_Armature)"),
         type=bpy.types.Object, poll=_poll_armature)
     bpy.types.Scene.mmr_retarget_target = bpy.props.PointerProperty(
-        name="Retarget Target",
-        description="The replacement rig the actions must play on. Defaults to "
-                    "the rig selected in the Status box",
+        name=tr("Đích retarget", "Retarget Target"),
+        description=tr("Rig thay thế mà các Action phải chạy được trên đó. Mặc định "
+                       "là rig đang chọn ở ô Trạng thái",
+                       "The replacement rig the actions must play on. Defaults to "
+                       "the rig selected in the Status box"),
         type=bpy.types.Object, poll=_poll_armature)
     bpy.types.Scene.mmr_retarget_leg_remap = bpy.props.BoolProperty(
-        name="Fix Leg Chain",
-        description="Drive the target's thigh from the source's 'Leg' bone. "
-                    "Use when the source rig's 'UpLeg' is a near-horizontal "
-                    "connector inside the pelvis instead of a real thigh",
+        name=tr("Sửa chuỗi xương chân", "Fix Leg Chain"),
+        description=tr("Điều khiển xương đùi của rig đích bằng xương 'Leg' của rig "
+                       "nguồn. Dùng khi 'UpLeg' của rig nguồn chỉ là một đoạn nối gần "
+                       "nằm ngang bên trong xương chậu chứ không phải xương đùi thật",
+                       "Drive the target's thigh from the source's 'Leg' bone. "
+                       "Use when the source rig's 'UpLeg' is a near-horizontal "
+                       "connector inside the pelvis instead of a real thigh"),
         default=False)
     bpy.types.Scene.mmr_retarget_root_scale = bpy.props.FloatProperty(
-        name="Root Motion Scale",
-        description="Multiplier for the root translation channel. 0 = derive it "
-                    "from the two rigs' hip heights. Set 1.0 when both rigs are "
-                    "the same character at the same scale but disagree on where "
-                    "the hip sits, otherwise the feet slide",
+        name=tr("Tỉ lệ root motion", "Root Motion Scale"),
+        description=tr("Hệ số nhân cho kênh tịnh tiến gốc. 0 = tự suy ra từ độ cao "
+                       "hông của hai rig. Đặt 1.0 khi hai rig là cùng một nhân vật, "
+                       "cùng scale nhưng lệch nhau về vị trí hông, nếu không chân "
+                       "sẽ bị trượt",
+                       "Multiplier for the root translation channel. 0 = derive it "
+                       "from the two rigs' hip heights. Set 1.0 when both rigs are "
+                       "the same character at the same scale but disagree on where "
+                       "the hip sits, otherwise the feet slide"),
         default=0.0, min=0.0, max=10.0, precision=3, step=1)
     bpy.types.Scene.mmr_retarget_only_used = bpy.props.BoolProperty(
-        name="Skip Unused Actions",
-        description="Only convert actions that something still references",
+        name=tr("Bỏ qua Action không dùng", "Skip Unused Actions"),
+        description=tr("Chỉ chuyển các Action vẫn còn được thứ gì đó tham chiếu",
+                       "Only convert actions that something still references"),
         default=False)
     bpy.types.Scene.mmr_retarget_in_place = bpy.props.BoolProperty(
-        name="Rewrite In Place",
-        description="Rewrite the actions themselves, so NLA strips and existing "
-                    "assignments keep working. Off = write '<name>_retarget' "
-                    "copies and leave the originals alone",
+        name=tr("Ghi đè tại chỗ", "Rewrite In Place"),
+        description=tr("Ghi đè chính các Action, để NLA strip và những chỗ đang gán "
+                       "vẫn chạy. Tắt = ghi bản chép '<name>_retarget' và giữ nguyên "
+                       "bản gốc",
+                       "Rewrite the actions themselves, so NLA strips and existing "
+                       "assignments keep working. Off = write '<name>_retarget' "
+                       "copies and leave the originals alone"),
         default=True)
 
 
@@ -3810,5 +4194,4 @@ def unregister():
     del bpy.types.Scene.mmr_use_symmetry
     del bpy.types.Scene.mmr_armature
     del bpy.types.Scene.mmr_target_mesh
-    for cls in reversed(CLASSES):
-        bpy.utils.unregister_class(cls)
+    ezg_i18n.unregister_classes(CLASSES)
