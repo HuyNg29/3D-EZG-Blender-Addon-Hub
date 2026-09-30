@@ -42,6 +42,7 @@ import bpy
 from mathutils import Matrix, Quaternion
 
 from . import core
+from .ezg_i18n import tr
 
 
 class MirrorError(Exception):
@@ -145,9 +146,9 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
     Tra ve (action_moi, canh_bao).
     """
     if ob is None or ob.type != 'ARMATURE':
-        raise MirrorError("Chua chon armature.")
+        raise MirrorError(tr("Chưa chọn armature.", "No armature selected."))
     if src_action is None:
-        raise MirrorError("Chua chon action can lat guong.")
+        raise MirrorError(tr("Chưa chọn action cần lật gương.", "No action selected to mirror."))
 
     report = []
     arm = ob.data
@@ -166,20 +167,27 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
             pass
     if n_pose and not n_match:
         raise MirrorError(
-            "Action '%s' khong dieu khien xuong nao cua '%s' — no thuoc rig "
-            "khac. Chon dung cap Armature/Action (vi du action da retarget "
-            "thi nam tren rig dich)." % (src_action.name, ob.name))
+            tr("Action '%s' không điều khiển xương nào của '%s' — nó thuộc rig "
+               "khác. Chọn đúng cặp Armature/Action (ví dụ action đã retarget "
+               "thì nằm trên rig đích).",
+               "Action '%s' drives no bones of '%s' — it belongs to another rig. "
+               "Pick the matching Armature/Action pair (a retargeted action, for "
+               "example, lives on the target rig).") % (src_action.name, ob.name))
     if arm.pose_position == 'REST':
         arm.pose_position = 'POSE'
-        report.append("Armature dang o Rest Position, da chuyen sang Pose.")
+        report.append(tr("Armature đang ở Rest Position, đã chuyển sang Pose Position.",
+                         "The armature was in Rest Position; switched it to Pose Position."))
 
     dt, da, worst = rest_symmetry_error(ob)
     if dt > 0.002 or da > 2.0:
         # Tu khi lat theo ma tran bien dang, rest lech khong con lam hong ket
         # qua nua — day chi la thong tin ve chinh cai rig.
-        report.append("Rest pose khong doi xung (lech %.1f mm / %.1f do o '%s'). "
-                      "Phep lat da bu duoc chuyen nay; ghi lai de biet dac diem "
-                      "cua rig."
+        report.append(tr("Rest pose không đối xứng (lệch %.1f mm / %.1f độ ở '%s'). "
+                         "Phép lật đã bù được chuyện này; ghi lại để biết đặc điểm "
+                         "của rig.",
+                         "The rest pose is not symmetric (off by %.1f mm / %.1f° at '%s'). "
+                         "The mirror already compensates for this; noted as a trait "
+                         "of the rig.")
                       % (dt * 1000.0, da, worst.replace("mixamorig:", "")))
 
     Mx = Matrix.Diagonal((-1.0, 1.0, 1.0, 1.0))
@@ -191,7 +199,8 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
 
     ad = ob.animation_data
     if ad is None:
-        raise MirrorError("Armature khong co animation data.")
+        raise MirrorError(tr("Armature không có animation data.",
+                             "The armature has no animation data."))
 
     muted = [(t, t.mute, t.is_solo) for t in ad.nla_tracks]
     prev_action = ad.action
@@ -230,7 +239,8 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
             new = src_action.copy()
             new.name = new_name
             if new.name != new_name:
-                report.append("Ten '%s' bi chiem, Blender doi thanh '%s'."
+                report.append(tr("Tên '%s' bị chiếm, Blender đổi thành '%s'.",
+                                 "The name '%s' is taken; Blender renamed it to '%s'.")
                               % (new_name, new.name))
         else:
             new = bpy.data.actions.new(new_name)
@@ -290,8 +300,10 @@ def mirror_action(context, ob, src_action, new_name, clone=True):
                 kp.handle_left_type = kp.handle_right_type = 'AUTO_CLAMPED'
 
         if not obj_vals:
-            report.append("Action goc khong co kenh cap object nen ban moi cung "
-                          "khong co. Kiem tra scale khi export.")
+            report.append(tr("Action gốc không có kênh cấp object nên bản mới cũng "
+                             "không có. Kiểm tra scale khi export.",
+                             "The original action has no object-level channels, so the "
+                             "new one has none either. Check the scale on export."))
         return new, report
     finally:
         for t, m, s in muted:

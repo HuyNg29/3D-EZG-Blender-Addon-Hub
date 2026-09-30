@@ -12,6 +12,9 @@ from bpy.props import (
 )
 from bpy.types import PropertyGroup
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 
 def _is_armature(self, ob):
     return ob is not None and ob.type == 'ARMATURE'
@@ -20,23 +23,31 @@ def _is_armature(self, ob):
 class EZG_AT_MapItem(PropertyGroup):
     """Một cặp xương nguồn -> đích."""
 
-    role: StringProperty(name="Role", default="")
-    side: StringProperty(name="Side", default="")
-    src: StringProperty(name="Source bone", default="")
-    tgt: StringProperty(name="Target bone", default="")
-    use: BoolProperty(name="Use", default=True)
+    role: StringProperty(name=tr("Vai trò", "Role"), default="")
+    side: StringProperty(name=tr("Bên", "Side"), default="")
+    src: StringProperty(name=tr("Xương nguồn", "Source Bone"), default="")
+    tgt: StringProperty(name=tr("Xương đích", "Target Bone"), default="")
+    use: BoolProperty(name=tr("Dùng", "Use"), default=True)
     pos: BoolProperty(
-        name="Transfer position", default=False,
-        description=("Truyen ca VI TRI cua xuong nay, khong chi goc xoay. Bat cho "
-                     "xuong IK mang vi tri that (co chan, co tay treo rieng vao "
-                     "root). Xuong FK binh thuong thi de tat"),
+        name=tr("Truyền vị trí", "Transfer Position"), default=False,
+        description=tr("Truyền cả VỊ TRÍ của xương này, không chỉ góc xoay. Bật cho "
+                       "xương IK mang vị trí thật (cổ chân, cổ tay treo riêng vào "
+                       "root). Xương FK bình thường thì để tắt",
+                       "Transfer this bone's POSITION too, not just its rotation. Enable "
+                       "for IK bones that carry the real position (ankles or wrists "
+                       "parented straight to the root). Leave off for regular FK bones"),
     )
     anchor: StringProperty(
-        name="Anchor bone", default="",
-        description=("Xuong DICH dung lam moc do vi tri (phai la mot cap khac dang "
-                     "co trong bang). Vi tri dat theo huong cua rig nguon nhung dai "
-                     "theo ti le chi cua rig dich, tinh tu moc nay. Neo co chan vao "
-                     "DAU GOI cho ket qua tot hon nhieu so voi neo vao hong"),
+        name=tr("Xương neo", "Anchor Bone"), default="",
+        description=tr("Xương ĐÍCH dùng làm mốc đo vị trí (phải là một cặp khác đang "
+                       "có trong bảng). Vị trí đặt theo hướng của rig nguồn nhưng dài "
+                       "theo tỉ lệ chi của rig đích, tính từ mốc này. Neo cổ chân vào "
+                       "ĐẦU GỐI cho kết quả tốt hơn nhiều so với neo vào hông",
+                       "TARGET bone used as the reference point for the position (must be "
+                       "another pair in the table). The position follows the source rig's "
+                       "direction but the target rig's limb proportions, measured from "
+                       "this point. Anchoring an ankle to the KNEE gives much better "
+                       "results than anchoring it to the hips"),
     )
 
     @property
@@ -46,90 +57,113 @@ class EZG_AT_MapItem(PropertyGroup):
 
 class EZG_AT_Settings(PropertyGroup):
     source: PointerProperty(
-        name="Source", type=bpy.types.Object, poll=_is_armature,
-        description="Armature dang co animation can chuyen di",
+        name=tr("Nguồn", "Source"), type=bpy.types.Object, poll=_is_armature,
+        description=tr("Armature đang có animation cần chuyển đi",
+                       "Armature that has the animation to transfer"),
     )
     target: PointerProperty(
-        name="Target", type=bpy.types.Object, poll=_is_armature,
-        description="Armature se nhan animation",
+        name=tr("Đích", "Target"), type=bpy.types.Object, poll=_is_armature,
+        description=tr("Armature sẽ nhận animation", "Armature that receives the animation"),
     )
 
     action_name: StringProperty(
-        name="Action", default="Retargeted",
-        description="Ten action se tao ra tren armature dich. Trung ten se bi ghi de",
+        name="Action", default="Retargeted",  # i18n-skip
+        description=tr("Tên action sẽ tạo ra trên armature đích. Trùng tên sẽ bị ghi đè",
+                       "Name of the action created on the target armature. An action "
+                       "with the same name is overwritten"),
     )
 
     align_rest: BoolProperty(
-        name="Align rest pose", default=True,
-        description=("Bu chenh lech giua rest pose hai rig (A-pose vs T-pose). "
-                     "Tat cai nay chi dung khi hai rig cung het tu the rest"),
+        name=tr("Căn rest pose", "Align Rest Pose"), default=True,
+        description=tr("Bù chênh lệch giữa rest pose hai rig (A-pose vs T-pose). "
+                       "Chỉ nên tắt khi hai rig có rest pose giống hệt nhau",
+                       "Compensate for the difference between the two rigs' rest poses "
+                       "(A-pose vs T-pose). Only turn off when both rigs have exactly "
+                       "the same rest pose"),
     )
     use_hips_loc: BoolProperty(
-        name="Transfer hips motion", default=True,
-        description="Chuyen ca tinh tien cua hong, khong chi goc xoay",
+        name=tr("Truyền chuyển động hông", "Transfer Hips Motion"), default=True,
+        description=tr("Chuyển cả tịnh tiến của hông, không chỉ góc xoay",
+                       "Transfer the hips translation too, not just the rotation"),
     )
     hips_auto: BoolProperty(
-        name="Auto scale", default=True,
-        description=("Quy doi tinh tien hong theo ti le chieu cao hong hai nhan vat. "
-                     "Tat de tu nhap he so"),
+        name=tr("Tự quy đổi tỉ lệ", "Auto Scale"), default=True,
+        description=tr("Quy đổi tịnh tiến hông theo tỉ lệ chiều cao hông hai nhân vật. "
+                       "Tắt để tự nhập hệ số",
+                       "Scale the hips translation by the ratio of the two characters' "
+                       "hip heights. Turn off to enter the factor by hand"),
     )
     hips_scale: FloatProperty(
-        name="Hips scale", default=1.0, min=0.001, max=100.0, soft_max=5.0,
-        description="He so nhan vao tinh tien cua hong",
+        name=tr("Hệ số hông", "Hips Scale"), default=1.0, min=0.001, max=100.0, soft_max=5.0,
+        description=tr("Hệ số nhân vào tịnh tiến của hông",
+                       "Multiplier applied to the hips translation"),
     )
 
     frame_mode: EnumProperty(
-        name="Range",
+        name=tr("Khoảng frame", "Range"),
         items=[
-            ('ACTION', "Action", "Lay tron khoang cua action ben nguon"),
-            ('SCENE', "Scene", "Lay khoang frame cua scene"),
-            ('MANUAL', "Manual", "Tu nhap"),
+            ('ACTION', "Action",  # i18n-skip
+             tr("Lấy trọn khoảng của action bên nguồn", "Use the full range of the source action")),
+            ('SCENE', "Scene",  # i18n-skip
+             tr("Lấy khoảng frame của scene", "Use the scene's frame range")),
+            ('MANUAL', tr("Tự nhập", "Manual"),
+             tr("Tự nhập khoảng frame", "Enter the frame range by hand")),
         ],
         default='ACTION',
     )
-    frame_start: IntProperty(name="Start", default=1)
-    frame_end: IntProperty(name="End", default=30)
+    frame_start: IntProperty(name=tr("Bắt đầu", "Start"), default=1)
+    frame_end: IntProperty(name=tr("Kết thúc", "End"), default=30)
 
     mapping: CollectionProperty(type=EZG_AT_MapItem)
     map_index: IntProperty(default=0)
 
     # --- Lat guong trai/phai ------------------------------------------------
     mirror_object: PointerProperty(
-        name="Armature", type=bpy.types.Object, poll=_is_armature,
-        description="Armature chua action can lat guong",
+        name="Armature", type=bpy.types.Object, poll=_is_armature,  # i18n-skip
+        description=tr("Armature chứa action cần lật gương",
+                       "Armature that holds the action to mirror"),
     )
     mirror_action: PointerProperty(
-        name="Action", type=bpy.types.Action,
-        description="Action can lat guong. De trong thi lay action dang gan",
+        name="Action", type=bpy.types.Action,  # i18n-skip
+        description=tr("Action cần lật gương. Để trống thì lấy action đang gán",
+                       "Action to mirror. Leave empty to use the assigned action"),
     )
     mirror_name: StringProperty(
-        name="New name", default="",
-        description="Ten action moi. De trong thi tu them hau to _Mirror",
+        name=tr("Tên mới", "New Name"), default="",
+        description=tr("Tên action mới. Để trống thì tự thêm hậu tố _Mirror",
+                       "Name of the new action. Leave empty to add the _Mirror suffix"),
     )
 
     # --- Nhun / khuech dai chuyen dong -------------------------------------
     polish_object: PointerProperty(
-        name="Armature", type=bpy.types.Object, poll=_is_armature,
-        description="Armature chua action can chinh",
+        name="Armature", type=bpy.types.Object, poll=_is_armature,  # i18n-skip
+        description=tr("Armature chứa action cần chỉnh",
+                       "Armature that holds the action to adjust"),
     )
     polish_action: PointerProperty(
-        name="Action", type=bpy.types.Action,
-        description="Action can chinh. De trong thi lay action dang gan",
+        name="Action", type=bpy.types.Action,  # i18n-skip
+        description=tr("Action cần chỉnh. Để trống thì lấy action đang gán",
+                       "Action to adjust. Leave empty to use the assigned action"),
     )
     bounce_depth: FloatProperty(
-        name="Depth", default=0.02, min=0.0, max=1.0, soft_max=0.15,
+        name=tr("Độ sâu", "Depth"), default=0.02, min=0.0, max=1.0, soft_max=0.15,
         unit='LENGTH', precision=4,
-        description="Do ha hong o day nhip nhun",
+        description=tr("Độ hạ hông ở đáy nhịp nhún",
+                       "How far the hips drop at the bottom of each bounce"),
     )
     bounce_cycles: IntProperty(
-        name="Cycles", default=2, min=1, max=16,
-        description=("So nhip nhun trong mot vong lap. Phai la so NGUYEN, "
-                     "khong thi cho noi vong lap se giat"),
+        name=tr("Số nhịp", "Cycles"), default=2, min=1, max=16,
+        description=tr("Số nhịp nhún trong một vòng lặp. Phải là số NGUYÊN, "
+                       "không thì chỗ nối vòng lặp sẽ giật",
+                       "Number of bounces per loop. Must be a WHOLE number, "
+                       "otherwise the loop seam will jerk"),
     )
     amplify_factor: FloatProperty(
-        name="Factor", default=1.5, min=0.0, max=10.0, soft_max=4.0,
-        description=("Day chuyen dong cua than xa tu the trung binh gap bao nhieu lan. "
-                     "KHONG idempotent: chay hai lan la nhan hai lan"),
+        name=tr("Hệ số", "Factor"), default=1.5, min=0.0, max=10.0, soft_max=4.0,
+        description=tr("Đẩy chuyển động của thân xa tư thế trung bình gấp bao nhiêu lần. "
+                       "KHÔNG idempotent: chạy hai lần là nhân hai lần",
+                       "How many times further to push the torso motion away from the "
+                       "average pose. NOT idempotent: running it twice multiplies twice"),
     )
 
 
@@ -137,15 +171,13 @@ classes = (EZG_AT_MapItem, EZG_AT_Settings)
 
 
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
     bpy.types.Scene.ezg_anim_tools = PointerProperty(type=EZG_AT_Settings)
 
 
 def unregister():
-    del bpy.types.Scene.ezg_anim_tools
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    try:
+        del bpy.types.Scene.ezg_anim_tools
+    except AttributeError:
+        pass
+    ezg_i18n.unregister_classes(classes)

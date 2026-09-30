@@ -21,6 +21,8 @@ import math
 import bpy
 from mathutils import Matrix
 
+from .ezg_i18n import tr
+
 
 class RetargetError(Exception):
     pass
@@ -207,33 +209,42 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
     report = []
 
     if src_ob is None or tgt_ob is None:
-        raise RetargetError("Chua chon du armature nguon va dich.")
+        raise RetargetError(tr("Chưa chọn đủ armature nguồn và đích.",
+                               "Source and target armatures are not both set yet."))
     if src_ob == tgt_ob:
-        raise RetargetError("Nguon va dich dang la cung mot armature.")
+        raise RetargetError(tr("Nguồn và đích đang là cùng một armature.",
+                               "Source and target are the same armature."))
     if not pairs:
-        raise RetargetError("Bang anh xa xuong dang rong.")
+        raise RetargetError(tr("Bảng ánh xạ xương đang rỗng.", "The bone mapping is empty."))
 
     ad = src_ob.animation_data
     if ad is None or ad.action is None:
-        raise RetargetError("Armature nguon khong co action nao dang gan.")
+        raise RetargetError(tr("Armature nguồn không có action nào đang gán.",
+                               "The source armature has no action assigned."))
 
     # Ở Rest Position thì pose.bones[].matrix trả về rest, bake ra sẽ là một loạt
     # khung hình đứng yên mà không báo lỗi gì. Đã dính đúng một lần.
-    for ob, nhan in ((src_ob, "nguon"), (tgt_ob, "dich")):
+    for ob, nhan in ((src_ob, tr("nguồn", "source")), (tgt_ob, tr("đích", "target"))):
         if ob.data.pose_position == 'REST':
             ob.data.pose_position = 'POSE'
-            report.append("Armature %s dang o Rest Position, da chuyen sang Pose." % nhan)
+            report.append(tr("Armature %s đang ở Rest Position, đã chuyển sang Pose Position.",
+                             "The %s armature was in Rest Position; switched it to Pose Position.")
+                          % nhan)
 
     # Slot cua action nguon. Xem bind_slot(): action sinh ra tren rig khac mang
     # slot ten rig do, khong khop thi action nam do ma khong dieu khien gi.
     if bind_slot(ad, ad.action):
-        report.append("Action nguon '%s' chua noi Action Slot, da noi lai."
+        report.append(tr("Action nguồn '%s' chưa nối Action Slot, đã nối lại.",
+                         "Source action '%s' had no Action Slot assigned; assigned one.")
                       % ad.action.name)
     if hasattr(ad, "action_slot") and ad.action_slot is None:
         raise RetargetError(
-            "Action '%s' khong noi duoc Action Slot nao tren '%s' nen no khong "
-            "dieu khien xuong gi — bake se ra mot loat khung hinh dung im. "
-            "Gan lai action trong Action Editor roi thu lai."
+            tr("Action '%s' không nối được Action Slot nào trên '%s' nên nó không "
+               "điều khiển xương gì — bake sẽ ra một loạt khung hình đứng im. "
+               "Gán lại action trong Action Editor rồi thử lại.",
+               "Action '%s' could not be assigned to any Action Slot on '%s', so it "
+               "drives no bones — baking would only produce static frames. "
+               "Reassign the action in the Action Editor and try again.")
             % (ad.action.name, src_ob.name))
 
     src_bones = src_ob.data.bones
@@ -241,7 +252,8 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
     pairs = [p for p in pairs
              if p.get("src") in src_bones and p.get("tgt") in tgt_bones]
     if not pairs:
-        raise RetargetError("Khong cap xuong nao ton tai tren ca hai rig.")
+        raise RetargetError(tr("Không có cặp xương nào tồn tại trên cả hai rig.",
+                               "None of the bone pairs exist on both rigs."))
 
     Ms, Mt = src_ob.matrix_world, tgt_ob.matrix_world
     Rs = Ms.to_3x3().normalized()
@@ -261,9 +273,11 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
     if use_hips_loc and hips_pair:
         ht, hs = hips_pair.get("tgt"), hips_pair.get("src")
         if ht not in tgt_bones or hs not in src_bones:
-            report.append("Khong xac dinh duoc xuong hong, bo qua tinh tien.")
+            report.append(tr("Không xác định được xương hông, bỏ qua tịnh tiến.",
+                             "Could not identify the hips bone; skipped the translation."))
         elif tgt_bones[ht].use_connect:
-            report.append("Xuong hong ben dich dang Connected nen khong tinh tien duoc.")
+            report.append(tr("Xương hông bên đích đang Connected nên không tịnh tiến được.",
+                             "The target hips bone is Connected, so it cannot be translated."))
         else:
             hips_tgt, hips_src = ht, hs
             ratio = (hips_scale if hips_scale is not None
@@ -278,9 +292,12 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
     if not action_is_static(ad.action) and not source_moves(
             context, src_ob, [p["src"] for p in pairs], frame_start, frame_end):
         raise RetargetError(
-            "Action '%s' co chuyen dong nhung tu the cua '%s' khong doi qua cac "
-            "frame. Kiem tra driver, NLA (track dang solo?) hoac constraint dang "
-            "khoa xuong. Bake luc nay chi ra khung hinh dung im."
+            tr("Action '%s' có chuyển động nhưng tư thế của '%s' không đổi qua các "
+               "frame. Kiểm tra driver, NLA (track đang solo?) hoặc constraint đang "
+               "khoá xương. Bake lúc này chỉ ra khung hình đứng im.",
+               "Action '%s' has motion but the pose of '%s' does not change across "
+               "frames. Check drivers, the NLA (a soloed track?) or constraints "
+               "locking the bones. Baking now would only produce static frames.")
             % (ad.action.name, src_ob.name))
 
     # --- Truyen vi tri per-bone (rig kieu IK) ------------------------------
@@ -299,17 +316,20 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
             continue
         name, a_tgt = p["tgt"], p.get("anchor")
         if not a_tgt:
-            report.append("'%s' bat truyen vi tri nhung chua chon xuong neo, bo qua."
+            report.append(tr("'%s' bật truyền vị trí nhưng chưa chọn xương neo, bỏ qua.",
+                             "'%s' has position transfer on but no anchor bone; skipped.")
                           % name)
             continue
         a_src = src_of_tgt.get(a_tgt)
         if a_src is None:
-            report.append("Xuong neo '%s' cua '%s' khong co trong bang anh xa, bo qua."
+            report.append(tr("Xương neo '%s' của '%s' không có trong bảng ánh xạ, bỏ qua.",
+                             "Anchor bone '%s' of '%s' is not in the bone mapping; skipped.")
                           % (a_tgt, name))
             continue
         if tgt_bones[name].use_connect:
             # Blender bo qua location cua xuong Connected: co key cung vo ich.
-            report.append("'%s' dang Connected nen khong nhan vi tri duoc, bo qua."
+            report.append(tr("'%s' đang Connected nên không nhận vị trí được, bỏ qua.",
+                             "'%s' is Connected, so it cannot take a position; skipped.")
                           % name)
             continue
         d_src = (rest_head_world(src_ob, p["src"])
@@ -317,7 +337,9 @@ def retarget(context, src_ob, tgt_ob, pairs, frame_start, frame_end,
         d_tgt = (rest_head_world(tgt_ob, name)
                  - rest_head_world(tgt_ob, a_tgt)).length
         if d_src < 1e-9:
-            report.append("'%s' trung vi tri voi xuong neo o rest, bo qua truyen vi tri."
+            report.append(tr("'%s' trùng vị trí với xương neo ở rest, bỏ qua truyền vị trí.",
+                             "'%s' shares its rest position with the anchor bone; "
+                             "skipped the position transfer.")
                           % name)
             continue
         pos_rules.append((name, p["src"], a_tgt, a_src, d_tgt / d_src))

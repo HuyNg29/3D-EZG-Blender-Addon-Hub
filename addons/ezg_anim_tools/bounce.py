@@ -25,6 +25,7 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 from . import core, roles
+from .ezg_i18n import tr
 
 
 class BounceError(Exception):
@@ -64,7 +65,8 @@ def find_legs(ob):
     out = {}
     hips = found.get(("hips", ""))
     if not hips:
-        raise BounceError("Khong tim thay xuong hong tren rig nay.")
+        raise BounceError(tr("Không tìm thấy xương hông trên rig này.",
+                             "Hips bone not found on this rig."))
     out["hips"] = hips
     for side in ("L", "R"):
         leg = {}
@@ -75,7 +77,8 @@ def find_legs(ob):
                 leg[key] = name
         missing = [k for k in ("thigh", "shin", "foot") if k not in leg]
         if missing:
-            raise BounceError("Chan %s thieu xuong: %s" % (side, ", ".join(missing)))
+            raise BounceError(tr("Chân %s thiếu xương: %s", "Leg %s is missing bones: %s")
+                              % (side, ", ".join(missing)))
         out[side] = leg
     return out
 
@@ -113,17 +116,18 @@ def add_bounce(context, ob, action, depth, cycles):
     cycles : so nhip moi vong. PHAI la so nguyen, khong thi vong lap se giat.
     """
     if ob is None or ob.type != 'ARMATURE':
-        raise BounceError("Chua chon armature.")
+        raise BounceError(tr("Chưa chọn armature.", "No armature selected."))
     if action is None:
-        raise BounceError("Chua chon action.")
+        raise BounceError(tr("Chưa chọn action.", "No action selected."))
     if cycles < 1:
-        raise BounceError("So nhip phai tu 1 tro len.")
+        raise BounceError(tr("Số nhịp phải từ 1 trở lên.", "Cycles must be 1 or more."))
 
     report = []
     arm = ob.data
     if arm.pose_position == 'REST':
         arm.pose_position = 'POSE'
-        report.append("Armature dang o Rest Position, da chuyen sang Pose.")
+        report.append(tr("Armature đang ở Rest Position, đã chuyển sang Pose Position.",
+                         "The armature was in Rest Position; switched it to Pose Position."))
 
     legs = find_legs(ob)
     hips = legs["hips"]
@@ -132,7 +136,7 @@ def add_bounce(context, ob, action, depth, cycles):
     Rt_inv = Rt.inverted()
     scale = M.to_scale()[0]
     if abs(scale) < 1e-9:
-        raise BounceError("Armature co scale bang 0.")
+        raise BounceError(tr("Armature có scale bằng 0.", "The armature's scale is 0."))
 
     rest = {b.name: b.matrix_local.copy() for b in arm.bones}
     order = hierarchy_order(arm)
@@ -143,7 +147,8 @@ def add_bounce(context, ob, action, depth, cycles):
 
     ad = ob.animation_data
     if ad is None:
-        raise BounceError("Armature khong co animation data.")
+        raise BounceError(tr("Armature không có animation data.",
+                             "The armature has no animation data."))
     muted = [(t, t.mute, t.is_solo) for t in ad.nla_tracks]
     prev_action = ad.action
     scene = context.scene
@@ -194,7 +199,8 @@ def add_bounce(context, ob, action, depth, cycles):
                 fwd += Vector((v.x, v.y, 0.0))
         if fwd.length < 1e-9:
             fwd = Vector((0.0, -1.0, 0.0))
-            report.append("Rig khong co xuong mui chan, gia dinh mat quay -Y.")
+            report.append(tr("Rig không có xương mũi chân, giả định mặt quay -Y.",
+                             "The rig has no toe bones; assuming it faces -Y."))
         fwd.normalize()
 
         lat = {}
@@ -308,10 +314,12 @@ def add_bounce(context, ob, action, depth, cycles):
                     drift = max(drift, (ank[i][k] - ank[j][k]).length)
 
         if depth > reach * 0.5:
-            report.append("Do nhun %.3f m kha sau so voi chieu dai chan %.3f m."
+            report.append(tr("Độ nhún %.3f m khá sâu so với chiều dài chân %.3f m.",
+                             "A bounce depth of %.3f m is quite deep for a leg length of %.3f m.")
                           % (depth, reach))
         if knee_fwd and min(knee_fwd) <= 0.0:
-            report.append("Co frame goi gap NGUOC (lech %.4f m ve phia sau)."
+            report.append(tr("Có frame gối gập NGƯỢC (lệch %.4f m về phía sau).",
+                             "Some frames bend the knee BACKWARDS (by %.4f m).")
                           % -min(knee_fwd))
 
         stats = {
@@ -340,9 +348,9 @@ def amplify_motion(context, ob, action, factor):
     hông kéo chân đi ngang mà hàm này không giải lại chân.
     """
     if ob is None or ob.type != 'ARMATURE':
-        raise BounceError("Chua chon armature.")
+        raise BounceError(tr("Chưa chọn armature.", "No armature selected."))
     if action is None:
-        raise BounceError("Chua chon action.")
+        raise BounceError(tr("Chưa chọn action.", "No action selected."))
 
     found = roles.auto_map(ob.data)
     names = [found[(r, "")] for r in TORSO_ROLES if (r, "") in found]
@@ -350,7 +358,8 @@ def amplify_motion(context, ob, action, factor):
         if ("shoulder", side) in found:
             names.append(found[("shoulder", side)])
     if not names:
-        raise BounceError("Khong nhan ra xuong than nao tren rig nay.")
+        raise BounceError(tr("Không nhận ra xương thân nào trên rig này.",
+                             "No torso bones recognized on this rig."))
 
     arm = ob.data
     if arm.pose_position == 'REST':

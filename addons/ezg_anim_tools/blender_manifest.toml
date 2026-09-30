@@ -2,9 +2,9 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_anim_tools"
-version = "1.4.1"
+version = "1.5.0"
 name = "EZG Animation Tools"
-tagline = "Retarget animation giua hai rig, va lat guong trai/phai"
+tagline = "Retarget animation giữa hai rig và lật gương trái/phải"
 maintainer = "EasyGoing Visual <visual@easygoing.vn>"
 type = "add-on"
 

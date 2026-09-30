@@ -3,6 +3,9 @@
 import bpy
 from bpy.types import Panel, UIList
 
+from . import ezg_i18n
+from .ezg_i18n import tr
+
 CATEGORY = "EZG Anim"
 
 
@@ -41,34 +44,39 @@ class EZG_AT_UL_map(UIList):
 
 
 class EZG_AT_PT_retarget(Panel):
-    bl_label = "Retarget"
+    bl_label = "Retarget"  # i18n-skip
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = CATEGORY
+
+    def draw_header_preset(self, context):
+        ezg_i18n.draw_toggle(self.layout, "ezg_at")
 
     def draw(self, context):
         st = context.scene.ezg_anim_tools
         layout = self.layout
 
         box = layout.box()
-        box.label(text="Armature", icon='ARMATURE_DATA')
-        box.prop(st, "source", text="From")
-        box.prop(st, "target", text="To")
+        box.label(text="Armature", icon='ARMATURE_DATA')  # i18n-skip
+        box.prop(st, "source", text=tr("Từ", "From"))
+        box.prop(st, "target", text=tr("Sang", "To"))
 
         if st.source and st.source.animation_data and st.source.animation_data.action:
             act = st.source.animation_data.action
             fr = act.frame_range
-            box.label(text="Action: %s  (%d..%d)" % (act.name, fr[0], fr[1]), icon='ACTION')
+            box.label(text="Action: %s  (%d..%d)" % (act.name, fr[0], fr[1]), icon='ACTION')  # i18n-skip
         elif st.source:
-            box.label(text="Rig nguon chua co action nao.", icon='ERROR')
+            box.label(text=tr("Rig nguồn chưa có action nào.", "The source rig has no action yet."),
+                      icon='ERROR')
 
         if st.source and st.source.data.pose_position == 'REST':
-            box.label(text="Rig nguon dang o Rest Position.", icon='ERROR')
+            box.label(text=tr("Rig nguồn đang ở Rest Position.", "The source rig is in Rest Position."),
+                      icon='ERROR')
 
         box = layout.box()
         row = box.row(align=True)
-        row.label(text="Bone mapping", icon='GROUP_BONE')
-        row.operator("ezg_at.auto_map", text="Auto Map", icon='AUTO')
+        row.label(text="Bone mapping", icon='GROUP_BONE')  # i18n-skip
+        row.operator("ezg_at.auto_map", text="Auto Map", icon='AUTO')  # i18n-skip
 
         row = box.row()
         row.template_list("EZG_AT_UL_map", "", st, "mapping", st, "map_index", rows=8)
@@ -80,16 +88,19 @@ class EZG_AT_PT_retarget(Panel):
 
         n = sum(1 for r in st.mapping if r.use and r.src and r.tgt)
         n_pos = sum(1 for r in st.mapping if r.use and r.pos and r.src and r.tgt)
-        box.label(text="%d cap dang bat%s"
-                  % (n, (", %d truyen vi tri" % n_pos) if n_pos else ""))
+        box.label(text=tr("%d cặp đang bật%s", "%d pairs enabled%s")
+                  % (n, (tr(", %d truyền vị trí", ", %d with position") % n_pos) if n_pos else ""))
         col = box.column()
         col.scale_y = 0.7
-        col.label(text="Nut vi tri (mui ten): bat cho xuong IK mang", icon='CON_LOCLIKE')
-        col.label(text="vi tri that (co chan/co tay treo rieng vao root),")
-        col.label(text="roi chon xuong neo — neo vao dau goi tot hon hong.")
+        col.label(text=tr("Nút vị trí (mũi tên): bật cho xương IK mang",
+                          "Position toggle (arrows): turn on for IK bones"), icon='CON_LOCLIKE')
+        col.label(text=tr("vị trí thật (cổ chân/cổ tay treo riêng vào root),",
+                          "that carry the real position (ankle/wrist on root),"))
+        col.label(text=tr("rồi chọn xương neo — neo vào đầu gối tốt hơn hông.",
+                          "then pick an anchor — the knee works better than the hips."))
 
         box = layout.box()
-        box.label(text="Options", icon='OPTIONS')
+        box.label(text=tr("Tuỳ chọn", "Options"), icon='OPTIONS')
         box.prop(st, "align_rest")
         box.prop(st, "use_hips_loc")
         sub = box.column(align=True)
@@ -99,26 +110,29 @@ class EZG_AT_PT_retarget(Panel):
         row.enabled = not st.hips_auto
         row.prop(st, "hips_scale")
 
-        box.prop(st, "frame_mode", text="Range")
+        box.prop(st, "frame_mode", text=tr("Khoảng frame", "Range"))
         if st.frame_mode == 'MANUAL':
             row = box.row(align=True)
             row.prop(st, "frame_start")
             row.prop(st, "frame_end")
 
         box = layout.box()
-        box.prop(st, "action_name", text="Action")
-        box.operator("ezg_at.retarget", text="Retarget", icon='PLAY')
-        box.operator("ezg_at.check", text="Check Accuracy", icon='DRIVER_DISTANCE')
+        box.prop(st, "action_name", text="Action")  # i18n-skip
+        box.operator("ezg_at.retarget", text="Retarget", icon='PLAY')  # i18n-skip
+        box.operator("ezg_at.check", text=tr("Kiểm tra độ chính xác", "Check Accuracy"),
+                     icon='DRIVER_DISTANCE')
 
         col = layout.column()
         col.scale_y = 0.7
-        col.label(text="Sai lech duoc do bang GOC, khong phai vi tri:", icon='INFO')
-        col.label(text="hai nhan vat khac ti le co the thi khong the")
-        col.label(text="khop vi tri khop duoc.")
+        col.label(text=tr("Sai lệch được đo bằng GÓC, không phải vị trí:",
+                          "The error is measured as an ANGLE, not a position:"), icon='INFO')
+        col.label(text=tr("hai nhân vật khác tỉ lệ cơ thể thì không thể",
+                          "two characters with different proportions can"))
+        col.label(text=tr("khớp vị trí khớp được.", "never match joint positions."))
 
 
 class EZG_AT_PT_mirror(Panel):
-    bl_label = "Mirror Action"
+    bl_label = tr("Lật gương action", "Mirror Action")
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = CATEGORY
@@ -129,51 +143,55 @@ class EZG_AT_PT_mirror(Panel):
         layout = self.layout
 
         box = layout.box()
-        box.prop(st, "mirror_object", text="Armature")
-        box.prop(st, "mirror_action", text="Action")
+        box.prop(st, "mirror_object", text="Armature")  # i18n-skip
+        box.prop(st, "mirror_action", text="Action")  # i18n-skip
 
         ob = st.mirror_object or st.target or context.object
         act = st.mirror_action
         if act is None and ob and ob.animation_data:
             act = ob.animation_data.action
             if act:
-                box.label(text="Dang lay action dang gan: %s" % act.name, icon='ACTION')
+                box.label(text=tr("Đang lấy action đang gán: %s", "Using the assigned action: %s")
+                          % act.name, icon='ACTION')
 
-        box.prop(st, "mirror_name", text="New name")
+        box.prop(st, "mirror_name", text=tr("Tên mới", "New Name"))
         if act and not st.mirror_name.strip():
-            box.label(text="-> '%s_Mirror'" % act.name, icon='DOT')
+            box.label(text="-> '%s_Mirror'" % act.name, icon='DOT')  # i18n-skip
 
-        layout.operator("ezg_at.mirror", text="Mirror Left / Right", icon='MOD_MIRROR')
+        layout.operator("ezg_at.mirror", text=tr("Lật gương trái / phải", "Mirror Left / Right"),
+                        icon='MOD_MIRROR')
 
         col = layout.column()
         col.scale_y = 0.7
-        col.label(text="Sao du ca 9 kenh cap object (location /", icon='INFO')
-        col.label(text="rotation / scale). Thieu chung thi Blender van")
-        col.label(text="dung nhung engine se hien nhan vat sai scale.")
+        col.label(text=tr("Sao đủ cả 9 kênh cấp object (location /",
+                          "Copies all 9 object-level channels (location /"), icon='INFO')
+        col.label(text=tr("rotation / scale). Thiếu chúng thì Blender vẫn",
+                          "rotation / scale). Without them Blender still"))
+        col.label(text=tr("đúng nhưng engine sẽ hiện nhân vật sai scale.",
+                          "looks right but the engine shows the wrong scale."))
         col.separator()
-        col.label(text="Nut nay nhan doi action goc roi lat de len, nen", icon='DUPLICATE')
-        col.label(text="giu ca marker, custom property, fcurve modifier.")
-        col.label(text="Doi lai: fcurve rac cua ban goc cung theo sang.")
+        col.label(text=tr("Nút này nhân đôi action gốc rồi lật đè lên, nên",
+                          "This duplicates the original action and mirrors it,"),
+                  icon='DUPLICATE')
+        col.label(text=tr("giữ cả marker, custom property, fcurve modifier.",
+                          "keeping markers, custom properties, F-Curve modifiers."))
+        col.label(text=tr("Đổi lại: fcurve rác của bản gốc cũng theo sang.",
+                          "Downside: junk F-Curves of the original come along too."))
 
 
 classes = (EZG_AT_UL_map, EZG_AT_PT_retarget, EZG_AT_PT_mirror)
 
 
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
 
 
 def unregister():
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    ezg_i18n.unregister_classes(classes)
 
 
 class EZG_AT_PT_polish(Panel):
-    bl_label = "Bounce / Polish"
+    bl_label = tr("Nhún / Tinh chỉnh", "Bounce / Polish")
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = CATEGORY
@@ -184,33 +202,38 @@ class EZG_AT_PT_polish(Panel):
         layout = self.layout
 
         box = layout.box()
-        box.prop(st, "polish_object", text="Armature")
-        box.prop(st, "polish_action", text="Action")
+        box.prop(st, "polish_object", text="Armature")  # i18n-skip
+        box.prop(st, "polish_action", text="Action")  # i18n-skip
         ob = st.polish_object or st.target or context.object
         if st.polish_action is None and ob and ob.animation_data and ob.animation_data.action:
-            box.label(text="Dang lay action dang gan: %s" % ob.animation_data.action.name,
-                      icon='ACTION')
+            box.label(text=tr("Đang lấy action đang gán: %s", "Using the assigned action: %s")
+                      % ob.animation_data.action.name, icon='ACTION')
 
         box = layout.box()
-        box.label(text="Bounce", icon='FORCE_HARMONIC')
+        box.label(text=tr("Nhún", "Bounce"), icon='FORCE_HARMONIC')
         box.prop(st, "bounce_depth")
         box.prop(st, "bounce_cycles")
-        box.operator("ezg_at.bounce", text="Add Bounce", icon='PLAY')
+        box.operator("ezg_at.bounce", text=tr("Thêm nhịp nhún", "Add Bounce"), icon='PLAY')
 
         box = layout.box()
-        box.label(text="Amplify torso", icon='CON_TRANSLIKE')
+        box.label(text=tr("Khuếch đại thân", "Amplify Torso"), icon='CON_TRANSLIKE')
         box.prop(st, "amplify_factor")
-        box.operator("ezg_at.amplify", text="Amplify Torso Motion", icon='PLAY')
+        box.operator("ezg_at.amplify",
+                     text=tr("Khuếch đại chuyển động thân", "Amplify Torso Motion"), icon='PLAY')
         col = box.column()
         col.scale_y = 0.7
-        col.label(text="KHONG idempotent: chay hai lan la", icon='ERROR')
-        col.label(text="nhan hai lan.")
+        col.label(text=tr("KHÔNG idempotent: chạy hai lần là",
+                          "NOT idempotent: running it twice"), icon='ERROR')
+        col.label(text=tr("nhân hai lần.", "amplifies twice."))
 
         col = layout.column()
         col.scale_y = 0.7
-        col.label(text="Nhun ghim ban chan bang IK hai xuong, va dat", icon='INFO')
-        col.label(text="do cao hong tuyet doi -> chay lai khong bi")
-        col.label(text="nhun chong nhun. So nhip phai NGUYEN.")
+        col.label(text=tr("Nhún ghim bàn chân bằng IK hai xương, và đặt",
+                          "Bounce pins the feet with two-bone IK and"), icon='INFO')
+        col.label(text=tr("độ cao hông tuyệt đối -> chạy lại không bị",
+                          "sets an absolute hip height -> running it"))
+        col.label(text=tr("nhún chồng nhún. Số nhịp phải NGUYÊN.",
+                          "again won't stack. Cycles must be WHOLE."))
 
 
 classes = classes + (EZG_AT_PT_polish,)

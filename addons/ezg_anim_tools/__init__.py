@@ -9,7 +9,7 @@ Import phải là relative và tham chiếu module dùng `__package__`: tên mod
 của extension là `bl_ext.<repo>.ezg_anim_tools`, không phải tên thư mục trần.
 """
 
-from . import ops, props, ui
+from . import ezg_i18n, ops, props, ui  # noqa: F401  (ezg_i18n: nut VI/EN tim qua goi)
 
 _modules = (props, ops, ui)
 

@@ -3,7 +3,8 @@
 import bpy
 from bpy.types import Operator
 
-from . import bounce, core, mirror, roles
+from . import bounce, core, ezg_i18n, mirror, roles
+from .ezg_i18n import tr
 
 
 def _settings(context):
@@ -30,17 +31,27 @@ def _active_pairs(st):
     return roles.resolve_children(rows)
 
 
+def _warn_suffix(report):
+    """Đuôi thông báo khi có cảnh báo; chi tiết đã in ra System Console."""
+    if not report:
+        return ""
+    return tr(" %d cảnh báo (xem System Console).",
+              " Warnings: %d (see System Console).") % len(report)
+
+
 class EZG_AT_OT_auto_map(Operator):
     bl_idname = "ezg_at.auto_map"
-    bl_label = "Auto Map Bones"
-    bl_description = "Doan bang anh xa xuong tu ten cua hai rig"
+    bl_label = tr("Auto Map xương", "Auto Map Bones")
+    bl_description = tr("Đoán bảng ánh xạ xương từ tên xương của hai rig",
+                        "Guess the bone mapping from the bone names of both rigs")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
         st = _settings(context)
         if not st.source or not st.target:
-            cls.poll_message_set("Chua chon du armature nguon va dich.")
+            cls.poll_message_set(tr("Chưa chọn đủ armature nguồn và đích.",
+                                    "Source and target armatures are not both set yet."))
             return False
         return True
 
@@ -56,16 +67,17 @@ class EZG_AT_OT_auto_map(Operator):
 
         if not found:
             self.report({'WARNING'},
-                        "Khong tu doan duoc cap nao. Hay noi tay trong bang.")
+                        tr("Không tự đoán được cặp nào. Hãy nối tay trong bảng.",
+                           "Could not guess any pair. Map the bones by hand in the table."))
             return {'CANCELLED'}
-        self.report({'INFO'}, "Da doan %d cap xuong." % len(found))
+        self.report({'INFO'}, tr("Đã đoán %d cặp xương.", "Guessed %d bone pairs.") % len(found))
         return {'FINISHED'}
 
 
 class EZG_AT_OT_add_row(Operator):
     bl_idname = "ezg_at.add_row"
-    bl_label = "Add Row"
-    bl_description = "Them mot cap xuong trong"
+    bl_label = tr("Thêm dòng", "Add Row")
+    bl_description = tr("Thêm một cặp xương trống", "Add an empty bone pair")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -78,8 +90,8 @@ class EZG_AT_OT_add_row(Operator):
 
 class EZG_AT_OT_remove_row(Operator):
     bl_idname = "ezg_at.remove_row"
-    bl_label = "Remove Row"
-    bl_description = "Xoa cap dang chon"
+    bl_label = tr("Xoá dòng", "Remove Row")
+    bl_description = tr("Xoá cặp đang chọn", "Remove the selected pair")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -96,8 +108,8 @@ class EZG_AT_OT_remove_row(Operator):
 
 class EZG_AT_OT_clear_map(Operator):
     bl_idname = "ezg_at.clear_map"
-    bl_label = "Clear Mapping"
-    bl_description = "Xoa toan bo bang anh xa"
+    bl_label = tr("Xoá bảng ánh xạ", "Clear Mapping")
+    bl_description = tr("Xoá toàn bộ bảng ánh xạ xương", "Clear the whole bone mapping")
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -107,25 +119,30 @@ class EZG_AT_OT_clear_map(Operator):
 
 class EZG_AT_OT_retarget(Operator):
     bl_idname = "ezg_at.retarget"
-    bl_label = "Retarget"
-    bl_description = "Bake animation cua rig nguon len rig dich"
+    bl_label = "Retarget"  # i18n-skip
+    bl_description = tr("Bake animation của rig nguồn lên rig đích",
+                        "Bake the source rig's animation onto the target rig")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
         st = _settings(context)
         if not st.source or not st.target:
-            cls.poll_message_set("Chua chon du armature nguon va dich.")
+            cls.poll_message_set(tr("Chưa chọn đủ armature nguồn và đích.",
+                                    "Source and target armatures are not both set yet."))
             return False
         if st.source == st.target:
-            cls.poll_message_set("Nguon va dich dang la cung mot armature.")
+            cls.poll_message_set(tr("Nguồn và đích đang là cùng một armature.",
+                                    "Source and target are the same armature."))
             return False
         if not any(r.use and r.src and r.tgt for r in st.mapping):
-            cls.poll_message_set("Bang anh xa dang rong. Bam Auto Map truoc.")
+            cls.poll_message_set(tr("Bảng ánh xạ đang rỗng. Bấm Auto Map trước.",
+                                    "The bone mapping is empty. Click Auto Map first."))
             return False
         ad = st.source.animation_data
         if ad is None or ad.action is None:
-            cls.poll_message_set("Armature nguon khong co action nao dang gan.")
+            cls.poll_message_set(tr("Armature nguồn không có action nào đang gán.",
+                                    "The source armature has no action assigned."))
             return False
         return True
 
@@ -135,7 +152,7 @@ class EZG_AT_OT_retarget(Operator):
         hips = next((p for p in pairs if p["role"] == "hips"), None)
         f0, f1 = _frame_range(st)
         if f1 < f0:
-            self.report({'ERROR'}, "Khoang frame khong hop le.")
+            self.report({'ERROR'}, tr("Khoảng frame không hợp lệ.", "Invalid frame range."))
             return {'CANCELLED'}
 
         try:
@@ -151,19 +168,22 @@ class EZG_AT_OT_retarget(Operator):
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
 
-        msg = "Da tao '%s': %d xuong, frame %d..%d." % (act.name, len(pairs), f0, f1)
+        msg = tr("Đã tạo '%s': %d xương, frame %d..%d.",
+                 "Created '%s': %d bones, frames %d..%d.") % (act.name, len(pairs), f0, f1)
         for line in report:
             print("[EZG Anim Tools]", line)
-        self.report({'WARNING'} if report else {'INFO'},
-                    msg + (" %d canh bao (xem System Console)." % len(report) if report else ""))
+        self.report({'WARNING'} if report else {'INFO'}, msg + _warn_suffix(report))
         return {'FINISHED'}
 
 
 class EZG_AT_OT_check(Operator):
     bl_idname = "ezg_at.check"
-    bl_label = "Check Accuracy"
-    bl_description = ("Do sai lech GOC giua huong chi hai rig qua tung frame. "
-                      "Chay sau khi retarget de biet ket qua bam sat den dau")
+    bl_label = tr("Kiểm tra độ chính xác", "Check Accuracy")
+    bl_description = tr("Đo sai lệch GÓC giữa hướng chi hai rig qua từng frame. "
+                        "Chạy sau khi retarget để biết kết quả bám sát đến đâu",
+                        "Measure the ANGLE error between the limb directions of both rigs "
+                        "on every frame. Run after retargeting to see how closely the "
+                        "result follows the source")
     bl_options = {'REGISTER'}
 
     @classmethod
@@ -176,9 +196,10 @@ class EZG_AT_OT_check(Operator):
         f0, f1 = _frame_range(st)
         res = core.measure_error(context, st.source, st.target, pairs, f0, f1)
         if not res:
-            self.report({'WARNING'}, "Khong du du lieu de do.")
+            self.report({'WARNING'}, tr("Không đủ dữ liệu để đo.", "Not enough data to measure."))
             return {'CANCELLED'}
-        msg = ("Lech goc trung binh %.2f do, lon nhat %.2f do o '%s' (%d mau)."
+        msg = (tr("Lệch góc trung bình %.2f độ, lớn nhất %.2f độ ở '%s' (%d mẫu).",
+                  "Mean angle error %.2f°, max %.2f° at '%s' (%d samples).")
                % (res["mean"], res["max"], res["worst"], res["samples"]))
         print("[EZG Anim Tools]", msg)
         self.report({'INFO'}, msg)
@@ -196,20 +217,23 @@ def _mirror_inputs(context):
 
 class EZG_AT_OT_mirror(Operator):
     bl_idname = "ezg_at.mirror"
-    bl_label = "Mirror Action"
-    bl_description = ("Nhan doi action da chon roi lat guong trai/phai de len. "
-                      "Giu nguyen marker, custom property, fcurve modifier va do "
-                      "phu kenh cua ban goc")
+    bl_label = tr("Lật gương action", "Mirror Action")
+    bl_description = tr("Nhân đôi action đã chọn rồi lật gương trái/phải đè lên. "
+                        "Giữ nguyên marker, custom property, fcurve modifier và độ "
+                        "phủ kênh của bản gốc",
+                        "Duplicate the selected action and mirror it left/right. Keeps "
+                        "the original's markers, custom properties, F-Curve modifiers "
+                        "and channel coverage")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
         ob, act = _mirror_inputs(context)
         if ob is None or ob.type != 'ARMATURE':
-            cls.poll_message_set("Chua chon armature.")
+            cls.poll_message_set(tr("Chưa chọn armature.", "No armature selected."))
             return False
         if act is None:
-            cls.poll_message_set("Chua co action nao de lat guong.")
+            cls.poll_message_set(tr("Chưa có action nào để lật gương.", "No action to mirror yet."))
             return False
         return True
 
@@ -218,7 +242,8 @@ class EZG_AT_OT_mirror(Operator):
         ob, act = _mirror_inputs(context)
         name = st.mirror_name.strip() or (act.name + "_Mirror")
         if name == act.name:
-            self.report({'ERROR'}, "Ten moi trung ten action goc.")
+            self.report({'ERROR'}, tr("Tên mới trùng tên action gốc.",
+                                      "The new name is the same as the original action's."))
             return {'CANCELLED'}
 
         try:
@@ -228,14 +253,14 @@ class EZG_AT_OT_mirror(Operator):
             return {'CANCELLED'}
 
         err, worst = mirror.mirror_error(context, ob, act, new)
-        msg = "Da tao '%s' (%d fcurve). Lech so voi anh guong ly thuyet: %.3f do." \
-              % (new.name, len(core.action_fcurves(new)), err)
+        msg = tr("Đã tạo '%s' (%d fcurve). Lệch so với ảnh gương lý thuyết: %.3f độ.",
+                 "Created '%s' (%d F-Curves). Deviation from the ideal mirror image: %.3f°.") \
+            % (new.name, len(core.action_fcurves(new)), err)
         for line in report:
             print("[EZG Anim Tools]", line)
         if worst and err > 0.5:
             print("[EZG Anim Tools] lech nhieu nhat o '%s'" % worst)
-        self.report({'WARNING'} if report else {'INFO'},
-                    msg + (" %d canh bao (System Console)." % len(report) if report else ""))
+        self.report({'WARNING'} if report else {'INFO'}, msg + _warn_suffix(report))
         return {'FINISHED'}
 
 
@@ -250,19 +275,22 @@ def _polish_inputs(context):
 
 class EZG_AT_OT_bounce(Operator):
     bl_idname = "ezg_at.bounce"
-    bl_label = "Add Bounce"
-    bl_description = ("Them nhip nhun, ghim ban chan dinh san bang IK hai xuong. "
-                      "Dat do cao hong tuyet doi nen chay lai khong nhun chong nhun")
+    bl_label = tr("Thêm nhịp nhún", "Add Bounce")
+    bl_description = tr("Thêm nhịp nhún, ghim bàn chân dính sàn bằng IK hai xương. "
+                        "Đặt độ cao hông tuyệt đối nên chạy lại không bị nhún chồng nhún",
+                        "Add a bounce while pinning the feet to the floor with two-bone IK. "
+                        "Sets an absolute hip height, so running it again does not stack "
+                        "bounces")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
         ob, act = _polish_inputs(context)
         if ob is None or ob.type != 'ARMATURE':
-            cls.poll_message_set("Chua chon armature.")
+            cls.poll_message_set(tr("Chưa chọn armature.", "No armature selected."))
             return False
         if act is None:
-            cls.poll_message_set("Chua co action nao de chinh.")
+            cls.poll_message_set(tr("Chưa có action nào để chỉnh.", "No action to adjust yet."))
             return False
         return True
 
@@ -276,20 +304,22 @@ class EZG_AT_OT_bounce(Operator):
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
 
-        msg = ("Nhun %.1f mm, ban chan truot %.2f mm, %d frame."
+        msg = (tr("Nhún %.1f mm, bàn chân trượt %.2f mm, %d frame.",
+                  "Bounce %.1f mm, foot slide %.2f mm, %d frames.")
                % (stats["bounce"] * 1000.0, stats["drift"] * 1000.0, stats["frames"]))
         for line in report:
             print("[EZG Anim Tools]", line)
-        self.report({'WARNING'} if report else {'INFO'},
-                    msg + (" %d canh bao (System Console)." % len(report) if report else ""))
+        self.report({'WARNING'} if report else {'INFO'}, msg + _warn_suffix(report))
         return {'FINISHED'}
 
 
 class EZG_AT_OT_amplify(Operator):
     bl_idname = "ezg_at.amplify"
-    bl_label = "Amplify Torso Motion"
-    bl_description = ("Day chuyen dong cua than xa tu the trung binh. "
-                      "KHONG idempotent: chay hai lan la nhan hai lan")
+    bl_label = tr("Khuếch đại chuyển động thân", "Amplify Torso Motion")
+    bl_description = tr("Đẩy chuyển động của thân xa tư thế trung bình. "
+                        "KHÔNG idempotent: chạy hai lần là nhân hai lần",
+                        "Push the torso motion further away from the average pose. "
+                        "NOT idempotent: running it twice amplifies twice")
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -305,7 +335,8 @@ class EZG_AT_OT_amplify(Operator):
         except bounce.BounceError as exc:
             self.report({'ERROR'}, str(exc))
             return {'CANCELLED'}
-        self.report({'INFO'}, "%d xuong than: bien do %.2f -> %.2f do."
+        self.report({'INFO'}, tr("%d xương thân: biên độ %.2f -> %.2f độ.",
+                                 "%d torso bones: amplitude %.2f° -> %.2f°.")
                     % (n, before, after))
         return {'FINISHED'}
 
@@ -320,17 +351,13 @@ classes = (
     EZG_AT_OT_mirror,
     EZG_AT_OT_bounce,
     EZG_AT_OT_amplify,
+    ezg_i18n.make_language_operator("ezg_at"),
 )
 
 
 def register():
-    for c in classes:
-        bpy.utils.register_class(c)
+    ezg_i18n.register_classes(classes)
 
 
 def unregister():
-    for c in reversed(classes):
-        try:
-            bpy.utils.unregister_class(c)
-        except Exception:
-            pass
+    ezg_i18n.unregister_classes(classes)

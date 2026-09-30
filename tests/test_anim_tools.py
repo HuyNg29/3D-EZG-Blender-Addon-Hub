@@ -641,7 +641,7 @@ bad[2]["pos"] = True
 bad[2]["anchor"] = "khong_ton_tai"
 _, rep_bad = core.retarget(ctx, ik_src, ik_tgt, bad, 1, 6, "IK_BadAnchor",
                            use_hips_loc=False)
-check(any("khong co trong bang" in r for r in rep_bad),
+check(any("không có trong bảng" in r for r in rep_bad),
       "xuong neo khong hop le -> co canh bao (%s)" % rep_bad)
 
 # Bat 'pos' ma quen chon neo cung phai bao.
@@ -649,7 +649,7 @@ noanchor = [dict(p) for p in ik_pairs_base]
 noanchor[2]["pos"] = True
 _, rep_na = core.retarget(ctx, ik_src, ik_tgt, noanchor, 1, 6, "IK_NoAnchor",
                           use_hips_loc=False)
-check(any("chua chon xuong neo" in r for r in rep_na),
+check(any("chưa chọn xương neo" in r for r in rep_na),
       "bat truyen vi tri ma khong co neo -> co canh bao (%s)" % rep_na)
 
 # Tay phai cua ban moi phai o dung cho tay trai cua ban goc, va nguoc lai
@@ -700,7 +700,7 @@ check(st2["drift"] < 1e-4, "chay lai van dinh san")
 
 # Nhun sau qua chieu dai chan phai bi bao
 rep3, _ = bounce.add_bounce(ctx, tgt, bact, 0.15, 2)
-check(any("kha sau" in r for r in rep3), "canh bao khi nhun sau qua chieu dai chan")
+check(any("khá sâu" in r for r in rep3), "canh bao khi nhun sau qua chieu dai chan")
 bounce.add_bounce(ctx, tgt, bact, DEPTH, 2)   # tra ve muc binh thuong
 
 n, before, after = bounce.amplify_motion(ctx, tgt, bact, 2.0)
