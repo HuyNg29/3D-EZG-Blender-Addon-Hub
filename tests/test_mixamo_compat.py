@@ -7,6 +7,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ezg_testkit as kit  # noqa: E402
 import sys, math
+import shutil
+import tempfile
 import bpy
 from mathutils import Vector
 
@@ -236,6 +238,20 @@ def main():
             bpy.ops.mmr.normalize_rig_scale()
             check(abs(rig.scale.x - 1.0) < 1e-5, "rig normalized to 1,1,1")
 
+            # Regression: the reason for re-importing. Here it is the scale,
+            # not the file, and it used to be reported as "FBX changed on disk".
+            cached = bpy.data.actions.get("Standing Melee Punch")
+            reason = lib._stale_reason(cached, anim_fbx, rig) if cached else None
+            check(reason == 'UNITS', "normalized rig -> stale reason UNITS (got %s)" % reason)
+            # A newer FBX on disk is the FILE reason. Use a copy with a later
+            # mtime so the real asset is never touched.
+            newer = os.path.join(tempfile.mkdtemp(prefix="mixlib_"), "newer.fbx")
+            shutil.copy2(anim_fbx, newer)
+            later = os.path.getmtime(anim_fbx) + 100
+            os.utime(newer, (later, later))
+            reason = lib._stale_reason(cached, newer, rig) if cached else None
+            check(reason == 'FILE', "newer FBX on disk -> stale reason FILE (got %s)" % reason)
+
             move_m, far_m = apply_current()     # cached action must NOT be reused
             print(f"    moved {move_m:.4f} m (was {move_cm:.4f}), "
                   f"furthest bone {far_m:.3f} m (was {far_cm:.3f})")
@@ -245,6 +261,9 @@ def main():
             check(abs(move_m - move_cm) < 0.05,
                   "re-applied animation matches the pre-normalize motion")
             check(move_m > 0.05, "re-applied animation is not flat")
+            fresh = bpy.data.actions.get("Standing Melee Punch")
+            reason = lib._stale_reason(fresh, anim_fbx, rig) if fresh else "missing"
+            check(reason is None, "re-imported action is reusable (stale reason %s)" % reason)
 
             # Regression: "Reimport from FBX" read the target rig AFTER
             # importing, when the FBX importer had already made the imported

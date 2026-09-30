@@ -228,6 +228,23 @@ def _is_stale(action, filepath):
     return abs(saved - cur) > 0.5
 
 
+def _stale_reason(action, filepath, target):
+    """Why the cached `action` cannot be reused for `target`, or None.
+
+    'FILE'  - the FBX on disk changed since it was imported (re-downloaded bake).
+    'UNITS' - it was made for a rig at another scale (this rig was normalized,
+              or the action was cached for a character at a different scale).
+
+    Kept separate so the report can name the real reason: both used to be
+    reported as "FBX changed on disk".
+    """
+    if _is_stale(action, filepath):
+        return 'FILE'
+    if target is not None and _unit_mismatch(action, target):
+        return 'UNITS'
+    return None
+
+
 def _replace_action(old, new):
     """Point every user of `old` (assignments, NLA strips) at `new`, delete
     `old`, and give `new` its name."""
@@ -1142,8 +1159,9 @@ class MIXLIB_OT_apply(Operator):
             # version instead of wiping possible manual key edits.
             _stamp_source(action, item.filepath)
         stale = None
-        if action is not None and (_is_stale(action, item.filepath)
-                                   or _unit_mismatch(action, target)):
+        stale_reason = (_stale_reason(action, item.filepath, target)
+                        if action is not None else None)
+        if stale_reason is not None:
             # Unit mismatch means the rig was normalized (or rebuilt at another
             # scale) after this action was cached. Reusing it verbatim is how a
             # character ends up 100x away, so re-import and retarget instead.
@@ -1198,9 +1216,21 @@ class MIXLIB_OT_apply(Operator):
                 bpy.data.actions.remove(src_action)
 
             if stale is not None:
+                # Read the stamp BEFORE _replace_action deletes `stale`. An
+                # unstamped action counts as Mixamo space (0.01) in
+                # _unit_mismatch, so report that same number.
+                cached_scale = stale.get("mixlib_rig_scale", 0.01)
                 _replace_action(stale, action)
-                self.report({'INFO'}, tr("FBX trên đĩa đã thay đổi — đã import lại animation",
-                                         "FBX changed on disk — re-imported the animation"))
+                if stale_reason == 'FILE':
+                    self.report({'INFO'}, tr("FBX trên đĩa đã thay đổi — đã import lại animation",
+                                             "FBX changed on disk — re-imported the animation"))
+                else:
+                    self.report({'INFO'},
+                                tr("Action đã lưu được làm cho rig scale %g, rig này scale "
+                                   "%g — đã import lại animation cho đúng đơn vị",
+                                   "The cached action was made for a rig at scale %g, this "
+                                   "rig is at %g — re-imported the animation in the right units")
+                                % (cached_scale, _rig_scale(target)))
             else:
                 action.name = item.name
 
