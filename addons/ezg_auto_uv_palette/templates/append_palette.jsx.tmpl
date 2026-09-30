@@ -1,0 +1,74 @@
+#target photoshop
+// Sinh tự động bởi add-on Auto UV Palette — đừng sửa tay, chạy lại add-on.
+// Mỗi item mang sẵn ô của nó dưới dạng tỉ lệ document (u, v, w, h) chứ không
+// dùng chung một COLS/ROWS — nhờ vậy asset to (ô 1/8) và asset nhỏ (ô 1/16)
+// đặt được vào cùng một tấm palette.
+(function () {
+    var LINKED = %(linked)s;
+    var PSD = %(psd)s;
+    var ITEMS = [
+%(items)s
+    ];
+
+    function placeSmartObject(path, linked) {
+        var d = new ActionDescriptor();
+        d.putPath(stringIDToTypeID("null"), new File(path));
+        if (linked) {
+            d.putBoolean(stringIDToTypeID("linked"), true);
+        }
+        executeAction(stringIDToTypeID("placeEvent"), d, DialogModes.NO);
+    }
+
+    function sizeOf(layer) {
+        var b = layer.bounds;
+        return {
+            w: b[2].as("px") - b[0].as("px"),
+            h: b[3].as("px") - b[1].as("px"),
+            cx: (b[0].as("px") + b[2].as("px")) / 2,
+            cy: (b[1].as("px") + b[3].as("px")) / 2
+        };
+    }
+
+    var oldUnits = app.preferences.rulerUnits;
+    app.preferences.rulerUnits = Units.PIXELS;
+    try {
+        var doc = null;
+        if (PSD !== "") {
+            doc = app.open(new File(PSD));
+        } else if (app.documents.length > 0) {
+            doc = app.activeDocument;
+        }
+        if (doc === null) {
+            alert("Auto UV Palette: chua mo file palette nao trong Photoshop, "
+                  + "va cung chua chon duong dan PSD trong add-on.");
+            return;
+        }
+        app.activeDocument = doc;
+
+        var docW = doc.width.as("px");
+        var docH = doc.height.as("px");
+
+        // Place đặt layer mới ngay trên layer đang active -> đưa active lên
+        // trên cùng để layer mới không chui vào giữa các layer cũ.
+        doc.activeLayer = doc.layers[0];
+        for (var i = ITEMS.length - 1; i >= 0; i--) {
+            var it = ITEMS[i];
+            var cellW = it.w * docW;
+            var cellH = it.h * docH;
+            placeSmartObject(it.file, LINKED);
+            var layer = doc.activeLayer;
+
+            var s = sizeOf(layer);
+            if (s.w > 0 && s.h > 0) {
+                layer.resize(cellW / s.w * 100, cellH / s.h * 100,
+                             AnchorPosition.MIDDLECENTER);
+            }
+            s = sizeOf(layer);
+            layer.translate(it.u * docW + cellW / 2 - s.cx,
+                            it.v * docH + cellH / 2 - s.cy);
+            layer.name = it.name;
+        }
+    } finally {
+        app.preferences.rulerUnits = oldUnits;
+    }
+})();

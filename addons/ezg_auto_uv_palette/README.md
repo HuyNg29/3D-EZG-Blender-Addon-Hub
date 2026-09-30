@@ -13,17 +13,17 @@ Yêu cầu Blender 4.2 trở lên.
 
 1. Ở **Object Mode**, chọn các object cần xếp.
 2. Mở sidebar bằng phím `N` (trong 3D Viewport hoặc UV Editor) > tab **UV Palette**.
-3. Nhập **Columns** và **Rows** (ví dụ 3 x 3, 4 x 4…).
+3. Nhập **Số cột** (Columns) và **Số hàng** (Rows) (ví dụ 3 x 3, 4 x 4…).
 4. Bảng preview cho thấy object nào vào ô nào (`H1 C2` = hàng 1, cột 2).
-5. Bấm **Pack UVs into Palette** — xếp UV xong, add-on **tạo 1 material mới**
+5. Bấm **Xếp UV vào palette** (Pack UVs into Palette) — xếp UV xong, add-on **tạo 1 material mới**
    (`UVPalette_3x3`…) và gán cho toàn bộ object đã chọn, thay thế material cũ.
    Material mới có sẵn 1 node Image Texture trống nối vào Base Color — chỗ gắn
    tấm palette sau khi ghép.
 
 `Ctrl+Z` hoàn tác được như mọi thao tác Blender khác.
 
-⚠️ **Thứ tự quan trọng**: vì Pack thay material, hãy chạy **Export Selected
-Textures** (và **Clean Up** nếu muốn) **trước** khi Pack. Material cũ sau khi
+⚠️ **Thứ tự quan trọng**: vì Pack thay material, hãy chạy **Export texture đã chọn** (Export Selected
+Textures; thêm **Dọn texture đã export** nếu muốn) **trước** khi Pack. Material cũ sau khi
 bị thay sẽ không còn ai dùng — lưu file là Blender purge, texture chưa export
 sẽ mất. Pack sẽ tự cảnh báo nếu phát hiện object có texture chưa export.
 
@@ -54,7 +54,7 @@ Với grid không vuông (ví dụ 4 cột x 2 hàng) thì ô rộng `1/4` cao `
 V bị scale khác nhau và texture sẽ méo. Dùng grid vuông (3x3, 4x4…) nếu không
 muốn méo.
 
-## Export Textures
+## Export texture (Export Textures)
 
 Xuất texture trong material của từng object đã chọn ra PNG.
 
@@ -62,7 +62,7 @@ Xuất texture trong material của từng object đã chọn ra PNG.
 2. Chọn **Size**: 1K / 2K / 4K / 8K — áp dụng cho toàn bộ, mọi ảnh ra đều vuông và
    cùng kích thước.
 3. Chọn **Path** — thư mục đích, tự tạo nếu chưa có.
-4. Bấm **Export Selected Textures**.
+4. Bấm **Export texture đã chọn** (Export Selected Textures).
 
 Quy tắc:
 
@@ -93,7 +93,7 @@ Quy tắc:
 Object đang **ẩn** (`H`) không nằm trong `selected_objects` của Blender nên
 không được export. Bấm `Alt+H` để hiện lại trước khi chạy.
 
-### Clean Up Exported Textures
+### Dọn texture đã export (Clean Up Exported Textures)
 
 Xóa khỏi file .blend các texture **đã export ra PNG** — ảnh packed 4K/8K chiếm
 phần lớn dung lượng file, export xong rồi thì không cần giữ bản trong .blend
@@ -111,10 +111,10 @@ Sau khi xóa, node Image Texture trong material vẫn còn nhưng trống (khôn
 trỏ tới ảnh nào) — đúng chỗ để gắn tấm palette mới vào. **Lưu file** (`Ctrl+S`)
 thì dung lượng .blend mới giảm thật.
 
-### Clean Up Old Materials
+### Dọn material cũ (Clean Up Old Materials)
 
 Xóa khỏi file .blend các **material cũ** của những object đã export texture ra
-PNG. Chạy sau **Clean Up Exported Textures** để dọn nốt vỏ material rỗng, hoặc
+PNG. Chạy sau **Dọn texture đã export** (Clean Up Exported Textures) để dọn nốt vỏ material rỗng, hoặc
 chạy thẳng cũng được — material bị xóa thì texture bên trong thành mồ côi, lưu
 file là Blender tự dọn. Cũng có hộp thoại xác nhận như phần xóa texture.
 
@@ -130,12 +130,12 @@ Lưới an toàn — material chỉ bị xóa khi:
 Object bị xóa hết material sẽ được dọn luôn slot rỗng — Pack UVs chạy sau đó
 vẫn gán material palette chung như bình thường.
 
-## Palette PSD (Smart Object)
+## PSD palette (Palette PSD, Smart Object)
 
 Ghép các PNG đã export thành 1 file Photoshop, mỗi texture là **1 layer Smart
 Object** nằm đúng ô của nó — thứ tự y hệt phần xếp UV. Cần cài Photoshop.
 
-1. Chạy **Export Selected Textures** trước (phần trên) — PSD dùng chính các PNG đó.
+1. Chạy **Export texture đã chọn** (Export Selected Textures) trước (phần trên) — PSD dùng chính các PNG đó.
 2. Nhập **Canvas** (px, canvas vuông). Panel hiện kích thước ô; nếu canvas
    không chia hết cho số cột/hàng sẽ cảnh báo kèm gợi ý số gần nhất (ví dụ
    grid 3x3 dùng 3072 thay vì 2048).
@@ -154,7 +154,7 @@ Photoshop > File > Scripts > Browse. Thứ tự layer trong bảng Layers: objec
 Thiếu file PNG nào (chưa chạy Export Selected Textures, hoặc object không có
 texture nên bị bỏ qua) thì add-on báo lỗi và không mở Photoshop.
 
-## Assign Palette
+## Gắn palette (Assign Palette)
 
 Bước cuối: gắn tấm palette đã ghép vào material chung.
 
@@ -162,14 +162,14 @@ Bước cuối: gắn tấm palette đã ghép vào material chung.
 2. **Palette**: trỏ tới file ảnh palette — PNG, JPG, hoặc **PSD thẳng luôn**
    (Blender đọc được PSD, không cần export PNG trung gian; sửa PSD xong bấm
    gắn lại là cập nhật).
-3. Bấm **Assign Palette to Material**.
+3. Bấm **Gắn palette vào material** (Assign Palette to Material).
 
 Add-on nạp ảnh và gắn vào node Image Texture **trống** mà Pack đã tạo sẵn
 trong `UVPalette_*`. Nếu material không có node trống thì dùng node đang nối
 Base Color; không có node nào thì tạo mới và tự nối vào Base Color. Chạy lại
 nhiều lần không tạo ảnh trùng lặp (ảnh đã nạp được reload thay vì nạp bản mới).
 
-## Add to Existing Palette
+## Thêm vào palette đã có (Add to Existing Palette)
 
 Thêm object mới vào một palette **đã ghép xong** mà không phải xếp lại từ đầu:
 UV của object mới được xếp vào **ô còn trống**, và texture của nó được Place
@@ -181,16 +181,16 @@ thêm vào file PSD palette cũ.
 2. **Palette**: trỏ tới ảnh palette hiện tại (mục *Assign Palette* ở trên) —
    không bắt buộc, nhưng nên có, xem phần "Ô nào là trống" bên dưới.
 3. Chọn **các object mới** (chỉ object mới — object đã trong palette phải bỏ ra).
-4. Chạy **Export Selected Textures** cho các object mới. Phải làm **trước**
+4. Chạy **Export texture đã chọn** (Export Selected Textures) cho các object mới. Phải làm **trước**
    bước 5, vì bước đó thay material — texture cũ thành mồ côi, lưu file là mất.
-5. Bấm **Add Selected to Empty Cells** — add-on xếp UV vào các ô trống rồi gán
+5. Bấm **Xếp object đã chọn vào ô trống** (Add Selected to Empty Cells) — add-on xếp UV vào các ô trống rồi gán
    material palette cho chúng. Thông báo cho biết object nào vào ô nào và còn
    bao nhiêu ô trống. `Ctrl+Z` hoàn tác được.
 6. **PSD**: trỏ tới file PSD palette đã lưu. Bỏ trống thì script chạy trên
    document đang mở sẵn trong Photoshop.
 7. Bấm **Append Textures to PSD** — add-on ghi `auto_uv_palette_append.jsx` và
    mở Photoshop, Place các PNG mới thành Smart Object vào đúng ô của chúng,
-   nằm trên cùng bảng Layers. **Save lại** PSD, rồi **Assign Palette** để
+   nằm trên cùng bảng Layers. **Save lại** PSD, rồi **Gắn palette** (Assign Palette) để
    Blender thấy bản mới.
 
 Kích thước ô khi append lấy từ **document thật** (rộng ÷ số cột), không lấy từ
@@ -257,7 +257,7 @@ Object nào có **UV rộng hơn ô của nó** (UV gốc nằm ngoài 0–1 nê
 bên cạnh) được nêu tên trong thông báo — model đó sẽ sample nhầm texture hàng
 xóm, cần sửa UV về trong 0–1 rồi xếp lại.
 
-### Reset UV out of Palette
+### Đưa UV ra khỏi palette (Reset UV out of Palette)
 
 Nghịch đảo của Pack / Add — đưa UV của object đã chọn từ ô của nó **trở về
 không gian 0–1** như trước khi xếp, gỡ material palette và xoá dấu ô. `Ctrl+Z`

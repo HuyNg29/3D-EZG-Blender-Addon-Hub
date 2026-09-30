@@ -1,0 +1,64 @@
+#target photoshop
+// Sinh tự động bởi add-on Auto UV Palette — đừng sửa tay, chạy lại add-on.
+(function () {
+    var CANVAS = %(canvas)d;
+    var COLS = %(cols)d;
+    var ROWS = %(rows)d;
+    var LINKED = %(linked)s;
+    var ITEMS = [
+%(items)s
+    ];
+
+    function placeSmartObject(path, linked) {
+        var d = new ActionDescriptor();
+        d.putPath(stringIDToTypeID("null"), new File(path));
+        if (linked) {
+            d.putBoolean(stringIDToTypeID("linked"), true);
+        }
+        executeAction(stringIDToTypeID("placeEvent"), d, DialogModes.NO);
+    }
+
+    function sizeOf(layer) {
+        var b = layer.bounds;
+        return {
+            w: b[2].as("px") - b[0].as("px"),
+            h: b[3].as("px") - b[1].as("px"),
+            cx: (b[0].as("px") + b[2].as("px")) / 2,
+            cy: (b[1].as("px") + b[3].as("px")) / 2
+        };
+    }
+
+    var oldUnits = app.preferences.rulerUnits;
+    app.preferences.rulerUnits = Units.PIXELS;
+    try {
+        var doc = app.documents.add(CANVAS, CANVAS, 72, "AutoUVPalette",
+                                    NewDocumentMode.RGB,
+                                    DocumentFill.TRANSPARENT);
+        var filler = doc.layers[0];
+        var cellW = CANVAS / COLS;
+        var cellH = CANVAS / ROWS;
+
+        for (var i = ITEMS.length - 1; i >= 0; i--) {
+            var it = ITEMS[i];
+            placeSmartObject(it.file, LINKED);
+            var layer = doc.activeLayer;
+
+            var s = sizeOf(layer);
+            if (s.w > 0 && s.h > 0) {
+                layer.resize(cellW / s.w * 100, cellH / s.h * 100,
+                             AnchorPosition.MIDDLECENTER);
+            }
+            s = sizeOf(layer);
+            layer.translate((it.col + 0.5) * cellW - s.cx,
+                            (it.row + 0.5) * cellH - s.cy);
+            layer.name = it.name;
+        }
+
+        // layer trong suốt do documents.add sinh ra, không còn cần
+        if (doc.layers.length > ITEMS.length) {
+            try { filler.remove(); } catch (e) {}
+        }
+    } finally {
+        app.preferences.rulerUnits = oldUnits;
+    }
+})();
