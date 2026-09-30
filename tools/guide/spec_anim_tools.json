@@ -1,0 +1,23 @@
+{"items":[
+ {"t":"box","r":[1298,193,22,72]},
+ {"t":"badge","at":[1309,279],"n":1},
+
+ {"t":"box","r":[797,118,489,52]},
+ {"t":"badge","at":[797,118],"n":2},
+ {"t":"label","at":[770,143],"text":"Rig nguồn (có action) → rig đích","align":"right"},
+
+ {"t":"box","r":[1040,210,241,22]},
+ {"t":"badge","at":[1040,210],"n":3},
+ {"t":"label","at":[770,221],"text":"Tự đoán cặp xương từ tên","align":"right"},
+
+ {"t":"box","r":[801,241,452,178]},
+ {"t":"badge","at":[801,241],"n":4},
+ {"t":"label","at":[770,300],"text":"Soát lại, sửa tay nếu sai","align":"right"},
+
+ {"t":"box","r":[797,513,489,162]},
+ {"t":"badge","at":[797,513],"n":5},
+
+ {"t":"box","r":[797,681,489,78]},
+ {"t":"badge","at":[797,681],"n":6},
+ {"t":"label","at":[770,720],"text":"Retarget rồi kiểm tra sai lệch","align":"right"}
+]}

@@ -1,0 +1,19 @@
+{"items":[
+ {"t":"box","r":[1171,87,114,24]},
+ {"t":"badge","at":[1171,87],"n":1},
+
+ {"t":"box","r":[946,216,340,27]},
+ {"t":"badge","at":[928,229],"n":2},
+ {"t":"label","at":[910,229],"text":"Lưu danh sách addon đang có","align":"right"},
+
+ {"t":"box","r":[951,288,330,21]},
+ {"t":"badge","at":[928,298],"n":3},
+ {"t":"label","at":[910,298],"text":"Bo chuan EZG = trọn bộ addon studio","align":"right"},
+
+ {"t":"box","r":[951,463,331,22]},
+ {"t":"badge","at":[928,473],"n":4},
+
+ {"t":"box","r":[951,490,331,23]},
+ {"t":"badge","at":[928,506],"n":5},
+ {"t":"label","at":[910,506],"text":"Cài lại cả bộ một lượt","align":"right"}
+]}

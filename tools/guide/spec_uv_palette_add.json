@@ -1,0 +1,17 @@
+{"items":[
+ {"t":"box","r":[486,408,192,200]},
+ {"t":"badge","at":[486,408],"n":1},
+ {"t":"label","at":[474,500],"text":"Chỉ chọn các object MỚI","align":"right"},
+
+ {"t":"box","r":[946,218,340,105]},
+ {"t":"badge","at":[928,270],"n":2},
+ {"t":"label","at":[910,270],"text":"Export texture của object mới","align":"right"},
+
+ {"t":"box","r":[946,597,340,104]},
+ {"t":"badge","at":[928,650],"n":3},
+ {"t":"label","at":[910,650],"text":"Xem ô sẽ nhận rồi bấm xếp","align":"right"},
+
+ {"t":"box","r":[946,729,340,46]},
+ {"t":"badge","at":[928,752],"n":4},
+ {"t":"label","at":[910,752],"text":"Trỏ PSD cũ, thêm texture vào","align":"right"}
+]}

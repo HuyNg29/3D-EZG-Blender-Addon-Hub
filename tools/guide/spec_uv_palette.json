@@ -1,0 +1,27 @@
+{"crop":[0,0,1321,690],"items":[
+ {"t":"box","r":[390,314,210,214]},
+ {"t":"badge","at":[390,314],"n":1},
+ {"t":"label","at":[378,420],"text":"Chọn các object cần xếp","align":"right"},
+
+ {"t":"box","r":[1298,192,22,70]},
+ {"t":"badge","at":[1309,276],"n":2},
+
+ {"t":"box","r":[946,112,340,38]},
+ {"t":"badge","at":[928,131],"n":3},
+
+ {"t":"box","r":[946,340,340,105]},
+ {"t":"badge","at":[928,392],"n":4},
+ {"t":"label","at":[910,392],"text":"Export texture TRƯỚC khi xếp UV","align":"right"},
+
+ {"t":"box","r":[946,280,340,21]},
+ {"t":"badge","at":[928,290],"n":5},
+ {"t":"label","at":[910,290],"text":"Xếp UV + gán material chung","align":"right"},
+
+ {"t":"box","r":[946,487,340,105]},
+ {"t":"badge","at":[928,540],"n":6},
+ {"t":"label","at":[910,540],"text":"Ghép PNG thành PSD (cần Photoshop)","align":"right"},
+
+ {"t":"box","r":[946,632,340,47]},
+ {"t":"badge","at":[928,656],"n":7},
+ {"t":"label","at":[910,656],"text":"Gắn tấm palette đã ghép","align":"right"}
+]}

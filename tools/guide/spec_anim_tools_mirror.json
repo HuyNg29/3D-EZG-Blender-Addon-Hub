@@ -1,0 +1,17 @@
+{"items":[
+ {"t":"box","r":[946,117,338,140]},
+ {"t":"badge","at":[928,187],"n":1},
+ {"t":"label","at":[910,187],"text":"Chọn rig + action (trống = đang gán)","align":"right"},
+
+ {"t":"box","r":[946,261,338,21]},
+ {"t":"badge","at":[928,271],"n":2},
+ {"t":"label","at":[910,271],"text":"Tạo action _Mirror mới","align":"right"},
+
+ {"t":"box","r":[946,521,338,112]},
+ {"t":"badge","at":[928,577],"n":3},
+ {"t":"label","at":[910,577],"text":"Số nhịp phải là số nguyên","align":"right"},
+
+ {"t":"box","r":[946,639,338,124]},
+ {"t":"badge","at":[928,700],"n":4},
+ {"t":"label","at":[910,700],"text":"Chạy 2 lần = nhân 2 lần","align":"right"}
+]}

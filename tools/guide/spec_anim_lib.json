@@ -1,0 +1,28 @@
+{"items":[
+ {"t":"box","r":[1298,192,22,76]},
+ {"t":"badge","at":[1309,282],"n":1},
+
+ {"t":"box","r":[946,87,340,40]},
+ {"t":"badge","at":[928,107],"n":2},
+ {"t":"label","at":[910,107],"text":"Trỏ tới thư mục FBX Mixamo","align":"right"},
+
+ {"t":"box","r":[400,165,170,515]},
+ {"t":"badge","at":[400,165],"n":3},
+ {"t":"label","at":[388,420],"text":"Chọn armature nhân vật","align":"right"},
+
+ {"t":"box","r":[951,197,302,20]},
+ {"t":"badge","at":[928,207],"n":4},
+ {"t":"label","at":[910,207],"text":"Chọn animation (dấu tích = đã có)","align":"right"},
+
+ {"t":"box","r":[946,318,340,142]},
+ {"t":"badge","at":[928,388],"n":5},
+ {"t":"label","at":[910,388],"text":"In Place = đứng tại chỗ","align":"right"},
+
+ {"t":"box","r":[946,464,340,42]},
+ {"t":"badge","at":[928,485],"n":6},
+ {"t":"label","at":[910,485],"text":"Áp lên rig đang chọn","align":"right"},
+
+ {"t":"box","r":[946,670,340,72]},
+ {"t":"badge","at":[928,706],"n":7},
+ {"t":"label","at":[910,706],"text":"Xuất FBX sang Unity","align":"right"}
+]}

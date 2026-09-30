@@ -1,0 +1,19 @@
+{"items":[
+ {"t":"box","r":[1298,190,22,66]},
+ {"t":"badge","at":[1309,270],"n":1},
+
+ {"t":"box","r":[947,87,112,24]},
+ {"t":"badge","at":[947,87],"n":2},
+
+ {"t":"box","r":[947,127,338,20]},
+ {"t":"badge","at":[928,137],"n":3},
+ {"t":"label","at":[910,137],"text":"Danh sách trống thì bấm Tải lại kho","align":"right"},
+
+ {"t":"box","r":[951,217,311,21]},
+ {"t":"badge","at":[928,227],"n":4},
+ {"t":"label","at":[910,227],"text":"Chọn addon (dấu tích = đã cài)","align":"right"},
+
+ {"t":"box","r":[951,439,331,23]},
+ {"t":"badge","at":[928,450],"n":5},
+ {"t":"label","at":[910,450],"text":"Cài xong addon tự bật","align":"right"}
+]}
