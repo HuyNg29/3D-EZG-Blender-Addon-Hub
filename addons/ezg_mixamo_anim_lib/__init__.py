@@ -1524,6 +1524,9 @@ class MIXLIB_OT_reimport(Operator):
                         % item.filepath)
             return {'CANCELLED'}
 
+        # Doc rig dich TRUOC khi import: importer FBX dat armature vua import lam
+        # active, doc sau se lay nham no roi xoa mat cung dong import ben duoi.
+        target = _active_armature(context)
         src_arm, imported = _import_fbx(item.filepath)
         if src_arm is None or src_arm.animation_data is None or src_arm.animation_data.action is None:
             _delete_objects(imported)
@@ -1532,7 +1535,6 @@ class MIXLIB_OT_reimport(Operator):
             return {'CANCELLED'}
 
         src_action = src_arm.animation_data.action
-        target = _active_armature(context)
         mism = _rest_mismatch(src_arm, target) if target else None
         units_differ = (target is not None
                         and abs(_rig_scale(src_arm) - _rig_scale(target)) > 1e-4)

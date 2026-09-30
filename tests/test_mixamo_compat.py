@@ -246,6 +246,27 @@ def main():
                   "re-applied animation matches the pre-normalize motion")
             check(move_m > 0.05, "re-applied animation is not flat")
 
+            # Regression: "Reimport from FBX" read the target rig AFTER
+            # importing, when the FBX importer had already made the imported
+            # armature active. It then deleted that armature along with the
+            # rest of the import and crashed on it ("StructRNA of type Object
+            # has been removed").
+            print("\n-- Reimport from FBX --")
+            props.active_index = idx
+            bpy.ops.object.select_all(action='DESELECT')
+            rig.select_set(True)
+            bpy.context.view_layer.objects.active = rig
+            n_objects = len(bpy.data.objects)
+            try:
+                res, err = bpy.ops.mixlib.reimport('EXEC_DEFAULT'), None
+            except Exception as exc:
+                res, err = None, exc
+            check(err is None and res == {'FINISHED'},
+                  "reimport runs without error (%s)" % err)
+            check(len(bpy.data.objects) == n_objects,
+                  "reimport leaves no imported objects behind")
+            check(rig.name in bpy.data.objects, "target rig survives the reimport")
+
     print()
     print("RESULT:", "ALL TESTS PASSED" if not FAILED else f"{len(FAILED)} FAILURES")
     if FAILED:
