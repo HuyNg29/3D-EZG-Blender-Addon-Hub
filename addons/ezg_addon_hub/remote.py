@@ -31,7 +31,7 @@ def online():
 
 def _fetch_json(url, token=""):
     if not online():
-        raise RemoteError("Blender dang o che do offline. Bat Preferences > System > Allow Online Access.")
+        raise RemoteError("Blender đang ở chế độ offline. Bật Preferences > System > Allow Online Access.")
 
     req = urllib.request.Request(url, headers={"User-Agent": "ezg-addon-hub"})
     if token:
@@ -42,19 +42,19 @@ def _fetch_json(url, token=""):
             raw = resp.read()
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
-            raise RemoteError("Bi tu choi (%d). Kho dat private? Kiem tra access token." % exc.code)
+            raise RemoteError("Bị từ chối (%d). Kho đặt private? Kiểm tra access token." % exc.code)
         if exc.code == 404:
-            raise RemoteError("Khong tim thay (404): %s" % url)
-        raise RemoteError("Loi HTTP %d khi tai %s" % (exc.code, url))
+            raise RemoteError("Không tìm thấy (404): %s" % url)
+        raise RemoteError("Lỗi HTTP %d khi tải %s" % (exc.code, url))
     except urllib.error.URLError as exc:
-        raise RemoteError("Khong ket noi duoc: %s" % exc.reason)
+        raise RemoteError("Không kết nối được: %s" % exc.reason)
     except Exception as exc:
-        raise RemoteError("Loi khi tai: %s" % exc)
+        raise RemoteError("Lỗi khi tải: %s" % exc)
 
     try:
         return json.loads(raw.decode("utf-8"))
     except Exception as exc:
-        raise RemoteError("Noi dung tra ve khong phai JSON hop le: %s" % exc)
+        raise RemoteError("Nội dung trả về không phải JSON hợp lệ: %s" % exc)
 
 
 def _catalog_url(index_url):
@@ -66,7 +66,7 @@ def fetch(index_url, token="", force=False):
     """Tra ve (index_dict, catalog_dict). catalog co the la {} neu kho khong co."""
     url = (index_url or "").strip()
     if not url:
-        raise RemoteError("Chua dat URL kho EZG trong Preferences cua hub.")
+        raise RemoteError("Chưa đặt URL kho EZG trong Preferences của hub.")
 
     if not force and url in _cache:
         return _cache[url]["index"], _cache[url]["catalog"]

@@ -108,9 +108,9 @@ class EZG_UL_catalog(UIList):
         sub = row.row()
         sub.alignment = 'RIGHT'
         if item.is_external:
-            sub.label(text="ben thu ba")
+            sub.label(text="bên thứ ba")
         elif item.installed and scanner.is_newer(item.version, item.installed_version):
-            sub.label(text="v%s moi" % item.version, icon='TRIA_UP')
+            sub.label(text="v%s mới" % item.version, icon='TRIA_UP')
         elif item.version:
             sub.label(text="v" + item.version)
 
@@ -149,16 +149,16 @@ def draw_store(layout, context):
     repo = scanner.find_repo_by_url(p.repo_url) if p else None
     if repo is None:
         box = layout.box()
-        box.label(text="Kho EZG chua duoc dang ki trong Blender.", icon='ERROR')
-        box.label(text="Can buoc nay thi Blender moi tu kiem tra cap nhat duoc.")
+        box.label(text="Kho EZG chưa được đăng kí trong Blender.", icon='ERROR')
+        box.label(text="Cần bước này thì Blender mới tự kiểm tra cập nhật được.")
         box.operator("ezg.setup_repo", icon='PLUS')
         layout.separator()
 
     row = layout.row(align=True)
-    row.operator("ezg.refresh_store", text="Tai lai kho", icon='FILE_REFRESH')
+    row.operator("ezg.refresh_store", text="Tải lại kho", icon='FILE_REFRESH')
 
     if len(wm.ezg_catalog) == 0:
-        layout.label(text="Bam 'Tai lai kho' de xem danh sach addon EZG.", icon='INFO')
+        layout.label(text="Bấm 'Tải lại kho' để xem danh sách addon EZG.", icon='INFO')
         return
 
     layout.template_list("EZG_UL_catalog", "", wm, "ezg_catalog", wm, "ezg_catalog_index", rows=7)
@@ -177,32 +177,32 @@ def draw_store(layout, context):
     if item.recommended:
         sub = head.row()
         sub.alignment = 'RIGHT'
-        sub.label(text="khuyen dung", icon='SOLO_ON')
+        sub.label(text="khuyên dùng", icon='SOLO_ON')
 
     if item.group_label:
-        box.label(text="Nhom: " + item.group_label)
+        box.label(text="Nhóm: " + item.group_label)
 
     if item.summary:
         _label_lines(box.column(align=True), item.summary)
 
     if item.is_external:
         box.separator()
-        box.label(text="Addon cua ben thu ba — EZG khong phat hanh lai.", icon='INFO')
+        box.label(text="Addon của bên thứ ba — EZG không phát hành lại.", icon='INFO')
         if item.installed:
-            box.label(text="Dang cai: v%s" % item.installed_version, icon='CHECKMARK')
-        box.operator("ezg.open_url", text="Mo trang goc", icon='URL').url = item.homepage
+            box.label(text="Đang cài: v%s" % item.installed_version, icon='CHECKMARK')
+        box.operator("ezg.open_url", text="Mở trang gốc", icon='URL').url = item.homepage
         return
 
     box.separator()
     if not item.installed:
-        op = box.operator("ezg.install", text="Cai vao Blender", icon='IMPORT')
+        op = box.operator("ezg.install", text="Cài vào Blender", icon='IMPORT')
         op.pkg_id = item.pkg_id
     elif scanner.is_newer(item.version, item.installed_version):
-        box.label(text="Dang cai v%s, kho co v%s" % (item.installed_version, item.version),
+        box.label(text="Đang cài v%s, kho có v%s" % (item.installed_version, item.version),
                   icon='TRIA_UP')
-        box.operator("ezg.update_all", text="Cap nhat", icon='IMPORT')
+        box.operator("ezg.update_all", text="Cập nhật", icon='IMPORT')
     else:
-        box.label(text="Da cai ban moi nhat (v%s)" % item.installed_version, icon='CHECKMARK')
+        box.label(text="Đã cài bản mới nhất (v%s)" % item.installed_version, icon='CHECKMARK')
 
 
 # ---------------------------------------------------------------------------
@@ -213,22 +213,22 @@ def draw_machine(layout, context):
     wm = context.window_manager
 
     row = layout.row(align=True)
-    row.operator("ezg.refresh_inventory", text="Quet lai", icon='FILE_REFRESH').check_updates = False
-    row.operator("ezg.refresh_inventory", text="Kiem tra ban moi", icon='URL').check_updates = True
+    row.operator("ezg.refresh_inventory", text="Quét lại", icon='FILE_REFRESH').check_updates = False
+    row.operator("ezg.refresh_inventory", text="Kiểm tra bản mới", icon='URL').check_updates = True
 
     if len(wm.ezg_inventory) == 0:
-        layout.label(text="Bam 'Quet lai' de xem addon dang cai.", icon='INFO')
+        layout.label(text="Bấm 'Quét lại' để xem addon đang cài.", icon='INFO')
         return
 
     n_update = sum(1 for i in wm.ezg_inventory if i.update_version)
     n_manual = sum(1 for i in wm.ezg_inventory if i.group == "C")
 
     info = layout.row()
-    info.label(text="%d addon | %d thu cong" % (len(wm.ezg_inventory), n_manual))
+    info.label(text="%d addon | %d thủ công" % (len(wm.ezg_inventory), n_manual))
     if n_update:
         sub = info.row()
         sub.alignment = 'RIGHT'
-        sub.label(text="%d ban moi" % n_update, icon='TRIA_UP')
+        sub.label(text="%d bản mới" % n_update, icon='TRIA_UP')
 
     layout.template_list("EZG_UL_inventory", "", wm, "ezg_inventory", wm, "ezg_inventory_index", rows=8)
 
@@ -237,11 +237,11 @@ def draw_machine(layout, context):
 
         one = col.row()
         one.scale_y = 1.2
-        one.operator("ezg.update_selected", text="Cap nhat muc dang chon", icon='IMPORT')
+        one.operator("ezg.update_selected", text="Cập nhật mục đang chọn", icon='IMPORT')
 
         big = col.row()
         big.scale_y = 1.3
-        big.operator("ezg.update_all", text="Cap nhat tat ca", icon='IMPORT')
+        big.operator("ezg.update_all", text="Cập nhật tất cả", icon='IMPORT')
 
     if not (0 <= wm.ezg_inventory_index < len(wm.ezg_inventory)):
         return
@@ -249,20 +249,20 @@ def draw_machine(layout, context):
     item = wm.ezg_inventory[wm.ezg_inventory_index]
     box = layout.box()
     box.label(text=item.name, **group_icon(item.group))
-    box.label(text="Phien ban: v%s" % (item.version or "?"))
-    box.label(text="Nguon: %s" % item.source_label)
-    box.label(text="Trang thai: %s" % ("dang bat" if item.enabled else "dang tat"))
+    box.label(text="Phiên bản: v%s" % (item.version or "?"))
+    box.label(text="Nguồn: %s" % item.source_label)
+    box.label(text="Trạng thái: %s" % ("đang bật" if item.enabled else "đang tắt"))
 
     if item.group == "C":
         box.separator()
-        box.label(text="Nguon thu cong — hub khong tu cap nhat duoc.", icon='INFO')
+        box.label(text="Nguồn thủ công — hub không tự cập nhật được.", icon='INFO')
         if item.homepage:
-            box.operator("ezg.open_url", text="Mo trang nguon", icon='URL').url = item.homepage
+            box.operator("ezg.open_url", text="Mở trang nguồn", icon='URL').url = item.homepage
         else:
-            box.label(text="Addon nay khong khai bao trang nguon.")
+            box.label(text="Addon này không khai báo trang nguồn.")
     elif item.update_version:
         box.separator()
-        box.label(text="Co ban moi: v%s" % item.update_version, icon='TRIA_UP')
+        box.label(text="Có bản mới: v%s" % item.update_version, icon='TRIA_UP')
 
 
 # ---------------------------------------------------------------------------
@@ -279,29 +279,29 @@ def draw_backup(layout, context):
     box.label(text="Profile: %s" % p.resolved_profile_name(), icon='USER')
     box.label(text=p.resolved_backup_dir())
     if p.sync_dir:
-        box.label(text="Dong bo: " + p.sync_dir, icon='UV_SYNC_SELECT')
+        box.label(text="Đồng bộ: " + p.sync_dir, icon='UV_SYNC_SELECT')
 
     n_manual = sum(1 for i in wm.ezg_inventory if i.group == "C")
     if len(wm.ezg_inventory):
         note = layout.column(align=True)
-        note.label(text="Se luu %d addon, trong do %d addon thu cong duoc zip kem."
+        note.label(text="Sẽ lưu %d addon, trong đó %d addon thủ công được zip kèm."
                         % (len(wm.ezg_inventory), n_manual), icon='INFO')
     else:
-        layout.label(text="Sang tab 'May cua toi' bam Quet lai de xem se luu gi.", icon='INFO')
+        layout.label(text="Sang tab 'Máy của tôi' bấm Quét lại để xem sẽ lưu gì.", icon='INFO')
 
     big = layout.row()
     big.scale_y = 1.4
-    big.operator("ezg.backup_create", text="TAO BACKUP", icon='FILE_BACKUP')
+    big.operator("ezg.backup_create", text="TẠO BACKUP", icon='FILE_BACKUP')
 
     layout.separator()
     row = layout.row(align=True)
-    row.label(text="Ban da luu")
+    row.label(text="Bản đã lưu")
     sub = row.row()
     sub.alignment = 'RIGHT'
     sub.operator("ezg.refresh_snapshots", text="", icon='FILE_REFRESH')
 
     if len(wm.ezg_snapshots) == 0:
-        layout.label(text="Chua co ban backup nao.", icon='DOT')
+        layout.label(text="Chưa có bản backup nào.", icon='DOT')
         return
 
     layout.template_list("EZG_UL_snapshots", "", wm, "ezg_snapshots", wm, "ezg_snapshots_index", rows=4)
@@ -311,18 +311,18 @@ def draw_backup(layout, context):
 
     snap = wm.ezg_snapshots[wm.ezg_snapshots_index]
     box = layout.box()
-    box.label(text="Tao luc: %s" % (snap.created or snap.name))
-    box.label(text="%d addon, %d co zip kem" % (snap.count, snap.blobs))
+    box.label(text="Tạo lúc: %s" % (snap.created or snap.name))
+    box.label(text="%d addon, %d có zip kèm" % (snap.count, snap.blobs))
     if snap.blender:
-        box.label(text="Tu Blender %s" % snap.blender)
+        box.label(text="Từ Blender %s" % snap.blender)
 
     box.separator()
     box.prop(wm, "ezg_restore_mode", text="")
     if wm.ezg_restore_mode == 'EXACT' and snap.blobs < snap.count:
-        box.label(text="Chi %d/%d addon co zip — so con lai se bi bo qua."
+        box.label(text="Chỉ %d/%d addon có zip — số còn lại sẽ bị bỏ qua."
                        % (snap.blobs, snap.count), icon='ERROR')
 
-    op = box.operator("ezg.restore", text="Phuc hoi", icon='IMPORT')
+    op = box.operator("ezg.restore", text="Phục hồi", icon='IMPORT')
     op.path = snap.path
     op.mode = wm.ezg_restore_mode
 

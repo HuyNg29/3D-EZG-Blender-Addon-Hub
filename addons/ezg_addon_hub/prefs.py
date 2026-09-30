@@ -28,44 +28,44 @@ class EZGHubPreferences(AddonPreferences):
 
     repo_url: StringProperty(
         name="URL kho EZG",
-        description="Dia chi index.json cua kho addon EZG",
+        description="Địa chỉ index.json của kho addon EZG",
         default=DEFAULT_REPO_URL,
     )
     access_token: StringProperty(
         name="Access token",
-        description="Chi can neu kho EZG dat o che do private",
+        description="Chỉ cần nếu kho EZG đặt ở chế độ private",
         default="",
         subtype='PASSWORD',
     )
     backup_dir: StringProperty(
-        name="Thu muc backup",
-        description="Noi luu snapshot profile addon",
+        name="Thư mục backup",
+        description="Nơi lưu snapshot profile addon",
         default="",
         subtype='DIR_PATH',
     )
     sync_dir: StringProperty(
-        name="Thu muc dong bo",
-        description=("Tuy chon. Tro toi NAS hoac thu muc Google Drive da sync. "
-                     "Hub chi ghi them ban manifest vao day, viec dong bo de OS lo"),
+        name="Thư mục đồng bộ",
+        description=("Tuỳ chọn. Trỏ tới NAS hoặc thư mục Google Drive đã sync. "
+                     "Hub chỉ ghi thêm bản manifest vào đây, việc đồng bộ để OS lo"),
         default="",
         subtype='DIR_PATH',
     )
     profile_name: StringProperty(
-        name="Ten profile",
-        description="Snapshot duoc luu theo ten nay",
+        name="Tên profile",
+        description="Snapshot được lưu theo tên này",
         default="",
     )
     backup_all_blobs: BoolProperty(
-        name="Luu zip cho moi addon",
-        description=("Mac dinh hub chi zip addon nguon thu cong (nhom C) vi addon tu kho "
-                     "tai lai duoc. Bat cai nay neu muon Restore dung y het phien ban cu, "
-                     "doi lai snapshot nang hon nhieu"),
+        name="Lưu zip cho mọi addon",
+        description=("Mặc định hub chỉ zip addon nguồn thủ công (nhóm C) vì addon từ kho "
+                     "tải lại được. Bật cái này nếu muốn Restore đúng y hệt phiên bản cũ, "
+                     "đổi lại snapshot nặng hơn nhiều"),
         default=False,
     )
     mirror_blobs: BoolProperty(
-        name="Chep ca zip sang thu muc dong bo",
-        description=("CAN NHAC KY: zip co the chua addon tra phi. De tat thi chi manifest "
-                     "duoc chep sang thu muc dung chung"),
+        name="Chép cả zip sang thư mục đồng bộ",
+        description=("CÂN NHẮC KỸ: zip có thể chứa addon trả phí. Để tắt thì chỉ manifest "
+                     "được chép sang thư mục dùng chung"),
         default=False,
     )
 
@@ -78,7 +78,7 @@ class EZGHubPreferences(AddonPreferences):
     def draw(self, context):
         layout = self.layout
 
-        layout.label(text="Hub nam o View3D > phim N > tab 'EZG Hub'.", icon='INFO')
+        layout.label(text="Hub nằm ở View3D > phím N > tab 'EZG Hub'.", icon='INFO')
         layout.separator()
 
         box = layout.box()
@@ -89,21 +89,21 @@ class EZGHubPreferences(AddonPreferences):
         box = layout.box()
         box.label(text="Backup profile", icon='FILE_BACKUP')
         box.prop(self, "profile_name",
-                 text="Ten profile" if self.profile_name else "Ten profile (%s)" % default_profile_name())
+                 text="Tên profile" if self.profile_name else "Tên profile (%s)" % default_profile_name())
         box.prop(self, "backup_dir",
-                 text="Thu muc" if self.backup_dir else "Thu muc (mac dinh)")
+                 text="Thư mục" if self.backup_dir else "Thư mục (mặc định)")
         if not self.backup_dir:
             box.label(text=default_backup_dir(), icon='DOT')
         box.prop(self, "backup_all_blobs")
 
         box = layout.box()
-        box.label(text="Dong bo (tuy chon)", icon='UV_SYNC_SELECT')
-        box.prop(self, "sync_dir", text="Thu muc")
+        box.label(text="Đồng bộ (tuỳ chọn)", icon='UV_SYNC_SELECT')
+        box.prop(self, "sync_dir", text="Thư mục")
         row = box.row()
         row.enabled = bool(self.sync_dir)
         row.prop(self, "mirror_blobs")
         if self.sync_dir and self.mirror_blobs:
-            box.label(text="Zip addon tra phi se nam tren thu muc dung chung.", icon='ERROR')
+            box.label(text="Zip addon trả phí sẽ nằm trên thư mục dùng chung.", icon='ERROR')
 
 
 def get(context=None):

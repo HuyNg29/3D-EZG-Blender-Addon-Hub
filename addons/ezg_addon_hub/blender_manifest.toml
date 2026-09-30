@@ -2,9 +2,9 @@ schema_version = "1.0.0"
 
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 id = "ezg_addon_hub"
-version = "0.1.4"
+version = "0.1.5"
 name = "EZG Addon Hub"
-tagline = "Quan li addon EZG, kiem ke may va backup profile addon"
+tagline = "Quản lí addon EZG, kiểm kê máy và backup profile addon"
 maintainer = "EZG <visual-01@easygoing.vn>"
 type = "add-on"
 
@@ -22,5 +22,5 @@ copyright = [
 ]
 
 [permissions]
-network = "Tai danh sach addon EZG va kiem tra ban cap nhat"
-files = "Doc addon dang cai de kiem ke va ghi file backup profile"
+network = "Tải danh sách addon EZG và kiểm tra bản cập nhật"
+files = "Đọc addon đang cài để kiểm kê và ghi file backup profile"

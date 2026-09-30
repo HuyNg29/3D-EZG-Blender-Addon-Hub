@@ -23,9 +23,9 @@ except ImportError:  # Blender 4.5 luon co, day chi la luoi an toan
     tomllib = None
 
 GROUP_LABEL = {
-    "A": "kho ngoai",
+    "A": "kho ngoài",
     "B": "EZG",
-    "C": "thu cong",
+    "C": "thủ công",
 }
 
 
@@ -153,7 +153,7 @@ def scan(ezg_repo_url=""):
             "version": _version_str(info.get("version")),
             "enabled": module in enabled_modules,
             "group": "C",
-            "source_label": "thu cong",
+            "source_label": "thủ công",
             "homepage": info.get("doc_url") or info.get("wiki_url") or "",
             "repo_module": "",
             "path": filepath if single_file else pkg_dir,

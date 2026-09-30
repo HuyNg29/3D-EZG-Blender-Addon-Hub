@@ -65,9 +65,9 @@ def register():
     wm.ezg_tab = EnumProperty(
         name="Tab",
         items=[
-            ('STORE', "Kho EZG", "Addon cua EZG: cai va cap nhat", 'URL', 0),
-            ('MACHINE', "May cua toi", "Moi addon dang cai tren may nay", 'DESKTOP', 1),
-            ('BACKUP', "Backup", "Luu va phuc hoi profile addon", 'FILE_BACKUP', 2),
+            ('STORE', "Kho EZG", "Addon của EZG: cài và cập nhật", 'URL', 0),
+            ('MACHINE', "Máy của tôi", "Mọi addon đang cài trên máy này", 'DESKTOP', 1),
+            ('BACKUP', "Backup", "Lưu và phục hồi profile addon", 'FILE_BACKUP', 2),
         ],
         default='STORE',
     )
@@ -85,12 +85,12 @@ def register():
     wm.ezg_error = StringProperty(default="")
 
     wm.ezg_restore_mode = EnumProperty(
-        name="Che do",
+        name="Chế độ",
         items=[
-            ('LATEST', "Ban moi nhat",
-             "Tai lai tu kho, chi dung zip da luu khi nguon khong con. Khuyen dung"),
-            ('EXACT', "Dung ban da luu",
-             "Cai dung version trong snapshot. Bat buoc phai co zip di kem"),
+            ('LATEST', "Bản mới nhất",
+             "Tải lại từ kho, chỉ dùng zip đã lưu khi nguồn không còn. Khuyên dùng"),
+            ('EXACT', "Đúng bản đã lưu",
+             "Cài đúng version trong snapshot. Bắt buộc phải có zip đi kèm"),
         ],
         default='LATEST',
     )

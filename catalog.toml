@@ -45,83 +45,83 @@ items = ["ezg_mixamo_marker_rigger", "ezg_mixamo_anim_lib", "ezg_anim_tools"]
 [items.ezg_addon_hub]
 title_vi = "EZG Addon Hub"
 summary_vi = """
-Trung tam quan li addon: cai addon EZG, kiem ke moi addon dang co tren may,
-va backup / phuc hoi profile addon khi doi may hoac cai lai Blender.
-Hub tu cap nhat chinh no qua kho nay."""
+Trung tâm quản lí addon: cài addon EZG, kiểm kê mọi addon đang có trên máy,
+và backup / phục hồi profile addon khi đổi máy hoặc cài lại Blender.
+Hub tự cập nhật chính nó qua kho này."""
 thumbnail = "thumbs/ezg_addon_hub.png"
 recommended = true
 
 [items.ezg_deco_namer]
 title_vi = "Deco Namer"
 summary_vi = """
-Doi ten hang loat mesh theo tien to deco_NN_ kem hau to chu cai.
-Tu dong nhay qua cac hau to da bi chiem.
-Hover vao rule de sang len nhom mesh cung ten."""
+Đổi tên hàng loạt mesh theo tiền tố deco_NN_ kèm hậu tố chữ cái.
+Tự động nhảy qua các hậu tố đã bị chiếm.
+Hover vào rule để sáng lên nhóm mesh cùng tên."""
 thumbnail = "thumbs/ezg_deco_namer.png"
 recommended = true
 
 [items.ezg_fbx_batch]
 title_vi = "FBX Batch to Blender"
 summary_vi = """
-Convert hang loat FBX trong 1 folder sang .blend, giu texture (pack vao file).
-Hai che do: moi FBX ra 1 file rieng, hoac gom tat ca vao 1 file.
-Chay bang tien trinh Blender nen rieng nen khong dong bang UI."""
+Convert hàng loạt FBX trong 1 folder sang .blend, giữ texture (pack vào file).
+Hai chế độ: mỗi FBX ra 1 file riêng, hoặc gom tất cả vào 1 file.
+Chạy bằng tiến trình Blender nền riêng nên không đóng băng UI."""
 thumbnail = "thumbs/ezg_fbx_batch.png"
 recommended = true
 
 [items.ezg_gn_info_namer]
 title_vi = "GN Info Namer"
 summary_vi = """
-Chon object ngoai viewport, bam mot nut la moi cai thanh mot node Object Info,
-noi het vao mot Join Geometry, dat nhan va dan thang hang luon — day cam vao
-Join theo dung thu tu tren xuong nen khong xoan vao nhau.
-Chieu nguoc lai cung duoc: chon node Info thi object cua no sang len ngoai
-viewport, co cong tac lam tu dong.
-Dat nhan cho node Object Info / Collection Info theo ten object ma node do dang
-tro toi, nen nhin cay Geometry Nodes la doc duoc ngay thay vi phai bam vao tung
-node. Chay cho cay dang mo (ke ca group long ben trong) hoac ca file.
-Kem nut dan cac node do ve mot cot thang, cach deu va thu nho lai cho gon —
-sap theo vi tri dang thay hoac theo nhan A→Z.
-Va nut don: xoa cac node Info khong tro toi object nao hoac khong noi vao dau,
-co bang xem truoc liet ke dung nhung node sap bi xoa kem ly do."""
+Chọn object ngoài viewport, bấm một nút là mỗi cái thành một node Object Info,
+nối hết vào một Join Geometry, đặt nhãn và dàn thẳng hàng luôn — dây cắm vào
+Join theo đúng thứ tự trên xuống nên không xoắn vào nhau.
+Chiều ngược lại cũng được: chọn node Info thì object của nó sáng lên ngoài
+viewport, có công tắc làm tự động.
+Đặt nhãn cho node Object Info / Collection Info theo tên object mà node đó đang
+trỏ tới, nên nhìn cây Geometry Nodes là đọc được ngay thay vì phải bấm vào từng
+node. Chạy cho cây đang mở (kể cả group lồng bên trong) hoặc cả file.
+Kèm nút dàn các node đó về một cột thẳng, cách đều và thu nhỏ lại cho gọn —
+sắp theo vị trí đang thấy hoặc theo nhãn A→Z.
+Và nút dọn: xoá các node Info không trỏ tới object nào hoặc không nối vào đâu,
+có bảng xem trước liệt kê đúng những node sắp bị xoá kèm lý do."""
 thumbnail = "thumbs/ezg_gn_info_namer.png"
 recommended = false
 
 [items.ezg_auto_uv_palette]
 title_vi = "Auto UV Palette"
 summary_vi = """
-Scale va sap xep UV cua cac object dang chon vao mot luoi palette.
-Dung khi nhieu object dung chung mot texture bang mau."""
+Scale và sắp xếp UV của các object đang chọn vào một lưới palette.
+Dùng khi nhiều object dùng chung một texture bảng màu."""
 thumbnail = "thumbs/ezg_auto_uv_palette.png"
 recommended = false
 
 [items.ezg_mixamo_marker_rigger]
 title_vi = "Manual Marker Mixamo Rigger"
 summary_vi = """
-Dat marker khop (cam, hang, co tay, khuyu, dau goi) len nhan vat T-Pose,
-tu sinh armature chuan Mixamo roi bind weight tu dong.
-Marker ben phai tu bam theo ben trai qua driver, chon duoc truc doi xung."""
+Đặt marker khớp (cằm, háng, cổ tay, khuỷu, đầu gối) lên nhân vật T-Pose,
+tự sinh armature chuẩn Mixamo rồi bind weight tự động.
+Marker bên phải tự bám theo bên trái qua driver, chọn được trục đối xứng."""
 thumbnail = "thumbs/ezg_mixamo_marker_rigger.png"
 recommended = false
 
 [items.ezg_mixamo_anim_lib]
 title_vi = "Mixamo Animation Library"
 summary_vi = """
-Duyet mot thu muc chua file FBX tai tu Mixamo va ap animation thang vao rig.
-Khoi phai import tung file mot roi retarget bang tay."""
+Duyệt một thư mục chứa file FBX tải từ Mixamo và áp animation thẳng vào rig.
+Khỏi phải import từng file một rồi retarget bằng tay."""
 thumbnail = "thumbs/ezg_mixamo_anim_lib.png"
 recommended = true
 
 [items.ezg_anim_tools]
 title_vi = "EZG Animation Tools"
 summary_vi = """
-Hai viec quanh chuyen dong: RETARGET animation tu mot bo xuong bat ki sang bo
-xuong khac (tu doan bang anh xa tu ten xuong, tu bu chenh lech rest pose A-pose
-vs T-pose, quy doi tinh tien hong theo ti le chieu cao), va LAT GUONG trai/phai
-mot action (sao du ca kenh cap object nen khong bi sai scale khi export).
-Chay duoc ca rig kieu IK: bat truyen vi tri cho tung xuong kem xuong neo, va
-lat guong dung ca tren rig co rest pose hai ben lech huong.
-Ca hai deu co nut do sai lech de biet ket qua bam sat den dau."""
+Hai việc quanh chuyển động: RETARGET animation từ một bộ xương bất kì sang bộ
+xương khác (tự đoán bảng ánh xạ từ tên xương, tự bù chênh lệch rest pose A-pose
+vs T-pose, quy đổi tịnh tiến hông theo tỉ lệ chiều cao), và LẬT GƯƠNG trái/phải
+một action (sao đủ cả kênh cấp object nên không bị sai scale khi export).
+Chạy được cả rig kiểu IK: bật truyền vị trí cho từng xương kèm xương neo, và
+lật gương đúng cả trên rig có rest pose hai bên lệch hướng.
+Cả hai đều có nút đo sai lệch để biết kết quả bám sát đến đâu."""
 thumbnail = "thumbs/ezg_anim_tools.png"
 recommended = false
 
@@ -135,11 +135,11 @@ recommended = false
 [[external]]
 id = "blender_mcp"
 title_vi = "Blender MCP"
-summary_vi = "Noi Blender voi Claude qua MCP. Tac gia: Siddharth Ahuja"
+summary_vi = "Nối Blender với Claude qua MCP. Tác giả: Siddharth Ahuja"
 homepage = "https://github.com/ahujasid/blender-mcp"
 
 [[external]]
 id = "tripo3d_blender_bridge"
 title_vi = "Tripo3D Blender Bridge"
-summary_vi = "Cau noi Tripo3D sang Blender. Tac gia: Tripo3D"
+summary_vi = "Cầu nối Tripo3D sang Blender. Tác giả: Tripo3D"
 homepage = "https://www.tripo3d.ai/"
