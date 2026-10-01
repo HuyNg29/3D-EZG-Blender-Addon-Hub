@@ -30,7 +30,7 @@ items = ["ezg_fbx_batch"]
 [[groups]]
 id = "modeling"
 label = "Modeling / UV"
-items = ["ezg_deco_namer", "ezg_auto_uv_palette"]
+items = ["ezg_deco_namer", "ezg_auto_uv_palette", "ezg_object_spread"]
 
 [[groups]]
 id = "nodes"
@@ -124,6 +124,23 @@ summary_en = """
 Scale and arrange the UVs of the selected objects into a palette grid.
 For many objects sharing one colour-swatch texture."""
 thumbnail = "thumbs/ezg_auto_uv_palette.png"
+recommended = false
+
+[items.ezg_object_spread]
+title_vi = "Object Spread"
+summary_vi = """
+Trải các object đang chọn thành một lưới đều để xem từng cái cho rõ, mỗi
+object cách nhau đúng khoảng đã đặt (đo từ mép nên object to nhỏ lẫn lộn cũng
+không đè lên nhau). Chọn số cột, số hàng hoặc để tự động.
+Một nút đưa pivot của tất cả về 0,0,0. Object con có parent cũng đang chọn thì
+đi theo parent như bình thường, không bị xếp tách ra."""
+summary_en = """
+Spread the selected objects into an even grid so each one is easy to see, with
+the set gap between them (measured from their edges, so mixed sizes never
+overlap). Pick the column count, the row count, or let it decide.
+One button moves every pivot back to 0,0,0. Children whose parent is also
+selected follow the parent as usual instead of being laid out on their own."""
+thumbnail = "thumbs/ezg_object_spread.png"
 recommended = false
 
 [items.ezg_mixamo_marker_rigger]

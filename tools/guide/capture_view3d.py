@@ -110,6 +110,56 @@ def scene_deco_namer():
                   ("SM_Chair", "SM_Lamp", "SM_Plant"), "SM_Lamp")
 
 
+def scene_object_spread():
+    # Vai asset to nho lan lon chong het o 0,0,0 + mot cum parent (Lamp con cua
+    # Table). Chon het roi bam Xep luoi that: Lamp phai nam yen tren Table.
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in list(bpy.data.objects):
+        bpy.data.objects.remove(o)
+    mesh = bpy.ops.mesh
+    specs = [
+        ("Rock_01", mesh.primitive_ico_sphere_add, {"radius": 0.6, "subdivisions": 1}, None),
+        ("Barrel_01", mesh.primitive_cylinder_add, {"radius": 0.5, "depth": 1.2}, None),
+        ("Tree_01", mesh.primitive_cone_add, {"radius1": 0.9, "depth": 2.6}, None),
+        ("Crate_01", mesh.primitive_cube_add, {"size": 1.0}, None),
+        ("Tyre_01", mesh.primitive_torus_add, {"major_radius": 0.6, "minor_radius": 0.2}, None),
+        ("Wall_01", mesh.primitive_cube_add, {"size": 1.0}, (3.0, 0.3, 1.5)),
+        ("Monkey_01", mesh.primitive_monkey_add, {"size": 1.0}, None),
+        ("Table_01", mesh.primitive_cube_add, {"size": 1.0}, (1.6, 0.9, 0.1)),
+    ]
+    for name, add, kw, scale in specs:
+        add(**kw)
+        ob = bpy.context.object
+        ob.name = name
+        if scale:
+            ob.scale = scale
+    table = bpy.data.objects["Table_01"]
+    mesh.primitive_cone_add(radius1=0.25, depth=0.6, location=(0.4, 0.0, 0.35))
+    lamp = bpy.context.object
+    lamp.name = "Lamp_01"
+    bpy.context.view_layer.update()
+    lamp.parent = table
+    lamp.matrix_parent_inverse = table.matrix_world.inverted()
+
+    area = view3d_area()
+    win_rgn = next(r for r in area.regions if r.type == 'WINDOW')
+    with bpy.context.temp_override(window=bpy.context.window_manager.windows[0],
+                                   area=area, region=win_rgn):
+        bpy.ops.object.select_all(action='SELECT')
+        bpy.context.view_layer.objects.active = table
+        settings = bpy.context.scene.ezg_spread
+        settings.mode = 'AUTO'
+        settings.gap = 0.6
+        log("arrange", bpy.ops.ezg_spread.arrange())
+    from math import radians
+    from mathutils import Euler
+    area.spaces.active.region_3d.view_rotation = \
+        Euler((radians(55), 0, radians(25))).to_quaternion()
+    with bpy.context.temp_override(window=bpy.context.window_manager.windows[0],
+                                   area=area, region=win_rgn):
+        bpy.ops.view3d.view_all()
+
+
 def scene_uv_palette():
     # 5 object, chon 4. Moi cai co material + Image Texture noi Base Color de
     # panel khong bao "object khong co texture".
@@ -392,6 +442,7 @@ def scene_hub_backup():
 # da lam o do rong mac dinh). scroll: so nac cuon sidebar xuong.
 SCENES = {
     "deco_namer": (scene_deco_namer, {}),
+    "object_spread": (scene_object_spread, {}),
     "uv_palette": (scene_uv_palette, {"widen": 110}),
     "uv_palette_add": (scene_uv_palette_add, {"widen": 110, "scroll": 30}),
     "anim_lib": (scene_anim_lib, {"widen": 110}),
