@@ -202,10 +202,11 @@ def _editable(objects):
 
 
 def arrange(context, roots, mode, columns, rows, gap):
-    """Dat pivot cua cac goc len cac diem cua luoi quanh 3D cursor.
+    """Dat pivot cua cac goc len cac diem cua luoi tren mat XY, giua goc 0,0,0.
 
-    Cung cot thi cung X, cung hang thi cung Y, moi pivot cung do cao Z voi
-    cursor. Buoc luoi = phan object thoi ra xa nhat ve hai phia cua pivot + gap
+    Cung cot thi cung X, cung hang thi cung Y, moi pivot o Z = 0. Khong theo 3D
+    cursor: cursor hay bi dat nham len mot object (Shift+S) nen ca luoi bay len
+    cao theo, ma artist thi nghi theo toa do the gioi. Buoc luoi = phan object thoi ra xa nhat ve hai phia cua pivot + gap
     (tinh rieng cho X va Y), nen luoi deu ma khong object nao chong len nhau, ke
     ca asset co pivot nam o mep thay vi o giua. Tra ve (so cot, so hang).
     """
@@ -223,11 +224,10 @@ def arrange(context, roots, mode, columns, rows, gap):
               + max(p.y - b[1] for p, b in pairs) + gap)
 
     cells, n_cols, n_rows = grid_cells(len(roots), mode, columns, rows)
-    cursor = context.scene.cursor.location
     for root, (col, row) in zip(roots, cells):
-        _place(root, Vector((cursor.x + (col - (n_cols - 1) / 2) * step_x,
-                             cursor.y - (row - (n_rows - 1) / 2) * step_y,
-                             cursor.z)))
+        _place(root, Vector(((col - (n_cols - 1) / 2) * step_x,
+                             -(row - (n_rows - 1) / 2) * step_y,
+                             0.0)))
     return n_cols, n_rows
 
 
@@ -274,12 +274,12 @@ GRID_PROPS = ("mode", "columns", "rows", "gap")
 class EZG_SPREAD_OT_arrange(bpy.types.Operator):
     bl_idname = "ezg_spread.arrange"
     bl_label = tr("Xếp lưới", "Arrange in Grid")
-    bl_description = tr("Đặt pivot của các object đang chọn lên lưới quanh 3D cursor: cùng cột "
-                        "thì cùng X, cùng hàng thì cùng Y, mọi pivot cùng độ cao Z với cursor. "
+    bl_description = tr("Trải pivot của các object đang chọn thành lưới trên mặt X/Y, giữa gốc "
+                        "0,0,0: cùng cột thì cùng X, cùng hàng thì cùng Y, mọi pivot ở Z = 0. "
                         "Object con có parent cũng đang chọn thì đi theo parent",
-                        "Put the pivots of the selected objects on a grid around the 3D cursor: "
-                        "same column means same X, same row means same Y, and every pivot "
-                        "sits at the cursor's height. Children whose parent is also selected "
+                        "Spread the pivots of the selected objects into a grid on the X/Y "
+                        "plane, centred on 0,0,0: same column means same X, same row means "
+                        "same Y, every pivot at Z = 0. Children whose parent is also selected "
                         "follow the parent")
     bl_options = {'REGISTER', 'UNDO'}
 

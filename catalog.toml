@@ -130,14 +130,16 @@ recommended = false
 title_vi = "Object Spread"
 summary_vi = """
 Trải các object đang chọn thành một lưới thẳng hàng theo toạ độ để xem từng cái
-cho rõ: pivot cùng cột thì cùng X, cùng hàng thì cùng Y, cùng một độ cao Z.
+cho rõ: trải trên mặt X/Y giữa gốc 0,0,0, pivot cùng cột thì cùng X, cùng hàng
+thì cùng Y, tất cả ở Z = 0.
 Bước lưới tự đủ rộng cho object lớn nhất cộng khoảng cách đã đặt, nên object to
 nhỏ lẫn lộn cũng không đè lên nhau. Chọn số cột, số hàng hoặc để tự động.
 Một nút đưa pivot của tất cả về 0,0,0. Object con có parent cũng đang chọn thì
 đi theo parent như bình thường, không bị xếp tách ra."""
 summary_en = """
 Lay the selected objects out on a grid aligned to coordinates so each one is easy
-to see: pivots in a column share X, pivots in a row share Y, all at one height.
+to see: spread on the X/Y plane around 0,0,0, pivots in a column share X, pivots
+in a row share Y, all at Z = 0.
 The grid step fits the largest object plus the set gap, so mixed sizes never
 overlap. Pick the column count, the row count, or let it decide.
 One button moves every pivot back to 0,0,0. Children whose parent is also

@@ -1,8 +1,9 @@
 """Object Spread: pivot thang hang theo toa do, khong chong nhau, con di theo parent.
 
 Nhung cho de vo:
-  - PIVOT phai nam dung diem luoi: cung cot cung X, cung hang cung Y, cung Z voi
-    cursor. Ban 1.0.0 dat TAM HINH vao giua o nen asset co pivot o mep (rat hay
+  - PIVOT phai nam dung diem luoi: cung cot cung X, cung hang cung Y, Z = 0.
+    Luoi giua goc 0,0,0, KHONG theo 3D cursor (1.1.0 theo cursor, cursor dat
+    nham len object la ca luoi bay len cao). Ban 1.0.0 dat TAM HINH vao giua o nen asset co pivot o mep (rat hay
     gap: pivot o day / o mat sau) ra lech hang lech cot, nhin lung tung.
   - object to nho lan lon -> buoc luoi phai du cho object LON NHAT, khong thi chong
   - parent va con cung chon -> con KHONG duoc xep rieng (vo cum), chi di theo parent
@@ -140,6 +141,7 @@ rocks = [box("Rock_10", (1.0, 1.0, 1.0), (0, 0, 0.5)),
          box("Rock_3", (2.0, 2.0, 2.0), (0, 0, 0.5)),
          box("Rock_4", (1.0, 1.0, 1.0), (0, 0, 0.5))]
 select(*rocks)
+# Cursor de lech ca X, Y, Z: luoi phai bo qua no.
 scene.cursor.location = (10.0, -5.0, 3.0)
 scene.ezg_spread.mode = 'COLUMNS'
 scene.ezg_spread.columns = 3
@@ -164,7 +166,7 @@ boxes = {o.name: bounds(o) for o in rocks}
 worst = min(gap_between(boxes[a.name], boxes[b.name])
             for i, a in enumerate(rocks) for b in rocks[i + 1:])
 check(worst >= 0.5 - TOL, "khong cap nao gan nhau hon gap 0.5 (gan nhat %.4f)" % worst)
-check(all(o.location.z == 3.0 for o in rocks), "moi pivot cung Z voi 3D cursor (3.0)")
+check(all(o.location.z == 0.0 for o in rocks), "moi pivot o Z = 0, khong theo Z cua cursor")
 
 # Pivot cung cot trung X, cung hang trung Y — trung DUNG so, khong chi xap xi.
 cx = {o.name: o.location.x for o in rocks}
@@ -175,11 +177,11 @@ check(cy["Rock_1"] == cy["Rock_2"] == cy["Rock_3"] and cy["Rock_4"] == cy["Rock_
 # Pivot o giua hinh theo XY: buoc cot = rong nhat (4.0) + gap, buoc hang = sau nhat (3.0) + gap.
 check(abs((cx["Rock_2"] - cx["Rock_1"]) - 4.5) < TOL, "buoc cot = rong nhat + gap (4.5)")
 check(abs((cy["Rock_1"] - cy["Rock_4"]) - 3.5) < TOL, "buoc hang = sau nhat + gap (3.5)")
-# Luoi 3 x 2 nam giua 3D cursor.
+# Luoi 3 x 2 nam giua goc 0,0,0, khong phai giua cursor.
 mid_x = (cx["Rock_1"] + cx["Rock_3"]) / 2
 mid_y = (cy["Rock_1"] + cy["Rock_4"]) / 2
-check(abs(mid_x - 10.0) < TOL and abs(mid_y + 5.0) < TOL,
-      "tam luoi o 3D cursor (%.3f, %.3f)" % (mid_x, mid_y))
+check(abs(mid_x) < TOL and abs(mid_y) < TOL,
+      "tam luoi o goc 0,0,0 (%.3f, %.3f)" % (mid_x, mid_y))
 
 # Operator ghi nguoc gia tri vao panel (de chinh o F9 thi panel theo).
 bpy.ops.ezg_spread.arrange(mode='ROWS', rows=1, gap=2.0)
@@ -209,11 +211,11 @@ check(loc["Prop_1"][0] == loc["Prop_4"][0] and loc["Prop_2"][0] == loc["Prop_5"]
 check(loc["Prop_1"][1] == loc["Prop_2"][1] == loc["Prop_3"][1]
       and loc["Prop_4"][1] == loc["Prop_5"][1] == loc["Prop_6"][1],
       "pivot lech tam: cung hang van cung Y (%s)" % sorted({round(v[1], 4) for v in loc.values()}))
-check({v[2] for v in loc.values()} == {0.0}, "pivot lech tam: moi pivot ve Z = 0 cua cursor")
+check({v[2] for v in loc.values()} == {0.0}, "pivot lech tam: moi pivot ve Z = 0")
 xs = sorted({v[0] for v in loc.values()})
 ys = sorted({v[1] for v in loc.values()})
 check(close([xs[1] - xs[0]], [xs[2] - xs[1]]) and close([sum(xs) / 3, sum(ys) / 2], [0, 0]),
-      "pivot lech tam: cot cach deu, luoi pivot nam giua cursor (%s, %s)" % (xs, ys))
+      "pivot lech tam: cot cach deu, luoi pivot nam giua goc (%s, %s)" % (xs, ys))
 pb = {o.name: bounds(o) for o in props}
 worst = min(gap_between(pb[a.name], pb[b.name]) for i, a in enumerate(props) for b in props[i + 1:])
 check(worst >= 0.3 - TOL, "pivot lech tam: van khong cap nao chong nhau (gan nhat %.4f)" % worst)
@@ -259,8 +261,9 @@ bpy.ops.ezg_spread.arrange()
 view_layer.update()
 check(wheel.parent == car, "chi chon Wheel -> van con parent Car")
 check(car.matrix_world == car_before, "Car (khong chon) khong bi dich")
-check(close(pivot(wheel), (20.0, 0.0, 0.0)),
-      "pivot Wheel dung o 3D cursor (%s)" % (tuple(round(v, 4) for v in pivot(wheel)),))
+check(close(pivot(wheel), (0.0, 0.0, 0.0)),
+      "pivot Wheel ve giua luoi 0,0,0 du cursor o cho khac (%s)"
+      % (tuple(round(v, 4) for v in pivot(wheel)),))
 scene.cursor.location = (0.0, 0.0, 0.0)
 
 
