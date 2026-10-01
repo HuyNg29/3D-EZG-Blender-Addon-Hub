@@ -1,7 +1,10 @@
-"""Object Spread: xep luoi khong chong nhau, object con di theo parent.
+"""Object Spread: pivot thang hang theo toa do, khong chong nhau, con di theo parent.
 
 Nhung cho de vo:
-  - object to nho lan lon -> o luoi phai rong theo object LON NHAT, khong thi chong
+  - PIVOT phai nam dung diem luoi: cung cot cung X, cung hang cung Y, cung Z voi
+    cursor. Ban 1.0.0 dat TAM HINH vao giua o nen asset co pivot o mep (rat hay
+    gap: pivot o day / o mat sau) ra lech hang lech cot, nhin lung tung.
+  - object to nho lan lon -> buoc luoi phai du cho object LON NHAT, khong thi chong
   - parent va con cung chon -> con KHONG duoc xep rieng (vo cum), chi di theo parent
   - chon con ma khong chon parent -> con dich theo the gioi nhung VAN giu parent
   - parent xoay / scale -> doi location trong khong gian parent phai tinh dung
@@ -46,14 +49,14 @@ def clear_scene():
 clear_scene()
 
 
-def box(name, size, location=(0.0, 0.0, 0.0), parent=None, link=True):
-    """Hop chu nhat kich thuoc `size`, tam hinh lech khoi pivot nua chieu cao Z
-    (pivot nam o day, giong asset game)."""
+def box(name, size, location=(0.0, 0.0, 0.0), parent=None, link=True, offset=(0.0, 0.0)):
+    """Hop chu nhat kich thuoc `size`, pivot nam o day (giong asset game).
+    `offset` dich hinh theo XY de pivot lech khoi tam, vd nam o mep."""
     me = bpy.data.meshes.new(name)
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=1.0)
     bmesh.ops.scale(bm, vec=size, verts=bm.verts)
-    bmesh.ops.translate(bm, vec=(0.0, 0.0, size[2] / 2), verts=bm.verts)
+    bmesh.ops.translate(bm, vec=(offset[0], offset[1], size[2] / 2), verts=bm.verts)
     bm.to_mesh(me)
     bm.free()
     ob = bpy.data.objects.new(name, me)
@@ -95,6 +98,11 @@ def close(a, b, tol=TOL):
 
 def same_matrix(a, b):
     return all(close(ra, rb) for ra, rb in zip(a, b))
+
+
+def pivot(ob):
+    view_layer.update()
+    return ob.matrix_world.translation
 
 
 # --- grid_cells -------------------------------------------------------------
@@ -156,16 +164,15 @@ boxes = {o.name: bounds(o) for o in rocks}
 worst = min(gap_between(boxes[a.name], boxes[b.name])
             for i, a in enumerate(rocks) for b in rocks[i + 1:])
 check(worst >= 0.5 - TOL, "khong cap nao gan nhau hon gap 0.5 (gan nhat %.4f)" % worst)
-check(all(abs(o.location.z - 0.5) < TOL for o in rocks), "giu nguyen Z")
+check(all(o.location.z == 3.0 for o in rocks), "moi pivot cung Z voi 3D cursor (3.0)")
 
-# O deu: tam cac object cung cot thang hang theo X, cung hang thang hang theo Y.
-cx = {n: (b[0] + b[2]) / 2 for n, b in boxes.items()}
-cy = {n: (b[1] + b[3]) / 2 for n, b in boxes.items()}
-check(abs(cx["Rock_1"] - cx["Rock_4"]) < TOL and abs(cx["Rock_2"] - cx["Rock_10"]) < TOL,
-      "cung cot -> cung X")
-check(abs(cy["Rock_1"] - cy["Rock_2"]) < TOL and abs(cy["Rock_2"] - cy["Rock_3"]) < TOL,
+# Pivot cung cot trung X, cung hang trung Y — trung DUNG so, khong chi xap xi.
+cx = {o.name: o.location.x for o in rocks}
+cy = {o.name: o.location.y for o in rocks}
+check(cx["Rock_1"] == cx["Rock_4"] and cx["Rock_2"] == cx["Rock_10"], "cung cot -> cung X")
+check(cy["Rock_1"] == cy["Rock_2"] == cy["Rock_3"] and cy["Rock_4"] == cy["Rock_10"],
       "cung hang -> cung Y")
-# Buoc cot = object rong nhat (4.0) + gap; buoc hang = object sau nhat (3.0) + gap.
+# Pivot o giua hinh theo XY: buoc cot = rong nhat (4.0) + gap, buoc hang = sau nhat (3.0) + gap.
 check(abs((cx["Rock_2"] - cx["Rock_1"]) - 4.5) < TOL, "buoc cot = rong nhat + gap (4.5)")
 check(abs((cy["Rock_1"] - cy["Rock_4"]) - 3.5) < TOL, "buoc hang = sau nhat + gap (3.5)")
 # Luoi 3 x 2 nam giua 3D cursor.
@@ -178,10 +185,38 @@ check(abs(mid_x - 10.0) < TOL and abs(mid_y + 5.0) < TOL,
 bpy.ops.ezg_spread.arrange(mode='ROWS', rows=1, gap=2.0)
 check(scene.ezg_spread.mode == 'ROWS' and scene.ezg_spread.rows == 1
       and abs(scene.ezg_spread.gap - 2.0) < TOL, "dat property cho operator -> panel cap nhat")
-ys = {round(cy, 3) for cy in ((bounds(o)[1] + bounds(o)[3]) / 2 for o in rocks)}
-check(len(ys) == 1, "ROWS 1 -> tat ca tren mot hang")
+check(len({o.location.y for o in rocks}) == 1, "ROWS 1 -> tat ca tren mot hang")
 
 scene.cursor.location = (0.0, 0.0, 0.0)
+
+
+# --- Pivot lech khoi tam (loi cua ban 1.0.0) ---------------------------------
+print("--- pivot lech khoi tam ---")
+
+clear_scene()
+# Pivot o mep sau (-Y), o goc, o mep trai... va dang nam lung tung ca X, Y, Z.
+props = [box("Prop_1", (1.0, 2.0, 1.0), (3.1, 0.7, 0.4), offset=(0.0, 1.0)),
+         box("Prop_2", (0.4, 0.4, 0.8), (-2.0, 5.0, -1.3)),
+         box("Prop_3", (2.0, 1.0, 1.0), (0.2, -4.4, 2.2), offset=(1.0, 0.5)),
+         box("Prop_4", (1.5, 1.5, 0.5), (8.0, 1.0, 0.0), offset=(-0.75, 0.0)),
+         box("Prop_5", (0.6, 3.0, 2.0), (-6.0, -1.0, 0.9), offset=(0.0, -1.5)),
+         box("Prop_6", (1.0, 1.0, 1.0), (1.0, 1.0, 1.0))]
+select(*props)
+bpy.ops.ezg_spread.arrange(mode='COLUMNS', columns=3, gap=0.3)
+loc = {o.name: tuple(o.location) for o in props}
+check(loc["Prop_1"][0] == loc["Prop_4"][0] and loc["Prop_2"][0] == loc["Prop_5"][0]
+      and loc["Prop_3"][0] == loc["Prop_6"][0], "pivot lech tam: cung cot van cung X")
+check(loc["Prop_1"][1] == loc["Prop_2"][1] == loc["Prop_3"][1]
+      and loc["Prop_4"][1] == loc["Prop_5"][1] == loc["Prop_6"][1],
+      "pivot lech tam: cung hang van cung Y (%s)" % sorted({round(v[1], 4) for v in loc.values()}))
+check({v[2] for v in loc.values()} == {0.0}, "pivot lech tam: moi pivot ve Z = 0 cua cursor")
+xs = sorted({v[0] for v in loc.values()})
+ys = sorted({v[1] for v in loc.values()})
+check(close([xs[1] - xs[0]], [xs[2] - xs[1]]) and close([sum(xs) / 3, sum(ys) / 2], [0, 0]),
+      "pivot lech tam: cot cach deu, luoi pivot nam giua cursor (%s, %s)" % (xs, ys))
+pb = {o.name: bounds(o) for o in props}
+worst = min(gap_between(pb[a.name], pb[b.name]) for i, a in enumerate(props) for b in props[i + 1:])
+check(worst >= 0.3 - TOL, "pivot lech tam: van khong cap nao chong nhau (gan nhat %.4f)" % worst)
 
 
 # --- Parent / con -----------------------------------------------------------
@@ -222,11 +257,10 @@ select(wheel)
 scene.cursor.location = (20.0, 0.0, 0.0)
 bpy.ops.ezg_spread.arrange()
 view_layer.update()
-b = bounds(wheel)
 check(wheel.parent == car, "chi chon Wheel -> van con parent Car")
 check(car.matrix_world == car_before, "Car (khong chon) khong bi dich")
-check(abs((b[0] + b[2]) / 2 - 20.0) < TOL and abs((b[1] + b[3]) / 2) < TOL,
-      "Wheel dung giua 3D cursor (%.3f, %.3f)" % ((b[0] + b[2]) / 2, (b[1] + b[3]) / 2))
+check(close(pivot(wheel), (20.0, 0.0, 0.0)),
+      "pivot Wheel dung o 3D cursor (%s)" % (tuple(round(v, 4) for v in pivot(wheel)),))
 scene.cursor.location = (0.0, 0.0, 0.0)
 
 

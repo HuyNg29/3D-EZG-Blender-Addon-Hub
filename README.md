@@ -22,7 +22,7 @@ Addon hiện có:
 | `ezg_fbx_batch` | FBX Batch to Blender | 1.6.0 | Pipeline |
 | `ezg_deco_namer` | Deco Namer | 1.6.0 | Modeling / UV |
 | `ezg_auto_uv_palette` | Auto UV Palette | 1.8.0 | Modeling / UV |
-| `ezg_object_spread` | Object Spread | 1.0.0 | Modeling / UV |
+| `ezg_object_spread` | Object Spread | 1.1.0 | Modeling / UV |
 | `ezg_gn_info_namer` | GN Info Namer | 1.6.0 | Geometry Nodes |
 | `ezg_mixamo_marker_rigger` | Manual Marker Mixamo Rigger | 0.25.0 | Rigging / Animation |
 | `ezg_mixamo_anim_lib` | Mixamo Animation Library | 1.6.0 | Rigging / Animation |
@@ -129,7 +129,7 @@ sẽ xoá sạch thiết lập Blender của bạn. Lý do chi tiết ở [docs/
 | `test_mixamo_compat.py` | Rig sinh ra khớp rig Mixamo thật (**cần FBX mẫu**) |
 | `test_i18n.py` | Nút VI \| EN: lint song ngữ, bấm EN/VI thật, không sót chữ tiếng Việt ở EN, dữ liệu giữ nguyên |
 | `test_fbx_batch.py` | FBX Batch theo dõi tiến trình nền kể cả khi Blender huỷ modal: không cho convert chồng, worker chết giữa chừng thì báo lỗi |
-| `test_object_spread.py` | Object Spread xếp lưới không đè nhau (kể cả collection instance), object con đi theo parent, Về 0,0,0 đúng cả khi parent xoay/scale |
+| `test_object_spread.py` | Object Spread xếp pivot thẳng hàng theo toạ độ (kể cả asset có pivot ở mép), không đè nhau (kể cả collection instance), object con đi theo parent, Về 0,0,0 đúng cả khi parent xoay/scale |
 
 Một số test cần bộ FBX mẫu của Mixamo. Bộ này nặng ~33 MB nên **không nằm trong git**:
 

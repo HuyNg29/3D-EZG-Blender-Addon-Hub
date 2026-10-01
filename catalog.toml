@@ -129,15 +129,17 @@ recommended = false
 [items.ezg_object_spread]
 title_vi = "Object Spread"
 summary_vi = """
-Trải các object đang chọn thành một lưới đều để xem từng cái cho rõ, mỗi
-object cách nhau đúng khoảng đã đặt (đo từ mép nên object to nhỏ lẫn lộn cũng
-không đè lên nhau). Chọn số cột, số hàng hoặc để tự động.
+Trải các object đang chọn thành một lưới thẳng hàng theo toạ độ để xem từng cái
+cho rõ: pivot cùng cột thì cùng X, cùng hàng thì cùng Y, cùng một độ cao Z.
+Bước lưới tự đủ rộng cho object lớn nhất cộng khoảng cách đã đặt, nên object to
+nhỏ lẫn lộn cũng không đè lên nhau. Chọn số cột, số hàng hoặc để tự động.
 Một nút đưa pivot của tất cả về 0,0,0. Object con có parent cũng đang chọn thì
 đi theo parent như bình thường, không bị xếp tách ra."""
 summary_en = """
-Spread the selected objects into an even grid so each one is easy to see, with
-the set gap between them (measured from their edges, so mixed sizes never
-overlap). Pick the column count, the row count, or let it decide.
+Lay the selected objects out on a grid aligned to coordinates so each one is easy
+to see: pivots in a column share X, pivots in a row share Y, all at one height.
+The grid step fits the largest object plus the set gap, so mixed sizes never
+overlap. Pick the column count, the row count, or let it decide.
 One button moves every pivot back to 0,0,0. Children whose parent is also
 selected follow the parent as usual instead of being laid out on their own."""
 thumbnail = "thumbs/ezg_object_spread.png"

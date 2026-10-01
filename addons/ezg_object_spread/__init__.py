@@ -55,10 +55,10 @@ def _rows_prop(**kw):
 
 def _gap_prop(**kw):
     return FloatProperty(name=tr("Khoảng cách", "Gap"),
-                         description=tr("Khoảng trống giữa hai object cạnh nhau, đo từ mép "
-                                        "object chứ không phải từ pivot",
-                                        "Empty space between neighbouring objects, measured "
-                                        "from their edges, not their pivots"),
+                         description=tr("Khoảng trống tối thiểu giữa hai object cạnh nhau, "
+                                        "đo từ mép object chứ không phải từ pivot",
+                                        "Minimum empty space between neighbouring objects, "
+                                        "measured from their edges, not their pivots"),
                          subtype='DISTANCE', min=0.0, soft_max=10.0, default=1.0, **kw)
 
 
@@ -178,16 +178,19 @@ def world_bounds(context, groups):
     return boxes
 
 
-def _translate(ob, delta):
-    """Dich object mot vector theo truc the gioi.
+def _place(ob, target):
+    """Dua pivot cua object toi diem `target` (toa do the gioi).
 
     Object con giu nguyen parent: chi doi location trong khong gian cua parent,
     nen sau do van di theo parent nhu cu.
     """
     if ob.parent is None and not ob.constraints:
-        new = ob.location + delta
+        # Gan thang: matrix_world.translation = location + delta_location, nen
+        # object cung cot ra dung cung mot so X, khong lech nhau vai ulp.
+        new = target - ob.delta_location
     else:
         space = ob.matrix_world @ ob.matrix_basis.inverted_safe()
+        delta = target - ob.matrix_world.translation
         new = ob.location + space.to_3x3().inverted_safe() @ delta
     ob.location = [0.0 if abs(v) < EPSILON else v for v in new]
 
@@ -199,34 +202,39 @@ def _editable(objects):
 
 
 def arrange(context, roots, mode, columns, rows, gap):
-    """Xep cac goc thanh luoi quanh 3D cursor. Tra ve (so cot, so hang).
+    """Dat pivot cua cac goc len cac diem cua luoi quanh 3D cursor.
 
-    Moi o rong bang object lon nhat + gap nen luoi deu va khong object nao chong
-    len nhau. Tam hop bao cua object nam giua o; chi doi X/Y, giu nguyen Z.
+    Cung cot thi cung X, cung hang thi cung Y, moi pivot cung do cao Z voi
+    cursor. Buoc luoi = phan object thoi ra xa nhat ve hai phia cua pivot + gap
+    (tinh rieng cho X va Y), nen luoi deu ma khong object nao chong len nhau, ke
+    ca asset co pivot nam o mep thay vi o giua. Tra ve (so cot, so hang).
     """
     groups = _members(roots)
     boxes = world_bounds(context, groups)
-    for i, root in enumerate(roots):
-        if boxes[i] is None:  # Empty, light... khong co hinh: xep theo pivot
-            t = root.matrix_world.translation
-            boxes[i] = [t.x, t.y, t.x, t.y]
+    pivots = [root.matrix_world.translation.copy() for root in roots]
+    for i, p in enumerate(pivots):
+        if boxes[i] is None:  # Empty, light... khong co hinh: chi la mot diem o pivot
+            boxes[i] = [p.x, p.y, p.x, p.y]
+
+    pairs = list(zip(pivots, boxes))
+    step_x = (max(p.x - b[0] for p, b in pairs)      # thoi sang trai pivot
+              + max(b[2] - p.x for p, b in pairs) + gap)
+    step_y = (max(b[3] - p.y for p, b in pairs)      # thoi len tren pivot
+              + max(p.y - b[1] for p, b in pairs) + gap)
 
     cells, n_cols, n_rows = grid_cells(len(roots), mode, columns, rows)
-    cell_w = max(b[2] - b[0] for b in boxes) + gap
-    cell_h = max(b[3] - b[1] for b in boxes) + gap
     cursor = context.scene.cursor.location
-
-    for root, box, (col, row) in zip(roots, boxes, cells):
-        x = cursor.x + (col - (n_cols - 1) / 2) * cell_w
-        y = cursor.y - (row - (n_rows - 1) / 2) * cell_h
-        _translate(root, Vector((x - (box[0] + box[2]) / 2, y - (box[1] + box[3]) / 2, 0.0)))
+    for root, (col, row) in zip(roots, cells):
+        _place(root, Vector((cursor.x + (col - (n_cols - 1) / 2) * step_x,
+                             cursor.y - (row - (n_rows - 1) / 2) * step_y,
+                             cursor.z)))
     return n_cols, n_rows
 
 
 def to_origin(context, roots):
     context.evaluated_depsgraph_get()  # cho chac matrix_world da cap nhat
     for root in roots:
-        _translate(root, -root.matrix_world.translation)
+        _place(root, Vector((0.0, 0.0, 0.0)))
 
 
 def _follow_note(followers):
@@ -266,12 +274,13 @@ GRID_PROPS = ("mode", "columns", "rows", "gap")
 class EZG_SPREAD_OT_arrange(bpy.types.Operator):
     bl_idname = "ezg_spread.arrange"
     bl_label = tr("Xếp lưới", "Arrange in Grid")
-    bl_description = tr("Trải các object đang chọn thành lưới quanh 3D cursor, cách nhau đúng "
-                        "khoảng đã đặt. Chỉ dời theo X/Y, giữ nguyên Z. Object con có parent "
-                        "cũng đang chọn thì đi theo parent",
-                        "Spread the selected objects into a grid around the 3D cursor, with "
-                        "the set gap between them. Moves along X/Y only and keeps Z. Children "
-                        "whose parent is also selected follow the parent")
+    bl_description = tr("Đặt pivot của các object đang chọn lên lưới quanh 3D cursor: cùng cột "
+                        "thì cùng X, cùng hàng thì cùng Y, mọi pivot cùng độ cao Z với cursor. "
+                        "Object con có parent cũng đang chọn thì đi theo parent",
+                        "Put the pivots of the selected objects on a grid around the 3D cursor: "
+                        "same column means same X, same row means same Y, and every pivot "
+                        "sits at the cursor's height. Children whose parent is also selected "
+                        "follow the parent")
     bl_options = {'REGISTER', 'UNDO'}
 
     # SKIP_SAVE: khong nho gia tri lan truoc -> property nao chua dat thi lay

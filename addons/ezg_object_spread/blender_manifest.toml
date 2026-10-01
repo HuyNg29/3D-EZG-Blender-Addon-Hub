@@ -3,9 +3,9 @@ schema_version = "1.0.0"
 # KHONG BAO GIO doi `id` sau lan release dau tien.
 # Doi id = Blender coi day la add-on khac -> user mat settings va bi cai trung.
 id = "ezg_object_spread"
-version = "1.0.0"
+version = "1.1.0"
 name = "Object Spread"
-tagline = "Trải object đang chọn thành lưới để xem, đưa về 0,0,0"
+tagline = "Xếp pivot object đang chọn thành lưới thẳng hàng, đưa về 0,0,0"
 maintainer = "EasyGoing Visual <visual@easygoing.vn>"
 type = "add-on"
 
