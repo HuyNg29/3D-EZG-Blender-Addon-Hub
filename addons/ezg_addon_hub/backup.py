@@ -29,6 +29,12 @@ SCHEMA = 1
 MANIFEST_NAME = "manifest.json"
 BLOBS_DIRNAME = "blobs"
 
+# Ten artist dat cho ban backup nam trong manifest ("label"), KHONG o ten thu muc:
+# thu muc giu dau thoi gian de sap moi nhat truoc, va doi ten thu muc thi ban
+# chep o thu muc dong bo thanh mot ban khac. Manifest cu khong co "label" van doc
+# duoc — van la schema 1.
+LABEL_MAX = 64
+
 
 class BackupError(Exception):
     pass
@@ -73,14 +79,31 @@ def _zip_addon(item, out_path):
                 z.write(full, os.path.join(pkg_id, rel))
 
 
-def create(context, items, snapshot_root, profile, all_blobs=False):
-    """Ghi mot snapshot. Tra ve (duong_dan, so_addon, canh_bao)."""
+def _new_snap_dir(base):
+    """Thu muc moi cho snapshot. Dau thoi gian chi toi phut, nen hai lan backup
+    trong cung mot phut phai them hau to — truoc day lan sau ghi de len lan truoc."""
     stamp = _timestamp()
-    snap_dir = os.path.join(snapshot_root, _safe(profile), stamp)
+    path, n = os.path.join(base, stamp), 2
+    while os.path.exists(path):
+        path = os.path.join(base, "%s_%d" % (stamp, n))
+        n += 1
+    return path
+
+
+def clean_label(label):
+    """Gon khoang trang, cat bot neu qua dai. Manifest sua tay hong kieu -> ''."""
+    if not isinstance(label, str):
+        return ""
+    return " ".join(label.split())[:LABEL_MAX]
+
+
+def create(context, items, snapshot_root, profile, all_blobs=False, label=""):
+    """Ghi mot snapshot. Tra ve (duong_dan, so_addon, canh_bao)."""
+    snap_dir = _new_snap_dir(os.path.join(snapshot_root, _safe(profile)))
     blobs_dir = os.path.join(snap_dir, BLOBS_DIRNAME)
 
     try:
-        os.makedirs(snap_dir, exist_ok=True)
+        os.makedirs(snap_dir)
     except Exception as exc:
         raise BackupError(tr("Không tạo được thư mục '%s': %s", "Could not create folder '%s': %s") % (snap_dir, exc))
 
@@ -119,6 +142,7 @@ def create(context, items, snapshot_root, profile, all_blobs=False):
     manifest = {
         "schema": SCHEMA,
         "profile": profile,
+        "label": clean_label(label),
         "created": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "blender": {
             "version": list(bpy.app.version),
@@ -128,14 +152,45 @@ def create(context, items, snapshot_root, profile, all_blobs=False):
         "items": records,
     }
 
+    _write_manifest(snap_dir, manifest)
+    return snap_dir, len(records), warnings
+
+
+def _write_manifest(snap_dir, manifest):
+    # Ghi ra file tam roi thay: hong giua chung (day o, mat dien) thi ban cu con
+    # nguyen — manifest la thu duy nhat cho biet ban backup chua gi.
     path = os.path.join(snap_dir, MANIFEST_NAME)
+    tmp = path + ".tmp"
     try:
-        with open(path, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(manifest, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
     except Exception as exc:
         raise BackupError(tr("Không ghi được manifest: %s", "Could not write the manifest: %s") % exc)
 
-    return snap_dir, len(records), warnings
+
+def rename(snap_dir, label, sync_root=None, profile=""):
+    """Dat / doi ten ban backup. Ten rong = bo ten, hien lai theo gio tao.
+
+    Ban chep o thu muc dong bo (neu co) doi ten theo. Tra ve (ten_moi, da_doi_ban_dong_bo).
+    """
+    label = clean_label(label)
+    manifest = read_manifest(snap_dir)
+    manifest["label"] = label
+    _write_manifest(snap_dir, manifest)
+
+    mirrored = False
+    if sync_root:
+        dst = os.path.join(sync_root, _safe(profile), os.path.basename(snap_dir))
+        if os.path.isfile(os.path.join(dst, MANIFEST_NAME)):
+            try:
+                other = read_manifest(dst)
+                other["label"] = label
+                _write_manifest(dst, other)
+                mirrored = True
+            except BackupError:
+                pass  # ban chinh da doi xong; ban dong bo hong thi de nguyen
+    return label, mirrored
 
 
 def mirror_manifest(snap_dir, sync_root, profile, include_blobs=False):
@@ -178,6 +233,7 @@ def list_snapshots(snapshot_root, profile):
         items = data.get("items", [])
         out.append({
             "name": name,
+            "label": clean_label(data.get("label")),
             "path": snap_dir,
             "created": data.get("created", ""),
             "count": len(items),

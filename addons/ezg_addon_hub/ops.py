@@ -285,6 +285,13 @@ class EZG_OT_open_url(Operator):
         return {'FINISHED'}
 
 
+def _select_snapshot(wm, path):
+    for i, row in enumerate(wm.ezg_snapshots):
+        if os.path.normcase(row.path) == os.path.normcase(path):
+            wm.ezg_snapshots_index = i
+            return
+
+
 class EZG_OT_refresh_snapshots(Operator):
     bl_idname = "ezg.refresh_snapshots"
     bl_label = tr("Tải lại danh sách backup", "Reload backup list")
@@ -297,7 +304,8 @@ class EZG_OT_refresh_snapshots(Operator):
         wm.ezg_snapshots.clear()
         for s in snaps:
             row = wm.ezg_snapshots.add()
-            row.name = s["name"]
+            row.name = s["label"] or s["name"]
+            row.label = s["label"]
             row.path = s["path"]
             row.created = s["created"]
             row.count = s["count"]
@@ -313,8 +321,13 @@ class EZG_OT_backup_create(Operator):
     bl_label = tr("Tạo backup", "Create backup")
     bl_description = tr("Lưu danh sách addon đang cài thành một snapshot", "Save the installed add-on list as a snapshot")
 
+    # Bo trong thi lay o "Ten backup" tren panel.
+    label: StringProperty(options={'SKIP_SAVE', 'HIDDEN'})
+
     def execute(self, context):
         p = _prefs()
+        wm = context.window_manager
+        label = self.label if self.properties.is_property_set("label") else wm.ezg_backup_label
         items = scanner.scan(p.repo_url)
         if not items:
             self.report({'WARNING'}, tr("Không có addon nào để backup.", "No add-ons to back up."))
@@ -323,7 +336,7 @@ class EZG_OT_backup_create(Operator):
         try:
             snap_dir, count, warnings = backup.create(
                 context, items, p.resolved_backup_dir(),
-                p.resolved_profile_name(), p.backup_all_blobs)
+                p.resolved_profile_name(), p.backup_all_blobs, label)
         except backup.BackupError as exc:
             _set_status("", str(exc))
             self.report({'ERROR'}, str(exc))
@@ -339,14 +352,74 @@ class EZG_OT_backup_create(Operator):
                 warnings.append(tr("Không chép sang thư mục đồng bộ: %s", "Could not copy to the sync folder: %s") % exc)
 
         bpy.ops.ezg.refresh_snapshots()
+        _select_snapshot(wm, snap_dir)  # chon san ban vua tao -> doi ten duoc ngay
+        wm.ezg_backup_label = ""
 
-        msg = tr("Đã backup %d addon vào %s", "Backed up %d add-ons to %s") % (count, os.path.basename(snap_dir))
+        name = backup.clean_label(label) or os.path.basename(snap_dir)
+        msg = tr("Đã backup %d addon vào '%s'", "Backed up %d add-ons to '%s'") % (count, name)
         if mirrored:
             msg += tr(" (đã chép sang thư mục đồng bộ)", " (copied to the sync folder)")
         _set_status(msg, " | ".join(warnings))
         self.report({'WARNING'} if warnings else {'INFO'}, msg)
         for w in warnings:
             print("[EZG Hub]", w)
+        return {'FINISHED'}
+
+
+class EZG_OT_backup_rename(Operator):
+    bl_idname = "ezg.backup_rename"
+    bl_label = tr("Đổi tên backup", "Rename Backup")
+    bl_description = tr("Đặt hoặc đổi tên bản backup này. Để trống thì hiện lại theo giờ tạo",
+                        "Name or rename this backup. Leave empty to show its creation time again")
+    bl_options = {'REGISTER'}
+
+    path: StringProperty(options={'SKIP_SAVE', 'HIDDEN'})
+    label: StringProperty(name=tr("Tên", "Name"), options={'SKIP_SAVE'})
+
+    def invoke(self, context, event):
+        if not self.properties.is_property_set("label"):
+            try:
+                self.label = backup.clean_label(backup.read_manifest(self.path).get("label"))
+            except backup.BackupError:
+                pass
+        return context.window_manager.invoke_props_dialog(
+            self, width=320, title=tr("Đổi tên backup", "Rename Backup"),
+            confirm_text=tr("Đổi tên", "Rename"))
+
+    def draw(self, context):
+        self.layout.prop(self, "label", text="",
+                         placeholder=tr("Để trống = hiện theo giờ tạo",
+                                        "Empty = show the creation time"))
+
+    def execute(self, context):
+        p = _prefs()
+        wm = context.window_manager
+        if not self.path or not os.path.isdir(self.path):
+            self.report({'ERROR'}, tr("Không tìm thấy bản backup.", "Backup not found."))
+            return {'CANCELLED'}
+
+        try:
+            label, mirrored = backup.rename(
+                self.path, self.label,
+                bpy.path.abspath(p.sync_dir) if p.sync_dir else None,
+                p.resolved_profile_name())
+        except backup.BackupError as exc:
+            _set_status("", str(exc))
+            self.report({'ERROR'}, str(exc))
+            return {'CANCELLED'}
+
+        bpy.ops.ezg.refresh_snapshots()
+        _select_snapshot(wm, self.path)
+
+        if label:
+            msg = tr("Đã đặt tên backup: '%s'", "Backup renamed to '%s'") % label
+        else:
+            msg = tr("Đã bỏ tên, backup hiện lại theo giờ tạo.",
+                     "Name removed; the backup shows its creation time again.")
+        if mirrored:
+            msg += tr(" (đổi cả bản ở thư mục đồng bộ)", " (sync folder copy too)")
+        _set_status(msg)
+        self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 
@@ -402,6 +475,7 @@ classes = (
     EZG_OT_open_url,
     EZG_OT_refresh_snapshots,
     EZG_OT_backup_create,
+    EZG_OT_backup_rename,
     EZG_OT_restore,
     ezg_i18n.make_language_operator("ezg"),
 )

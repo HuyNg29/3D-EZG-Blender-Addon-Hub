@@ -18,7 +18,7 @@ Addon hiện có:
 
 | id | Tên | Version | Nhóm |
 |---|---|---|---|
-| `ezg_addon_hub` | EZG Addon Hub | 0.2.0 | Hub |
+| `ezg_addon_hub` | EZG Addon Hub | 0.3.0 | Hub |
 | `ezg_fbx_batch` | FBX Batch to Blender | 1.6.0 | Pipeline |
 | `ezg_deco_namer` | Deco Namer | 1.6.0 | Modeling / UV |
 | `ezg_auto_uv_palette` | Auto UV Palette | 1.8.0 | Modeling / UV |
@@ -124,7 +124,7 @@ sẽ xoá sạch thiết lập Blender của bạn. Lý do chi tiết ở [docs/
 | Test | Kiểm tra |
 |---|---|
 | `test_addons_load.py` | Mọi addon trong `addons/` bật và tắt được dưới hệ thống Extensions |
-| `test_hub.py` | 22 kiểm tra cho hub: quét máy, tải kho, backup, restore |
+| `test_hub.py` | 52 kiểm tra cho hub: quét máy, tải kho, backup, đặt / đổi tên backup, restore |
 | `test_mmr.py` | Bộ test của Marker Mixamo Rigger |
 | `test_mixamo_compat.py` | Rig sinh ra khớp rig Mixamo thật (**cần FBX mẫu**) |
 | `test_i18n.py` | Nút VI \| EN: lint song ngữ, bấm EN/VI thật, không sót chữ tiếng Việt ở EN, dữ liệu giữ nguyên |

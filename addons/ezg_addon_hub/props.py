@@ -45,7 +45,8 @@ class EZG_CatalogItem(PropertyGroup):
 
 class EZG_SnapshotItem(PropertyGroup):
     """Mot ban backup da luu — tab 'Backup'."""
-    name: StringProperty()
+    name: StringProperty()           # ten hien thi: ten artist dat, khong co thi ten thu muc
+    label: StringProperty()          # ten artist dat (rong = chua dat)
     path: StringProperty()
     created: StringProperty()
     count: IntProperty()
@@ -88,6 +89,14 @@ def register():
 
     wm.ezg_snapshots = CollectionProperty(type=EZG_SnapshotItem)
     wm.ezg_snapshots_index = IntProperty(default=0)
+    wm.ezg_backup_label = StringProperty(
+        name=tr("Tên backup", "Backup name"),
+        description=tr("Tên cho bản backup sắp tạo, vd 'Trước khi cài ND'. Để trống thì "
+                       "hiện theo giờ tạo. Đổi được sau",
+                       "Name for the backup about to be created, e.g. 'Before installing ND'. "
+                       "Leave empty to show its creation time. Can be changed later"),
+        default="",
+    )
 
     wm.ezg_status = StringProperty(default="")
     wm.ezg_error = StringProperty(default="")
@@ -115,7 +124,7 @@ def unregister():
     wm = bpy.types.WindowManager
     for attr in ("ezg_tab", "ezg_inventory", "ezg_inventory_index",
                  "ezg_catalog", "ezg_catalog_index",
-                 "ezg_snapshots", "ezg_snapshots_index",
+                 "ezg_snapshots", "ezg_snapshots_index", "ezg_backup_label",
                  "ezg_status", "ezg_error", "ezg_restore_mode"):
         try:
             delattr(wm, attr)

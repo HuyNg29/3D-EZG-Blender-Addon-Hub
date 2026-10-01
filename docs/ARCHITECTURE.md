@@ -119,6 +119,11 @@ Nhóm A và B **không cần blob** vì tải lại được từ nguồn. Chỉ
             └── manifest.json
 ```
 
+Tên thư mục snapshot là giờ tạo (thêm `_2`, `_3`... nếu hai lần backup rơi vào cùng một phút), để
+luôn sắp được mới nhất lên trước. **Tên artist đặt cho bản backup** ("Trước khi cài ND") nằm ở khoá
+`label` trong `manifest.json`, không nằm ở tên thư mục: đổi tên chỉ ghi lại manifest, kể cả bản ở thư
+mục đồng bộ, nên không sinh ra bản trùng. Manifest cũ không có `label` thì hiện theo giờ tạo.
+
 Trong hub có setting **"Thư mục đồng bộ"**. Nếu bật, mỗi lần backup hub ghi thêm một bản manifest vào:
 
 ```

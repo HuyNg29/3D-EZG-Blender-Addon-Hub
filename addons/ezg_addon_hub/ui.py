@@ -294,6 +294,8 @@ def draw_backup(layout, context):
     else:
         layout.label(text=tr("Sang tab 'Máy của tôi' bấm Quét lại để xem sẽ lưu gì.", "Go to 'My machine' and click Rescan to see what will be saved."), icon='INFO')
 
+    layout.prop(wm, "ezg_backup_label", text="", icon='GREASEPENCIL',
+                placeholder=tr("Tên backup (không bắt buộc)", "Backup name (optional)"))
     big = layout.row()
     big.scale_y = 1.4
     big.operator("ezg.backup_create", text=tr("TẠO BACKUP", "CREATE BACKUP"), icon='FILE_BACKUP')
@@ -316,6 +318,10 @@ def draw_backup(layout, context):
 
     snap = wm.ezg_snapshots[wm.ezg_snapshots_index]
     box = layout.box()
+    row = box.row(align=True)
+    row.label(text=snap.label or tr("Chưa đặt tên", "Unnamed"), icon='BOOKMARKS')
+    row.operator("ezg.backup_rename", text=tr("Đổi tên", "Rename"),
+                 icon='GREASEPENCIL').path = snap.path
     box.label(text=tr("Tạo lúc: %s", "Created: %s") % (snap.created or snap.name))
     box.label(text=tr("%d addon, %d có zip kèm", "%d add-ons, %d with zip") % (snap.count, snap.blobs))
     if snap.blender:

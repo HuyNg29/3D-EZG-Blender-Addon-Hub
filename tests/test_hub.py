@@ -144,6 +144,70 @@ if len(wm.ezg_snapshots):
           "(%d vs %d)" % (len(wm.ezg_inventory), n_inv))
 
 print("-" * 70)
+print("6b) Dat ten / doi ten backup")
+backup_mod = sys.modules[HUB + ".backup"]
+first_dir = os.path.join(prof, snaps[0]) if snaps else ""
+
+# Tao lien tiep trong cung mot phut: truoc day lan sau GHI DE lan truoc vi ten
+# thu muc chi tinh toi phut.
+wm.ezg_backup_label = "  Tr\u01b0\u1edbc   khi c\u00e0i ND  "
+res = bpy.ops.ezg.backup_create()
+check("backup co ten chay", 'FINISHED' in res, str(res) + " err=" + wm.ezg_error)
+snaps2 = sorted(os.listdir(prof)) if os.path.isdir(prof) else []
+check("tao 2 lan trong 1 phut -> 2 thu muc, khong ghi de", len(snaps2) == 2, "(=%r)" % snaps2)
+if first_dir:
+    with open(os.path.join(first_dir, "manifest.json"), encoding="utf-8") as f:
+        check("ban dau tien con nguyen", len(json.load(f)["items"]) == n_inv)
+
+named = next((d for d in snaps2 if os.path.join(prof, d) != first_dir), None)
+named_dir = os.path.join(prof, named) if named else ""
+want = "Tr\u01b0\u1edbc khi c\u00e0i ND"
+if named_dir:
+    with open(os.path.join(named_dir, "manifest.json"), encoding="utf-8") as f:
+        got = json.load(f).get("label")
+    check("ten ghi vao manifest, gon khoang trang", got == want, "(=%r)" % got)
+check("o Ten backup tu xoa sau khi tao", wm.ezg_backup_label == "", "(=%r)" % wm.ezg_backup_label)
+check("danh sach co 2 ban", len(wm.ezg_snapshots) == 2, "(=%d)" % len(wm.ezg_snapshots))
+sel = wm.ezg_snapshots[wm.ezg_snapshots_index] if len(wm.ezg_snapshots) else None
+check("chon san ban vua tao, hien bang ten", sel is not None and sel.name == want
+      and sel.label == want and os.path.normcase(sel.path) == os.path.normcase(named_dir),
+      "(%r)" % (sel.name if sel else None))
+others = [r for r in wm.ezg_snapshots if r.path != named_dir]
+check("ban chua dat ten hien theo gio tao", others and others[0].name == snaps[0] and not others[0].label)
+
+
+def sync_label(snap_dir):
+    path = os.path.join(tmp_sync, "test.user", os.path.basename(snap_dir), "manifest.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f).get("label")
+
+
+check("ban dong bo mang ten", sync_label(named_dir) == want, "(=%r)" % sync_label(named_dir))
+
+res = bpy.ops.ezg.backup_rename('EXEC_DEFAULT', path=named_dir, label="BU s\u1ea1ch")
+check("doi ten chay", 'FINISHED' in res, str(res) + " err=" + wm.ezg_error)
+with open(os.path.join(named_dir, "manifest.json"), encoding="utf-8") as f:
+    data = json.load(f)
+check("doi ten ghi vao manifest", data.get("label") == "BU s\u1ea1ch", "(=%r)" % data.get("label"))
+check("doi ten khong dung toi danh sach addon", len(data["items"]) == n_inv)
+check("doi ten ca ban dong bo", sync_label(named_dir) == "BU s\u1ea1ch", "(=%r)" % sync_label(named_dir))
+sel = wm.ezg_snapshots[wm.ezg_snapshots_index]
+check("danh sach hien ten moi, van chon dung ban", sel.name == "BU s\u1ea1ch"
+      and os.path.normcase(sel.path) == os.path.normcase(named_dir), "(%r)" % sel.name)
+check("doi ten khong doi thu muc", os.path.isdir(named_dir))
+check("khong de lai file tam", not [f for f in os.listdir(named_dir) if f.endswith(".tmp")])
+
+res = bpy.ops.ezg.backup_rename('EXEC_DEFAULT', path=named_dir, label="   ")
+sel = wm.ezg_snapshots[wm.ezg_snapshots_index]
+check("ten rong -> bo ten, hien lai theo gio tao", 'FINISHED' in res
+      and sel.name == named and sel.label == "", "(%r / %r)" % (sel.name, sel.label))
+
+check("ten qua dai bi cat", len(backup_mod.clean_label("x" * 200)) == backup_mod.LABEL_MAX)
+check("manifest sua tay hong kieu -> coi nhu chua dat ten", backup_mod.clean_label(42) == "")
+
+print("-" * 70)
 print("7) Nut 'Cap nhat muc dang chon'")
 check("operator co ton tai", hasattr(bpy.ops.ezg, "update_selected"))
 
